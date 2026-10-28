@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h3 mb-0">Редактирование сотрудника</h1>
+            <a href="/employees" class="btn btn-outline-secondary">← К списку</a>
+        </div>
+
+        <div id="conflict-alert" class="alert alert-warning d-none" role="alert">
+            Данные устарели, обновите страницу.
+            <button type="button" class="btn btn-sm btn-warning ms-2" onclick="location.reload()">Обновить</button>
+        </div>
+
+        <form id="employee-form" class="card shadow-sm p-4" novalidate>
+            <input type="hidden" name="version" id="version" value="">
+
+            <h5 class="mb-3 text-secondary">Основные данные</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="last_name">Фамилия <span class="text-danger">*</span></label>
+                    <input class="form-control" id="last_name" name="last_name" required maxlength="100">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="first_name">Имя <span class="text-danger">*</span></label>
+                    <input class="form-control" id="first_name" name="first_name" required maxlength="100">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="middle_name">Отчество</label>
+                    <input class="form-control" id="middle_name" name="middle_name" maxlength="100">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="personnel_number">Табельный номер <span class="text-danger">*</span></label>
+                    <input class="form-control" id="personnel_number" name="personnel_number" required maxlength="20">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="department_id">Подразделение <span class="text-danger">*</span></label>
+                    <select class="form-select" id="department_id" name="department_id" required>
+                        <option value="">Загрузка...</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="position_id">Должность <span class="text-danger">*</span></label>
+                    <select class="form-select" id="position_id" name="position_id" required>
+                        <option value="">Сначала выберите подразделение</option>
+                    </select>
+                </div>
+            </div>
+
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0 text-secondary">Размеры СИЗ</h5>
+                <button type="button" class="btn btn-sm btn-outline-success" id="add-size-btn">+ Добавить размер</button>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle" id="sizes-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Наименование СИЗ</th>
+                            <th style="width: 150px;">Размер</th>
+                            <th style="width: 80px;" class="text-center">Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Сюда будут добавляться строки -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="/employees" class="btn btn-outline-secondary">Отмена</a>
+                <button type="submit" class="btn btn-primary" id="btn-submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.EMPLOYEE_ID = Number("{{ employee_id }}");
+</script>
+<script src="{{ url_for('static', path='js/employee_edit.js') }}"></script>
+{% endblock %}

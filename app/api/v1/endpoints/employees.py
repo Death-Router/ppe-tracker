@@ -1,0 +1,179 @@
+from fastapi import APIRouter, Depends, HTTPException, WebSocketDisconnect, status
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.exc import StaleDataError
+
+from app.api.v1.endpoints.ws import manager
+from app.db.session import get_db
+from app.models.employee import Employee
+from app.models.employee_ppe_size import EmployeePpeSize
+from app.models.ppe_item import PpeItem
+from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
+
+router = APIRouter(prefix="/employees", tags=["Сотрудники"])
+
+
+async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Employee:
+    """Загружает сотрудника со всеми связями. Гарантированно решает MissingGreenlet."""
+    result = await db.execute(
+        select(Employee)
+        .where(Employee.id == employee_id)
+        .options(
+            selectinload(Employee.ppe_sizes)
+            .selectinload(EmployeePpeSize.ppe_item)
+            .selectinload(PpeItem.category),
+            selectinload(Employee.department_rel),
+            selectinload(Employee.position_rel),
+        )
+    )
+    return result.scalar_one()
+
+
+@router.post("/", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
+async def create_employee(
+    employee_in: EmployeeCreate, db: AsyncSession = Depends(get_db)
+):
+    # Проверка уникальности табельного номера
+    result = await db.execute(
+        select(Employee).where(
+            Employee.personnel_number == employee_in.personnel_number
+        )
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400, detail="Сотрудник с таким табельным номером уже существует"
+        )
+
+    # Создаем сотрудника (без размеров)
+    employee_data = employee_in.model_dump(exclude={"ppe_sizes"})
+    db_employee = Employee(**employee_data)
+    db.add(db_employee)
+    await db.flush()
+
+    # Создаем размеры
+    if employee_in.ppe_sizes:
+        item_ids = [size.ppe_item_id for size in employee_in.ppe_sizes]
+        items_result = await db.execute(
+            select(PpeItem.id).where(PpeItem.id.in_(item_ids))
+        )
+        if set(item_ids) - set(items_result.scalars().all()):
+            await db.rollback()
+            raise HTTPException(status_code=404, detail="Наименования СИЗ не найдены")
+
+        for size_data in employee_in.ppe_sizes:
+            db.add(
+                EmployeePpeSize(
+                    employee_id=db_employee.id,
+                    ppe_item_id=size_data.ppe_item_id,
+                    size_value=size_data.size_value,
+                )
+            )
+
+    await db.commit()
+
+    # --- ДОБАВЛЯЕМ WEBSOCKET-УВЕДОМЛЕНИЕ О СОЗДАНИИ ---
+    try:
+        await manager.broadcast_to_employee(
+            0, {"event": "employee_created", "employee_id": db_employee.id}
+        )
+    except (WebSocketDisconnect, RuntimeError) as e:
+        print(f"Ошибка WS: {e}")
+    # -------------------------------------------------
+
+    # Возвращаем объект со связями
+    return await get_employee_with_relations(db, db_employee.id)
+
+
+@router.get("/", response_model=list[EmployeeRead])
+async def get_employees(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Employee).options(
+            selectinload(Employee.ppe_sizes)
+            .selectinload(EmployeePpeSize.ppe_item)
+            .selectinload(PpeItem.category),
+            selectinload(Employee.department_rel),
+            selectinload(Employee.position_rel),
+        )
+    )
+    return result.scalars().all()
+
+
+@router.get("/{employee_id}", response_model=EmployeeRead)
+async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
+    employee = await get_employee_with_relations(db, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    return employee
+
+
+@router.put("/{employee_id}", response_model=EmployeeRead)
+async def update_employee(
+    employee_id: int, employee_in: EmployeeUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    db_employee = result.scalar_one_or_none()
+    if not db_employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    if db_employee.version != employee_in.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Данные устарели"
+        )
+
+    update_data = employee_in.model_dump(
+        exclude_unset=True, exclude={"version", "ppe_sizes"}
+    )
+    for field, value in update_data.items():
+        setattr(db_employee, field, value)
+
+    if employee_in.ppe_sizes is not None:
+        await db.execute(
+            delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id)
+        )
+        for size_data in employee_in.ppe_sizes:
+            db.add(
+                EmployeePpeSize(
+                    employee_id=db_employee.id,
+                    ppe_item_id=size_data.ppe_item_id,
+                    size_value=size_data.size_value,
+                )
+            )
+
+    try:
+        await db.commit()
+    except StaleDataError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Конфликт версий")
+
+    try:
+        await manager.broadcast_to_employee(
+            employee_id, {"event": "employee_updated", "employee_id": employee_id}
+        )
+    except (WebSocketDisconnect, RuntimeError) as e:
+        print(f"Ошибка WS: {e}")
+
+    return await get_employee_with_relations(db, employee_id)
+
+
+@router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    db_employee = result.scalar_one_or_none()
+    if not db_employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    try:
+        await db.delete(db_employee)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка удаления")
+
+    try:
+        await manager.broadcast_to_employee(
+            0, {"event": "employee_updated", "employee_id": employee_id}
+        )
+    except (WebSocketDisconnect, RuntimeError) as e:
+        print(f"Ошибка WS: {e}")

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Сотрудники</h1>
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal">Добавить</button>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="employees-table">
+            <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>ФИО</th>
+                <th>Табельный номер</th>
+                <th>Должность</th>
+                <th class="text-end">Действия</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr><td colspan="5" class="text-center text-muted py-4">Загрузка…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Модальное окно создания -->
+<div class="modal fade" id="createModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="create-form">
+        <div class="modal-header">
+          <h5 class="modal-title">Новый сотрудник</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Фамилия <span class="text-danger">*</span></label>
+                    <input class="form-control" name="last_name" required maxlength="100">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Имя <span class="text-danger">*</span></label>
+                    <input class="form-control" name="first_name" required maxlength="100">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Отчество</label>
+                    <input class="form-control" name="middle_name" maxlength="100">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Табельный номер <span class="text-danger">*</span></label>
+                    <input class="form-control" name="personnel_number" required maxlength="20">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Подразделение <span class="text-danger">*</span></label>
+                    <select class="form-select" name="department_id" id="create-dept" required>
+                        <option value="">Загрузка...</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Должность <span class="text-danger">*</span></label>
+                    <select class="form-select" name="position_id" id="create-pos" required>
+                        <option value="">Сначала выберите подразделение</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/employees_list.js') }}"></script>
+{% endblock %}
