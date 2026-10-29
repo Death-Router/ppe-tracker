@@ -1,14 +1,28 @@
 {% extends "base.html" %}
-
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Наименования СИЗ</h1>
-    <button class="btn btn-success" title="Добавить" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg"></i></button>
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
+</div>
+
+<!-- Панель поиска и фильтрации -->
+<div class="row g-2 mb-3">
+    <div class="col-md-5">
+        <div class="input-group">
+            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+        </div>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" id="category-filter">
+            <option value="">Все категории</option>
+        </select>
+    </div>
 </div>
 
 <div class="card shadow-sm">
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="items-table">
+        <table class="table table-sm table-hover align-middle mb-0" id="items-table">
             <thead class="bg-brand-orange">
             <tr>
                 <th>Наименование</th>
@@ -17,7 +31,7 @@
             </tr>
             </thead>
             <tbody>
-            <tr><td colspan="4" class="text-center text-muted py-4">Загрузка…</td></tr>
+            <tr><td colspan="3" class="text-center text-muted py-4">Загрузка…</td></tr>
             </tbody>
         </table>
     </div>
@@ -35,7 +49,7 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Наименование <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" name="name" required maxlength="150">
+            <input type="text" class="form-control" name="name" required maxlength="255">
           </div>
           <div class="mb-3">
             <label class="form-label">Категория <span class="text-danger">*</span></label>
@@ -43,55 +57,17 @@
                 <option value="">Загрузка...</option>
             </select>
           </div>
-
-          <div class="mb-3">
-            <label class="form-label">Размеры (опционально)</label>
-            <div class="input-group mb-2">
-                <input type="text" class="form-control" id="new-size-input" placeholder="Например, 42">
-                <select class="form-select" id="new-size-gender" style="max-width: 120px;">
-                    <option value="">Унисекс</option>
-                    <option value="М">Мужской</option>
-                    <option value="Ж">Женский</option>
-                </select>
-                <button class="btn btn-outline-success" type="button" id="add-size-to-create-btn">+</button>
-            </div>
-            <ul class="list-group" id="create-sizes-list" style="max-height: 150px; overflow-y: auto;">
-                <!-- Добавленные размеры будут здесь -->
-            </ul>
-          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Создать</button>
+          <button type="submit" class="btn btn-primary">Создать</button>
         </div>
       </form>
     </div>
   </div>
 </div>
-
-
-            <ul class="list-group" id="sizes-list">
-                <!-- Список размеров -->
-            </ul>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', path='js/ppe_items_list.js') }}"></script>
-
-
-            <ul class="list-group" id="sizes-list">
-                <!-- Список размеров -->
-            </ul>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
