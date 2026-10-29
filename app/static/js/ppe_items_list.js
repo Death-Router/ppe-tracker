@@ -58,6 +58,9 @@
       filtered = filtered.filter(item => item.category?.name === selectedCategory);
     }
 
+    // Сортировка по алфавиту (по названию)
+    filtered.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
     renderTable(filtered);
   }
 

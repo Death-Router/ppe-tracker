@@ -6,50 +6,76 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🛠 Исправляем регистр категорий (с импортом всех моделей)..."
+echo "🔧 Добавляем сортировку по алфавиту в ppe_categories_list.js..."
 
-cat > fix_case.py << 'EOF'
-import asyncio
-from sqlalchemy import select
+python3 - << 'PYEOF'
+with open('app/static/js/ppe_categories_list.js', 'r') as f:
+    content = f.read()
 
-# Импортируем ВСЕ модели, чтобы SQLAlchemy видел связи
-from app.models.user import User
-from app.models.department import Department
-from app.models.position import Position
-from app.models.employee import Employee
-from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.employee_ppe_issue import EmployeePpeIssue
-from app.models.ppe_category import PpeCategory
-from app.models.ppe_item import PpeItem
-from app.models.ppe_size import PpeSize
-from app.models.position_ppe_norm import PositionPpeNorm
+# В функции filterCategories добавляем сортировку перед рендером
+old_code = '''    if (searchTerm) {
+      filtered = filtered.filter(c => 
+        c.name.toLowerCase().includes(searchTerm) || 
+        (c.description || '').toLowerCase().includes(searchTerm)
+      );
+    }
 
-from app.db.session import async_session_maker
+    renderTable(filtered);'''
 
-async def fix():
-    async with async_session_maker() as db:
-        result = await db.execute(select(PpeCategory))
-        categories = result.scalars().all()
-        
-        for cat in categories:
-            new_name = cat.name.capitalize()
-            if cat.name != new_name:
-                print(f"Обновление: '{cat.name}' -> '{new_name}'")
-                cat.name = new_name
-        
-        await db.commit()
-        print("✅ Регистр категорий исправлен.")
+new_code = '''    if (searchTerm) {
+      filtered = filtered.filter(c => 
+        c.name.toLowerCase().includes(searchTerm) || 
+        (c.description || '').toLowerCase().includes(searchTerm)
+      );
+    }
 
-if __name__ == "__main__":
-    asyncio.run(fix())
-EOF
+    // Сортировка по алфавиту (по названию)
+    filtered.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
-echo "🚀 Копируем и запускаем скрипт..."
-docker compose cp fix_case.py api:/app/fix_case.py
-docker compose exec -T api python fix_case.py
+    renderTable(filtered);'''
 
-echo "🧹 Удаляем временный файл..."
-rm fix_case.py
+if old_code in content:
+    content = content.replace(old_code, new_code)
+    print("✅ Сортировка по алфавиту добавлена в JS.")
+else:
+    print("⚠️ Не удалось найти блок filterCategories для добавления сортировки.")
+
+with open('app/static/js/ppe_categories_list.js', 'w') as f:
+    f.write(content)
+PYEOF
+
+# То же самое для списка СИЗ (наименований)
+echo "🔧 Добавляем сортировку по алфавиту в ppe_items_list.js..."
+
+python3 - << 'PYEOF'
+with open('app/static/js/ppe_items_list.js', 'r') as f:
+    content = f.read()
+
+# В функции filterItems добавляем сортировку перед рендером
+old_code = '''    if (selectedCategory) {
+      filtered = filtered.filter(item => item.category?.name === selectedCategory);
+    }
+
+    renderTable(filtered);'''
+
+new_code = '''    if (selectedCategory) {
+      filtered = filtered.filter(item => item.category?.name === selectedCategory);
+    }
+
+    // Сортировка по алфавиту (по названию)
+    filtered.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+    renderTable(filtered);'''
+
+if old_code in content:
+    content = content.replace(old_code, new_code)
+    print("✅ Сортировка по алфавиту добавлена в ppe_items_list.js.")
+else:
+    print("⚠️ Не удалось найти блок filterItems для добавления сортировки.")
+
+with open('app/static/js/ppe_items_list.js', 'w') as f:
+    f.write(content)
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
@@ -60,4 +86,4 @@ echo "✅ ГОТОВО!"
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: import all models in fix_case.py"
+git commit -m "ui: add alphabetical sorting to categories and ppe items lists"
