@@ -51,7 +51,7 @@
 
   async function loadPositionsForSelect(deptId) {
     if (!deptId) {
-      createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
+      createPosSelect.innerHTML = '<option value="">Сначала выберите цех</option>';
       return;
     }
     try {
@@ -84,7 +84,7 @@
       window.showToast('Сотрудник создан', 'success');
       bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
       createForm.reset();
-      createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
+      createPosSelect.innerHTML = '<option value="">Сначала выберите цех</option>';
       loadEmployees();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
