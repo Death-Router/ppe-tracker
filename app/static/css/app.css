@@ -198,3 +198,12 @@ h1, h2, h3, h4, h5, h6 {
 .navbar-nav .nav-link i {
     margin-bottom: 2px;
 }
+
+/* Разрешаем перенос текста в навбаре и выравниваем по центру */
+.navbar-nav .nav-link span {
+    white-space: normal;
+    text-align: center;
+    display: block;
+    line-height: 1.2;
+    margin-top: 2px;
+}
