@@ -4,11 +4,14 @@
   const tbody = document.querySelector('#norms-table tbody');
   const createForm = document.getElementById('create-norm-form');
   const itemSelect = document.getElementById('norm-item-select');
+  const modalElement = document.getElementById('createNormModal');
+  const modalTitle = modalElement.querySelector('.modal-title');
+  const submitBtn = createForm.querySelector('button[type="submit"]');
 
   let allPpeItems = [];
   let currentPositionId = null;
+  let editingNormId = null; // Если редактируем, здесь будет ID
 
-  // Инициализация: загружаем должности и СИЗ
   async function init() {
     try {
       const positions = await API.get('/api/v1/positions');
@@ -17,7 +20,6 @@
 
       allPpeItems = await API.get('/api/v1/ppe_items');
       
-      // Заполняем выпадающий список СИЗ в модалке
       itemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
         allPpeItems.map(i => `<option value="${i.id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
     } catch (err) {
@@ -25,7 +27,6 @@
     }
   }
 
-  // Загрузка норм для выбранной должности
   async function loadNorms(positionId) {
     if (!positionId) {
       normsContainer.classList.add('d-none');
@@ -47,52 +48,6 @@
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
-  function formatPeriod(value, unit) {
-    if (!value) return '—';
-    const num = parseInt(value, 10);
-    if (isNaN(num)) return `${value} ${unit}`;
-
-    // Склонение для "год"
-    if (unit === 'год') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} лет`;
-      if (lastDigit === 1) return `${num} год`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} года`;
-      return `${num} лет`;
-    }
-    // Склонение для "месяц"
-    if (unit === 'месяц') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} месяцев`;
-      if (lastDigit === 1) return `${num} месяц`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} месяца`;
-      return `${num} месяцев`;
-    }
-    // Склонение для "день"
-    if (unit === 'день') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} дней`;
-      if (lastDigit === 1) return `${num} день`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} дня`;
-      return `${num} дней`;
-    }
-    // Склонение для "смена"
-    if (unit === 'смена') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} смен`;
-      if (lastDigit === 1) return `${num} смена`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} смены`;
-      return `${num} смен`;
-    }
-    // Для "до износа" и других — просто возвращаем как есть
-    return `${value} ${unit}`;
-  }
-
-
   function renderTable(norms) {
     if (!norms.length) {
       tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">Норм пока нет</td></tr>`;
@@ -101,10 +56,11 @@
     tbody.innerHTML = norms.map(n => `
       <tr data-norm-id="${n.id}">
         <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
-        <td>${formatPeriod(n.wear_period_value, n.wear_period_unit)}</td>
+        <td>${escapeHtml(n.wear_period_value)} ${escapeHtml(n.wear_period_unit)}</td>
         <td>${escapeHtml(n.quantity)}</td>
         <td class="text-end">
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -112,7 +68,40 @@
 
   posSelect.addEventListener('change', (e) => loadNorms(e.target.value));
 
-  // Обработка формы добавления нормы
+  // Открытие модалки для создания
+  window.openCreateModal = () => {
+    editingNormId = null;
+    modalTitle.textContent = 'Новая норма выдачи';
+    submitBtn.textContent = 'Добавить';
+    createForm.reset();
+    // Сбрасываем выбранное СИЗ
+    if (itemSelect) itemSelect.value = '';
+  };
+
+  // Редактирование нормы
+  window.editNorm = async (normId) => {
+    try {
+      // Загружаем данные нормы
+      const norm = await API.get(`/api/v1/position_ppe_norms/${normId}`);
+      
+      editingNormId = normId;
+      modalTitle.textContent = 'Редактирование нормы';
+      submitBtn.textContent = 'Сохранить';
+
+      // Заполняем форму
+      itemSelect.value = norm.ppe_item_id;
+      createForm.elements['wear_period_value'].value = norm.wear_period_value;
+      createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
+      createForm.elements['quantity'].value = norm.quantity;
+
+      // Открываем модалку
+      new bootstrap.Modal(modalElement).show();
+    } catch (err) {
+      window.showToast(`Ошибка загрузки нормы: ${err.message}`, 'danger');
+    }
+  };
+
+  // Обработка формы (создание или обновление)
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentPositionId) return;
@@ -127,10 +116,20 @@
 
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
+    
     try {
-      await API.post('/api/v1/position_ppe_norms/', payload);
-      window.showToast('Норма добавлена', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('createNormModal')).hide();
+      if (editingNormId) {
+        // Обновление
+        payload.version = (await API.get(`/api/v1/position_ppe_norms/${editingNormId}`)).version;
+        await API.put(`/api/v1/position_ppe_norms/${editingNormId}`, payload);
+        window.showToast('Норма обновлена', 'success');
+      } else {
+        // Создание
+        await API.post('/api/v1/position_ppe_norms/', payload);
+        window.showToast('Норма добавлена', 'success');
+      }
+      
+      bootstrap.Modal.getInstance(modalElement).hide();
       createForm.reset();
       loadNorms(currentPositionId);
     } catch (err) {
@@ -140,7 +139,6 @@
     }
   });
 
-  // Удаление
   window.deleteNorm = async (id) => {
     if (!confirm('Удалить эту норму?')) return;
     try {
@@ -152,34 +150,14 @@
     }
   };
 
+  // Привязка кнопки "Добавить норму" к открытию модалки в режиме создания
+  document.querySelector('button[data-bs-target="#createNormModal"]')?.addEventListener('click', openCreateModal);
+
   WS.subscribe((data) => {
     if (data.event === 'norm_updated' && currentPositionId) {
       loadNorms(currentPositionId);
     }
   });
-
-
-  // Обработчик изменения СИЗ в модалке создания нормы
-  const normItemSelect = document.getElementById('norm-item-select');
-  if (normItemSelect) {
-    normItemSelect.addEventListener('change', async (e) => {
-      const selectedId = Number(e.target.value);
-      const unitLabel = document.getElementById('norm-unit-label');
-      
-      if (!selectedId) {
-        unitLabel.textContent = 'ед.';
-        return;
-      }
-
-      // Находим выбранное СИЗ в allPpeItems
-      const selectedItem = allPpeItems.find(i => i.id === selectedId);
-      if (selectedItem && selectedItem.unit) {
-        unitLabel.textContent = selectedItem.unit.short_name;
-      } else {
-        unitLabel.textContent = 'ед.';
-      }
-    });
-  }
 
   init();
 })();

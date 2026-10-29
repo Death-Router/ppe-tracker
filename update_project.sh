@@ -6,133 +6,206 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Перезаписываем position_ppe_norms.py (гарантированная подгрузка unit)..."
+echo "📝 Обновляем шаблон норм (добавляем кнопку редактирования)..."
 
-cat > app/api/v1/endpoints/position_ppe_norms.py << 'EOF'
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError
-from app.api.v1.endpoints.ws import manager
-from app.db.session import get_db
-from app.models.position_ppe_norm import PositionPpeNorm
-from app.models.position import Position
-from app.models.ppe_item import PpeItem
-from app.models.unit import Unit
-from app.schemas.position_ppe_norm import PositionPpeNormCreate, PositionPpeNormRead, PositionPpeNormUpdate
+python3 - << 'PYEOF'
+with open('app/templates/norms/list.html', 'r') as f:
+    content = f.read()
 
-router = APIRouter(prefix="/position_ppe_norms", tags=["Нормы выдачи СИЗ"])
+# В таблице норм заменяем ячейку действий на две кнопки
+old_actions = '''        <td class="text-end">
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteNorm(${n.id})">Удалить</button>
+        </td>'''
 
+new_actions = '''        <td class="text-end">
+          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+        </td>'''
 
-def norm_options():
-    """Возвращает список опций для загрузки всех вложенных связей."""
-    return [
-        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.category),
-        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.unit),
-        selectinload(PositionPpeNorm.position).selectinload(Position.department)
-    ]
+if old_actions in content:
+    content = content.replace(old_actions, new_actions)
+    with open('app/templates/norms/list.html', 'w') as f:
+        f.write(content)
+    print("✅ Кнопка редактирования добавлена в таблицу.")
+else:
+    print("⚠️ Не удалось найти блок действий в таблице норм.")
+PYEOF
 
+echo "📝 Обновляем JS для норм (логика редактирования)..."
 
-async def get_norm_with_relations(db: AsyncSession, norm_id: int) -> PositionPpeNorm:
-    """Загружает норму со всеми связями."""
-    result = await db.execute(
-        select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id).options(*norm_options())
-    )
-    return result.scalar_one()
+cat > app/static/js/norms_list.js << 'EOF'
+(() => {
+  const posSelect = document.getElementById('position-select');
+  const normsContainer = document.getElementById('norms-container');
+  const tbody = document.querySelector('#norms-table tbody');
+  const createForm = document.getElementById('create-norm-form');
+  const itemSelect = document.getElementById('norm-item-select');
+  const modalElement = document.getElementById('createNormModal');
+  const modalTitle = modalElement.querySelector('.modal-title');
+  const submitBtn = createForm.querySelector('button[type="submit"]');
 
+  let allPpeItems = [];
+  let currentPositionId = null;
+  let editingNormId = null; // Если редактируем, здесь будет ID
 
-@router.post("/", response_model=PositionPpeNormRead, status_code=status.HTTP_201_CREATED)
-async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends(get_db)):
-    pos_res = await db.execute(select(Position).where(Position.id == norm_in.position_id))
-    if not pos_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Должность не найдена")
-        
-    item_res = await db.execute(select(PpeItem).where(PpeItem.id == norm_in.ppe_item_id))
-    if not item_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
+  async function init() {
+    try {
+      const positions = await API.get('/api/v1/positions');
+      posSelect.innerHTML = '<option value="">-- Выберите должность --</option>' + 
+        positions.map(p => `<option value="${p.id}">${p.department?.name ?? ''} / ${p.name}</option>`).join('');
 
-    db_norm = PositionPpeNorm(**norm_in.model_dump())
-    db.add(db_norm)
+      allPpeItems = await API.get('/api/v1/ppe_items');
+      
+      itemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
+        allPpeItems.map(i => `<option value="${i.id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
+    } catch (err) {
+      window.showToast(`Ошибка инициализации: ${err.message}`, 'danger');
+    }
+  }
+
+  async function loadNorms(positionId) {
+    if (!positionId) {
+      normsContainer.classList.add('d-none');
+      return;
+    }
     
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=400, 
-            detail="Для этой должности норма на данное СИЗ уже существует."
-        )
-        
-    return await get_norm_with_relations(db, db_norm.id)
+    currentPositionId = Number(positionId);
+    normsContainer.classList.remove('d-none');
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Загрузка...</td></tr>';
 
+    try {
+      const allNorms = await API.get('/api/v1/position_ppe_norms');
+      const filtered = allNorms.filter(n => n.position_id === currentPositionId);
+      renderTable(filtered);
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-3">Ошибка: ${err.message}</td></tr>`;
+    }
+  }
 
-@router.get("/", response_model=list[PositionPpeNormRead])
-async def get_norms(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).options(*norm_options()))
-    return result.scalars().all()
+  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
+  function renderTable(norms) {
+    if (!norms.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">Норм пока нет</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = norms.map(n => `
+      <tr data-norm-id="${n.id}">
+        <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
+        <td>${escapeHtml(n.wear_period_value)} ${escapeHtml(n.wear_period_unit)}</td>
+        <td>${escapeHtml(n.quantity)}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>
+    `).join('');
+  }
 
-@router.get("/{norm_id}", response_model=PositionPpeNormRead)
-async def get_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id).options(*norm_options()))
-    norm = result.scalar_one_or_none()
-    if not norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
-    return norm
+  posSelect.addEventListener('change', (e) => loadNorms(e.target.value));
 
+  // Открытие модалки для создания
+  window.openCreateModal = () => {
+    editingNormId = null;
+    modalTitle.textContent = 'Новая норма выдачи';
+    submitBtn.textContent = 'Добавить';
+    createForm.reset();
+    // Сбрасываем выбранное СИЗ
+    if (itemSelect) itemSelect.value = '';
+  };
 
-@router.put("/{norm_id}", response_model=PositionPpeNormRead)
-async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
-    if db_norm.version != norm_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
+  // Редактирование нормы
+  window.editNorm = async (normId) => {
+    try {
+      // Загружаем данные нормы
+      const norm = await API.get(`/api/v1/position_ppe_norms/${normId}`);
+      
+      editingNormId = normId;
+      modalTitle.textContent = 'Редактирование нормы';
+      submitBtn.textContent = 'Сохранить';
+
+      // Заполняем форму
+      itemSelect.value = norm.ppe_item_id;
+      createForm.elements['wear_period_value'].value = norm.wear_period_value;
+      createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
+      createForm.elements['quantity'].value = norm.quantity;
+
+      // Открываем модалку
+      new bootstrap.Modal(modalElement).show();
+    } catch (err) {
+      window.showToast(`Ошибка загрузки нормы: ${err.message}`, 'danger');
+    }
+  };
+
+  // Обработка формы (создание или обновление)
+  createForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!currentPositionId) return;
+
+    const payload = {
+      position_id: currentPositionId,
+      ppe_item_id: Number(itemSelect.value),
+      wear_period_value: createForm.elements['wear_period_value'].value.trim(),
+      wear_period_unit: createForm.elements['wear_period_unit'].value,
+      quantity: createForm.elements['quantity'].value.trim()
+    };
+
+    const btn = createForm.querySelector('button[type="submit"]');
+    btn.disabled = true;
     
-    update_data = norm_in.model_dump(exclude_unset=True, exclude={"version"})
-    for field, value in update_data.items():
-        setattr(db_norm, field, value)
-    db_norm.version += 1
-    
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая норма уже существует")
-    
-    try:
-        await manager.broadcast_to_employee(0, {"event": "norm_updated", "id": norm_id})
-    except: pass
+    try {
+      if (editingNormId) {
+        // Обновление
+        payload.version = (await API.get(`/api/v1/position_ppe_norms/${editingNormId}`)).version;
+        await API.put(`/api/v1/position_ppe_norms/${editingNormId}`, payload);
+        window.showToast('Норма обновлена', 'success');
+      } else {
+        // Создание
+        await API.post('/api/v1/position_ppe_norms/', payload);
+        window.showToast('Норма добавлена', 'success');
+      }
+      
+      bootstrap.Modal.getInstance(modalElement).hide();
+      createForm.reset();
+      loadNorms(currentPositionId);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
-    return await get_norm_with_relations(db, norm_id)
+  window.deleteNorm = async (id) => {
+    if (!confirm('Удалить эту норму?')) return;
+    try {
+      await API.request(`/api/v1/position_ppe_norms/${id}`, { method: 'DELETE' });
+      window.showToast('Норма удалена', 'success');
+      loadNorms(currentPositionId);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
 
+  // Привязка кнопки "Добавить норму" к открытию модалки в режиме создания
+  document.querySelector('button[data-bs-target="#createNormModal"]')?.addEventListener('click', openCreateModal);
 
-@router.delete("/{norm_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
-    try:
-        await db.delete(db_norm)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+  WS.subscribe((data) => {
+    if (data.event === 'norm_updated' && currentPositionId) {
+      loadNorms(currentPositionId);
+    }
+  });
+
+  init();
+})();
 EOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
-sleep 3
+sleep 2
 
-echo "🔄 Проверяем логи..."
-docker compose logs api --tail 10
-
-echo "✅ ГОТОВО!"
+echo "✅ ГОТОВО! Кнопка редактирования добавлена в нормы."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: force eager loading of unit in norms"
+git commit -m "feat: add edit button for norms"
