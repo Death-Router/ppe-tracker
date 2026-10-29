@@ -371,7 +371,9 @@
 
   // --- Модалка выдачи ---
   const issueModalElement = document.getElementById('issueModal');
-  const issueItemSelect = document.getElementById('issue-item-select');
+  const issueItemInput = document.getElementById('issue-item-input');
+  const issueItemIdInput = document.getElementById('issue-item-id');
+  const issuePpeList = document.getElementById('issue-ppe-list');
   const issueSizeSelect = document.getElementById('issue-size-select');
 
   window.openIssueModalForNorm = (ppeItemId) => {
@@ -380,15 +382,26 @@
     fetch('/api/v1/ppe_items')
       .then(r => r.json())
       .then(data => {
-        issueItemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
-          data.map(i => `<option value="${i.id}" data-category-id="${i.category_id}" ${i.id === ppeItemId ? 'selected' : ''}>${i.name} (${i.category?.name ?? ''})</option>`).join('');
-        
+        // Заполняем datalist
+        if (issuePpeList) {
+          issuePpeList.innerHTML = data.map(i => 
+            `<option value="${i.name} (${i.category?.name ?? ''})" data-id="${i.id}" data-category-id="${i.category_id}"></option>`
+          ).join('');
+        }
+
+        // Устанавливаем выбранное СИЗ, если передан ID
         if (ppeItemId) {
-          const selectedOption = issueItemSelect.options[issueItemSelect.selectedIndex];
-          const categoryId = selectedOption.getAttribute('data-category-id');
-          fillIssueSizes(categoryId);
-        } else {
-          issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
+          const item = data.find(i => i.id === ppeItemId);
+          if (item && issueItemInput) {
+            issueItemInput.value = `${item.name} (${item.category?.name ?? ''})`;
+            issueItemIdInput.value = item.id;
+            fillIssueSizes(item.category_id);
+            
+            const unitLabel = document.getElementById('issue-unit-label');
+            if (item.unit) {
+              unitLabel.textContent = item.unit.short_name;
+            }
+          }
         }
         
         modal.show();
@@ -440,13 +453,43 @@
       fetch('/api/v1/ppe_items')
         .then(r => r.json())
         .then(data => {
-          if (issueItemSelect) {
-            issueItemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
-              data.map(i => `<option value="${i.id}" data-category-id="${i.category_id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
+          if (issuePpeList) {
+            issuePpeList.innerHTML = data.map(i => 
+              `<option value="${i.name} (${i.category?.name ?? ''})" data-id="${i.id}" data-category-id="${i.category_id}"></option>`
+            ).join('');
           }
+          // Очищаем поля при открытии
+          if (issueItemInput) issueItemInput.value = '';
+          if (issueItemIdInput) issueItemIdInput.value = '';
           if (issueSizeSelect) issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
         });
     });
+
+    // Обработчик ввода в поле СИЗ (для модалки выдачи)
+    if (issueItemInput) {
+      issueItemInput.addEventListener('input', (e) => {
+        const val = e.target.value;
+        const option = Array.from(issuePpeList.options).find(opt => opt.value === val);
+        if (option) {
+          const itemId = option.getAttribute('data-id');
+          const categoryId = option.getAttribute('data-category-id');
+          issueItemIdInput.value = itemId;
+          
+          // Обновляем размеры и единицу измерения
+          fillIssueSizes(categoryId);
+          
+          const selectedItem = allPpeItems.find(i => i.id === Number(itemId));
+          const unitLabel = document.getElementById('issue-unit-label');
+          if (selectedItem && selectedItem.unit) {
+            unitLabel.textContent = selectedItem.unit.short_name;
+          } else {
+            unitLabel.textContent = 'ед.';
+          }
+        } else {
+          issueItemIdInput.value = '';
+        }
+      });
+    }
   }
 
   if (issueItemSelect) {
@@ -479,7 +522,7 @@
       e.preventDefault();
       const payload = FormHelper.serialize(issueForm);
       payload.employee_id = employeeId;
-      payload.ppe_item_id = Number(payload.ppe_item_id);
+      payload.ppe_item_id = Number(issueItemIdInput.value);
       if (!payload.issue_date) payload.issue_date = new Date().toISOString().split('T')[0];
       if (payload.size_value === '') payload.size_value = null;
 

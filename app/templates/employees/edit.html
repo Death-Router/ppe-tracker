@@ -184,9 +184,11 @@
         <div class="modal-body">
             <div class="mb-3">
                 <label class="form-label">Наименование СИЗ <span class="text-danger">*</span></label>
-                <select class="form-select" name="ppe_item_id" id="issue-item-select" required>
-                    <option value="">Загрузка...</option>
-                </select>
+                <input type="text" class="form-control" list="issue-ppe-list" id="issue-item-input" placeholder="Начните вводить название..." required autocomplete="off">
+                <datalist id="issue-ppe-list">
+                    <!-- Опции будут заполнены через JS -->
+                </datalist>
+                <input type="hidden" name="ppe_item_id" id="issue-item-id">
             </div>
             <div class="row g-3">
                 <div class="col-6">
