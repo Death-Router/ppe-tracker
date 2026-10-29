@@ -3,7 +3,9 @@
   const normsContainer = document.getElementById('norms-container');
   const tbody = document.querySelector('#norms-table tbody');
   const createForm = document.getElementById('create-norm-form');
-  const itemSelect = document.getElementById('norm-item-select');
+  const itemInput = document.getElementById('norm-item-input');
+  const itemIdInput = document.getElementById('norm-item-id');
+  const itemsDatalist = document.getElementById('ppe-items-list');
   const modalElement = document.getElementById('createNormModal');
   const modalTitle = modalElement.querySelector('.modal-title');
   const submitBtn = createForm.querySelector('button[type="submit"]');
@@ -20,8 +22,10 @@
 
       allPpeItems = await API.get('/api/v1/ppe_items');
       
-      itemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
-        allPpeItems.map(i => `<option value="${i.id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
+      // Заполняем datalist
+      itemsDatalist.innerHTML = allPpeItems.map(i => 
+        `<option value="${i.name} (${i.category?.name ?? ''})" data-id="${i.id}"></option>`
+      ).join('');
     } catch (err) {
       window.showToast(`Ошибка инициализации: ${err.message}`, 'danger');
     }
@@ -146,14 +150,25 @@
 
   posSelect.addEventListener('change', (e) => loadNorms(e.target.value));
 
+  // Обработчик ввода в поле СИЗ (поиск по datalist)
+  itemInput.addEventListener('input', (e) => {
+    const val = e.target.value;
+    const option = Array.from(itemsDatalist.options).find(opt => opt.value === val);
+    if (option) {
+      itemIdInput.value = option.getAttribute('data-id');
+    } else {
+      itemIdInput.value = '';
+    }
+  });
+
   // Открытие модалки для создания
   window.openCreateModal = () => {
     editingNormId = null;
     modalTitle.textContent = 'Новая норма выдачи';
     submitBtn.textContent = 'Добавить';
     createForm.reset();
-    // Сбрасываем выбранное СИЗ
-    if (itemSelect) itemSelect.value = '';
+    itemInput.value = '';
+    itemIdInput.value = '';
   };
 
   // Редактирование нормы
@@ -167,7 +182,11 @@
       submitBtn.textContent = 'Сохранить';
 
       // Заполняем форму
-      itemSelect.value = norm.ppe_item_id;
+      const item = allPpeItems.find(i => i.id === norm.ppe_item_id);
+      if (item) {
+        itemInput.value = `${item.name} (${item.category?.name ?? ''})`;
+        itemIdInput.value = item.id;
+      }
       createForm.elements['wear_period_value'].value = norm.wear_period_value;
       createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
       createForm.elements['quantity'].value = norm.quantity;
@@ -186,7 +205,7 @@
 
     const payload = {
       position_id: currentPositionId,
-      ppe_item_id: Number(itemSelect.value),
+      ppe_item_id: Number(itemIdInput.value),
       wear_period_value: createForm.elements['wear_period_value'].value.trim(),
       wear_period_unit: createForm.elements['wear_period_unit'].value,
       quantity: createForm.elements['quantity'].value.trim()

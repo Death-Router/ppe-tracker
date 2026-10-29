@@ -231,6 +231,13 @@
       if (isWsUpdate && isDirty) {
         window.showToast('Сотрудник изменён другим пользователем.', 'warning');
         versionInput.value = emp.version ?? '';
+      
+      // Меняем заголовок на ФИО сотрудника
+      const titleEl = document.getElementById('employee-title');
+      if (titleEl) {
+        const fio = [emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ');
+        titleEl.textContent = `Редактирование: ${fio}`;
+      }
         return;
       }
 
@@ -255,6 +262,13 @@
       }
 
       versionInput.value = emp.version ?? '';
+      
+      // Меняем заголовок на ФИО сотрудника
+      const titleEl = document.getElementById('employee-title');
+      if (titleEl) {
+        const fio = [emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ');
+        titleEl.textContent = `Редактирование: ${fio}`;
+      }
       isDirty = false;
       
       await loadIssues();
