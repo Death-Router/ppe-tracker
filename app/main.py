@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api.v1.endpoints import (
+from app.api.v1.endpoints import export, 
     employees, ppe_categories, ppe_items, ws, departments, positions,
     position_ppe_norms, employee_ppe_issues, ppe_sizes
 )
@@ -39,6 +39,7 @@ app.include_router(positions.router, prefix="/api/v1")
 app.include_router(position_ppe_norms.router, prefix="/api/v1")
 app.include_router(employee_ppe_issues.router, prefix="/api/v1")
 app.include_router(ppe_sizes.router, prefix="/api/v1")
+app.include_router(export.router, prefix="/api/v1")
 app.include_router(ppe_categories.router, prefix="/api/v1")
 app.include_router(ppe_items.router, prefix="/api/v1")
 
