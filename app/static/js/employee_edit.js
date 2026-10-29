@@ -156,8 +156,9 @@
     return tr;
   }
 
-  addSizeBtn.addEventListener('click', () => {
-    sizesTableBody.appendChild(createSizeRow());
+  addSizeBtn.addEventListener('click', async () => {
+    const tr = await createSizeRow();
+    sizesTableBody.appendChild(tr);
     isDirty = true;
   });
 
