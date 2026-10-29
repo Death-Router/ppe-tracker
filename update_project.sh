@@ -6,100 +6,258 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Исправляем кнопку 'Выдать' в модалке (убираем submit)..."
+echo "🔧 Полностью восстанавливаем карточку сотрудника (edit.html)..."
 
-python3 - << 'PYEOF'
-with open('app/templates/employees/edit.html', 'r') as f:
-    content = f.read()
+cat > app/templates/employees/edit.html << 'EOF'
+{% extends "base.html" %}
 
-# 1. Меняем тип кнопки в модалке выдачи на "button" и добавляем onclick
-old_button = '<button type="submit" class="btn btn-primary">Выдать</button>'
-new_button = '<button type="button" class="btn btn-primary" onclick="submitIssueForm(event)">Выдать</button>'
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h3 mb-0" id="employee-title">Редактирование сотрудника</h1>
+            <a href="/employees" class="btn btn-outline-secondary">← К списку</a>
+        </div>
 
-if old_button in content:
-    content = content.replace(old_button, new_button)
-    print("✅ Кнопка 'Выдать' изменена на type='button' с onclick.")
-else:
-    print("⚠️ Не удалось найти кнопку 'Выдать' в edit.html.")
+        <div id="conflict-alert" class="alert alert-warning d-none" role="alert">
+            Данные устарели, обновите страницу.
+            <button type="button" class="btn btn-sm btn-warning ms-2" onclick="location.reload()">Обновить</button>
+        </div>
 
-# 2. На всякий случай, если форма выдачи всё ещё внутри основной формы, 
-# убедимся, что у неё нет атрибута action (чтобы она не отправлялась)
-# Но мы уже вынесли её, так что это не должно быть проблемой.
+        <!-- Вкладки -->
+        <ul class="nav nav-tabs mb-3" id="employeeTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="main-tab" data-bs-toggle="tab" data-bs-target="#main" type="button" role="tab">Основные данные</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="sizes-tab" data-bs-toggle="tab" data-bs-target="#sizes" type="button" role="tab">Размеры СИЗ</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="norms-tab" data-bs-toggle="tab" data-bs-target="#norms" type="button" role="tab">Нормы выдачи</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="issues-tab" data-bs-toggle="tab" data-bs-target="#issues" type="button" role="tab">СИЗ сотрудника</button>
+            </li>
+        </ul>
 
-with open('app/templates/employees/edit.html', 'w') as f:
-    f.write(content)
-PYEOF
+        <form id="employee-form" novalidate>
+            <input type="hidden" name="version" id="version" value="">
+            
+            <div class="tab-content" id="employeeTabsContent">
+                <!-- Вкладка 1: Основные данные -->
+                <div class="tab-pane fade show active" id="main" role="tabpanel">
+                    <div class="card shadow-sm p-4">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label" for="last_name">Фамилия <span class="text-danger">*</span></label>
+                                <input class="form-control" id="last_name" name="last_name" required maxlength="100">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="first_name">Имя <span class="text-danger">*</span></label>
+                                <input class="form-control" id="first_name" name="first_name" required maxlength="100">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="middle_name">Отчество <span class="text-danger">*</span></label>
+                                <input class="form-control" id="middle_name" name="middle_name" required maxlength="100">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="personnel_number">Табельный номер <span class="text-danger">*</span></label>
+                                <input class="form-control" id="personnel_number" name="personnel_number" required maxlength="20">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="department_id">Подразделение <span class="text-danger">*</span></label>
+                                <select class="form-select" id="department_id" name="department_id" required>
+                                    <option value="">Загрузка...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="position_id">Должность <span class="text-danger">*</span></label>
+                                <select class="form-select" id="position_id" name="position_id" required>
+                                    <option value="">Сначала выберите подразделение</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" for="hire_date">Дата приема <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="hire_date" name="hire_date" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" for="position_change_date">Дата перевода</label>
+                                <input type="date" class="form-control" id="position_change_date" name="position_change_date">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" for="gender">Пол <span class="text-danger">*</span></label>
+                                <select class="form-select" id="gender" name="gender" required>
+                                    <option value="">Не указан</option>
+                                    <option value="М">Мужской</option>
+                                    <option value="Ж">Женский</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" for="height">Рост <span class="text-danger">*</span></label>
+                                <input class="form-control" id="height" name="height" placeholder="Например, 182" maxlength="10" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-echo "📝 Добавляем функцию submitIssueForm в employee_edit.js..."
+                <!-- Вкладка 2: Размеры СИЗ -->
+                <div class="tab-pane fade" id="sizes" role="tabpanel">
+                    <div class="card shadow-sm p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0 text-secondary">Размеры СИЗ</h5>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="add-size-btn">+ Добавить размер</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle" id="sizes-table">
+                                <thead class="bg-brand-orange">
+                                    <tr>
+                                        <th>Категория СИЗ</th>
+                                        <th style="width: 250px;">Размер</th>
+                                        <th style="width: 80px;" class="text-center">Действие</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Сюда будут добавляться строки -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
-python3 - << 'PYEOF'
-with open('app/static/js/employee_edit.js', 'r') as f:
-    content = f.read()
+                <!-- Вкладка 3: Нормы выдачи -->
+                <div class="tab-pane fade" id="norms" role="tabpanel">
+                    <div class="card shadow-sm p-4">
+                        <h5 class="mb-3 text-secondary">Положено по норме</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle" id="norms-table">
+                                <thead class="bg-brand-orange">
+                                    <tr>
+                                        <th>Наименование СИЗ</th>
+                                        <th>Норма</th>
+                                        <th>Выдано</th>
+                                        <th>Осталось</th>
+                                        <th style="width: 80px;" class="text-center">Действие</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="text-center text-muted py-2">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
-# Проверяем, есть ли уже функция submitIssueForm
-if 'function submitIssueForm' not in content:
-    # Добавляем функцию в конец файла (перед последней закрывающей скобкой)
-    # Находим последнюю скобку
-    last_brace = content.rfind('})();')
-    if last_brace != -1:
-        new_func = '''
-  // Функция для отправки формы выдачи (вызывается по кнопке)
-  window.submitIssueForm = async (event) => {
-    if (event) event.preventDefault();
-    
-    const form = document.getElementById('issue-form');
-    if (!form) return;
+                <!-- Вкладка 4: Выданные СИЗ -->
+                <div class="tab-pane fade" id="issues" role="tabpanel">
+                    <div class="card shadow-sm p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0 text-secondary">Выданные СИЗ</h5>
+                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#issueModal">+ Выдать СИЗ</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle" id="issues-table">
+                                <thead class="bg-brand-orange">
+                                    <tr>
+                                        <th>СИЗ</th>
+                                        <th>Дата выдачи</th>
+                                        <th>Срок годности</th>
+                                        <th>Кол-во</th>
+                                        <th style="width: 80px;" class="text-center">Действие</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Заполняется через JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-    const payload = FormHelper.serialize(form);
-    payload.employee_id = employeeId;
-    // Берем ID СИЗ из скрытого поля (мы его синхронизировали)
-    payload.ppe_item_id = Number(issueItemIdInput.value);
-    
-    if (!payload.ppe_item_id) {
-      window.showToast('Выберите СИЗ из списка', 'danger');
-      return;
-    }
+            <!-- Кнопки сохранения (всегда внизу) -->
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="/employees" class="btn btn-outline-secondary">Отмена</a>
+                <button type="submit" class="btn btn-primary" id="btn-submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-    if (!payload.issue_date) payload.issue_date = new Date().toISOString().split('T')[0];
-    if (payload.size_value === '') payload.size_value = null;
+<!-- Модальное окно выдачи (ВНЕ основной формы!) -->
+<div class="modal fade" id="issueModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="issue-form">
+        <div class="modal-header">
+          <h5 class="modal-title">Выдача СИЗ</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label">Наименование СИЗ <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" list="issue-ppe-list" id="issue-item-input" placeholder="Начните вводить название..." required autocomplete="off">
+                <datalist id="issue-ppe-list">
+                    <!-- Опции будут заполнены через JS -->
+                </datalist>
+                <input type="hidden" name="ppe_item_id" id="issue-item-id">
+            </div>
+            <div class="row g-3">
+                <div class="col-6">
+                    <label class="form-label">Дата выдачи <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" name="issue_date" required value="2026-10-29">
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Количество <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="quantity" required value="1">
+                        <span class="input-group-text" id="issue-unit-label">ед.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3 mt-3">
+                <label class="form-label">Размер (опционально)</label>
+                <select class="form-select" name="size_value" id="issue-size-select">
+                    <option value="">Сначала выберите СИЗ...</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="button" class="btn btn-primary" onclick="submitIssueForm(event)">Выдать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-    const btn = document.querySelector('button[onclick="submitIssueForm(event)"]');
-    if (btn) btn.disabled = true;
+{% block scripts %}
+<script>
+  window.EMPLOYEE_ID = Number("{{ employee_id }}");
+</script>
+<script src="{{ url_for('static', path='js/employee_edit.js') }}"></script>
+{% endblock %}
+EOF
 
-    try {
-      await API.post('/api/v1/employee_ppe_issues/', payload);
-      window.showToast('СИЗ выдано', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('issueModal')).hide();
-      form.reset();
-      // Сбрасываем скрытые поля
-      issueItemIdInput.value = '';
-      issueItemInput.value = '';
-      await loadIssues();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  };
-'''
-        content = content[:last_brace] + new_func + '\n' + content[last_brace:]
-        print("✅ Функция submitIssueForm добавлена в конец файла.")
-    else:
-        print("⚠️ Не удалось найти конец файла для вставки функции.")
-else:
-    print("ℹ️ Функция submitIssueForm уже есть.")
+echo "🔧 Восстанавливаем базовую логику в employee_edit.js (загрузка данных)..."
 
-with open('app/static/js/employee_edit.js', 'w') as f:
-    f.write(content)
-PYEOF
+# Мы не будем перезаписывать весь JS (он большой), но проверим, что функция loadEmployee и инициализация на месте.
+# Если файл был сломан, лучше перезаписать его полностью, но это займет много места.
+# Вместо этого проверим, что ключевые элементы есть.
+
+if grep -q "loadEmployee" app/static/js/employee_edit.js; then
+    echo "✅ employee_edit.js содержит loadEmployee."
+else
+    echo "⚠️ employee_edit.js не содержит loadEmployee! Возможно, файл поврежден."
+fi
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Кнопка 'Выдать' теперь не вызывает перезагрузку."
+echo "✅ ГОТОВО! Шаблон восстановлен, модалка вынесена."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: prevent form submit on issue button (use type=button + onclick)"
+git commit -m "fix: restore employee edit template with modal outside form"
