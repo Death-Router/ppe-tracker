@@ -6,241 +6,30 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Переделываем карточку сотрудника на вкладки..."
+echo "🛠 Очищаем таблицу employee_ppe_sizes (удаляем старые данные)..."
 
-cat > app/templates/employees/edit.html << 'EOF'
-{% extends "base.html" %}
+# Очищаем таблицу с размерами сотрудников
+docker compose exec -T db psql -U ppe -d ppe_db -c "TRUNCATE TABLE employee_ppe_sizes RESTART IDENTITY CASCADE;"
 
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-10">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h1 class="h3 mb-0">Редактирование сотрудника</h1>
-            <a href="/employees" class="btn btn-outline-secondary">← К списку</a>
-        </div>
+echo "🔄 Откатываем неудачную миграцию (если она частично применилась)..."
 
-        <div id="conflict-alert" class="alert alert-warning d-none" role="alert">
-            Данные устарели, обновите страницу.
-            <button type="button" class="btn btn-sm btn-warning ms-2" onclick="location.reload()">Обновить</button>
-        </div>
+# Откатываем последнюю миграцию, если она была
+docker compose exec -T api alembic downgrade -1 || true
 
-        <!-- Вкладки -->
-        <ul class="nav nav-tabs mb-3" id="employeeTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="main-tab" data-bs-toggle="tab" data-bs-target="#main" type="button" role="tab">Основные данные</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="sizes-tab" data-bs-toggle="tab" data-bs-target="#sizes" type="button" role="tab">Размеры СИЗ</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="norms-tab" data-bs-toggle="tab" data-bs-target="#norms" type="button" role="tab">Нормы выдачи</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="issues-tab" data-bs-toggle="tab" data-bs-target="#issues" type="button" role="tab">СИЗ сотрудника</button>
-            </li>
-        </ul>
+echo "🔄 Применяем миграцию заново..."
 
-        <form id="employee-form" novalidate>
-            <input type="hidden" name="version" id="version" value="">
-            
-            <div class="tab-content" id="employeeTabsContent">
-                <!-- Вкладка 1: Основные данные -->
-                <div class="tab-pane fade show active" id="main" role="tabpanel">
-                    <div class="card shadow-sm p-4">
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label" for="last_name">Фамилия <span class="text-danger">*</span></label>
-                                <input class="form-control" id="last_name" name="last_name" required maxlength="100">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="first_name">Имя <span class="text-danger">*</span></label>
-                                <input class="form-control" id="first_name" name="first_name" required maxlength="100">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="middle_name">Отчество <span class="text-danger">*</span></label>
-                                <input class="form-control" id="middle_name" name="middle_name" required maxlength="100">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="personnel_number">Табельный номер <span class="text-danger">*</span></label>
-                                <input class="form-control" id="personnel_number" name="personnel_number" required maxlength="20">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="department_id">Подразделение <span class="text-danger">*</span></label>
-                                <select class="form-select" id="department_id" name="department_id" required>
-                                    <option value="">Загрузка...</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="position_id">Должность <span class="text-danger">*</span></label>
-                                <select class="form-select" id="position_id" name="position_id" required>
-                                    <option value="">Сначала выберите подразделение</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label" for="hire_date">Дата приема <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control" id="hire_date" name="hire_date" required>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label" for="position_change_date">Дата перевода</label>
-                                <input type="date" class="form-control" id="position_change_date" name="position_change_date">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label" for="gender">Пол <span class="text-danger">*</span></label>
-                                <select class="form-select" id="gender" name="gender" required>
-                                    <option value="">Не указан</option>
-                                    <option value="М">Мужской</option>
-                                    <option value="Ж">Женский</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label" for="height">Рост <span class="text-danger">*</span></label>
-                                <input class="form-control" id="height" name="height" placeholder="Например, 182" maxlength="10" required>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Вкладка 2: Размеры СИЗ -->
-                <div class="tab-pane fade" id="sizes" role="tabpanel">
-                    <div class="card shadow-sm p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="mb-0 text-secondary">Размеры СИЗ</h5>
-                            <button type="button" class="btn btn-sm btn-outline-success" id="add-size-btn">+ Добавить размер</button>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered align-middle" id="sizes-table">
-                                <thead class="bg-brand-orange">
-                                    <tr>
-                                        <th>Наименование СИЗ</th>
-                                        <th style="width: 250px;">Размер</th>
-                                        <th style="width: 80px;" class="text-center">Действие</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Сюда будут добавляться строки -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Вкладка 3: Нормы выдачи -->
-                <div class="tab-pane fade" id="norms" role="tabpanel">
-                    <div class="card shadow-sm p-4">
-                        <h5 class="mb-3 text-secondary">Положено по норме</h5>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered align-middle" id="norms-table">
-                                <thead class="bg-brand-orange">
-                                    <tr>
-                                        <th>Наименование СИЗ</th>
-                                        <th>Норма</th>
-                                        <th>Выдано</th>
-                                        <th>Осталось</th>
-                                        <th style="width: 80px;" class="text-center">Действие</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td colspan="5" class="text-center text-muted py-2">Загрузка...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Вкладка 4: Выданные СИЗ -->
-                <div class="tab-pane fade" id="issues" role="tabpanel">
-                    <div class="card shadow-sm p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="mb-0 text-secondary">Выданные СИЗ</h5>
-                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#issueModal">+ Выдать СИЗ</button>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered align-middle" id="issues-table">
-                                <thead class="bg-brand-orange">
-                                    <tr>
-                                        <th>СИЗ</th>
-                                        <th>Дата выдачи</th>
-                                        <th>Срок годности</th>
-                                        <th>Кол-во</th>
-                                        <th style="width: 80px;" class="text-center">Действие</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Заполняется через JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Кнопки сохранения (всегда внизу) -->
-            <div class="d-flex justify-content-end gap-2 mt-4">
-                <a href="/employees" class="btn btn-outline-secondary">Отмена</a>
-                <button type="submit" class="btn btn-primary" id="btn-submit">Сохранить</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Модальное окно выдачи -->
-<div class="modal fade" id="issueModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="issue-form">
-        <div class="modal-header">
-          <h5 class="modal-title">Выдача СИЗ</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-            <div class="mb-3">
-                <label class="form-label">Наименование СИЗ <span class="text-danger">*</span></label>
-                <select class="form-select" name="ppe_item_id" id="issue-item-select" required>
-                    <option value="">Загрузка...</option>
-                </select>
-            </div>
-            <div class="row g-3">
-                <div class="col-6">
-                    <label class="form-label">Дата выдачи <span class="text-danger">*</span></label>
-                    <input type="date" class="form-control" name="issue_date" required value="2026-10-29">
-                </div>
-                <div class="col-6">
-                    <label class="form-label">Количество <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="quantity" required value="1">
-                </div>
-            </div>
-            <div class="mb-3 mt-3">
-                <label class="form-label">Размер (опционально)</label>
-                <select class="form-select" name="size_value" id="issue-size-select">
-                    <option value="">Сначала выберите СИЗ...</option>
-                </select>
-            </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-          <button type="submit" class="btn btn-primary">Выдать</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-  window.EMPLOYEE_ID = Number("{{ employee_id }}");
-</script>
-<script src="{{ url_for('static', path='js/employee_edit.js') }}"></script>
-{% endblock %}
-EOF
+docker compose exec -T api alembic upgrade head
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
-sleep 2
+sleep 3
 
-echo "✅ ГОТОВО! Карточка сотрудника разбита на вкладки."
+echo "🔄 Проверяем логи..."
+docker compose logs api --tail 10
+
+echo "✅ ГОТОВО! Миграция применена. Теперь размеры сотрудников привязаны к категориям."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: split employee card into tabs"
+git commit -m "fix: clear employee_ppe_sizes table and reapply migration"
