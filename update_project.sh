@@ -6,37 +6,52 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Центрируем навигацию в навбаре..."
+echo "🎨 Добавляем глобальные стили для скругления таблиц..."
 
 python3 - << 'PYEOF'
-with open('app/templates/base.html', 'r') as f:
+with open('app/static/css/app.css', 'r') as f:
     content = f.read()
 
-# Убираем me-auto у левого списка, чтобы он не прижимался влево
-# И добавляем mx-auto для центрирования
-old_ul = '<ul class="navbar-nav me-auto">'
-new_ul = '<ul class="navbar-nav mx-auto">'
+if '.card .table' not in content:
+    content += '''
+/* Скругление углов таблиц внутри карточек */
+.card {
+    overflow: hidden; /* Обрезаем всё, что выходит за границы карточки */
+}
 
-if old_ul in content:
-    content = content.replace(old_ul, new_ul)
-    print("✅ Левый список центрирован (mx-auto).")
+.card .table {
+    margin-bottom: 0;
+    border-radius: 0 0 16px 16px; /* Скругляем нижние углы таблицы, если она последняя */
+}
 
-# Правый список (Выйти) оставляем справа, но можно тоже центрировать.
-# Если хотим, чтобы "Выйти" был справа, оставляем как есть.
-# Если хотим все по центру, можно сделать общий контейнер.
-# Пока оставим "Выйти" справа (me-auto у левого убрали, он центрируется, а правый остается справа).
+/* Убираем скругление у первой строки, если она внутри thead */
+.card .table thead tr:first-child th:first-child {
+    border-top-left-radius: 0;
+}
+.card .table thead tr:first-child th:last-child {
+    border-top-right-radius: 0;
+}
 
-with open('app/templates/base.html', 'w') as f:
-    f.write(content)
+/* Если таблица обернута в .table-responsive, скругляем и его */
+.card .table-responsive {
+    border-radius: 0 0 16px 16px;
+    overflow: hidden;
+}
+'''
+    with open('app/static/css/app.css', 'w') as f:
+        f.write(content)
+    print("✅ CSS для скругления таблиц добавлен.")
+else:
+    print("ℹ️ CSS уже есть.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Навигация отцентрирована."
+echo "✅ ГОТОВО! Все таблицы теперь со скруглёнными углами."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: center navigation items in navbar"
+git commit -m "ui: fix rounded corners for tables inside cards"
