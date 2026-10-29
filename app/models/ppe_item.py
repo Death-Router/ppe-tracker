@@ -6,6 +6,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.employee_ppe_issue import EmployeePpeIssue
     from app.models.ppe_category import PpeCategory
+    from app.models.unit import Unit
     from app.models.position_ppe_norm import PositionPpeNorm
 
 
@@ -18,8 +19,10 @@ class PpeItem(Base):
         ForeignKey("ppe_categories.id", ondelete="RESTRICT")
     )
     version: Mapped[int] = mapped_column(default=1, server_default="1", nullable=False)
+    unit_id: Mapped[int | None] = mapped_column(ForeignKey("units.id"), nullable=True)
 
     category: Mapped["PpeCategory"] = relationship(back_populates="items")
+    unit: Mapped["Unit | None"] = relationship()
     
     employee_issues: Mapped[list["EmployeePpeIssue"]] = relationship(
         back_populates="ppe_item", cascade="all, delete-orphan"
