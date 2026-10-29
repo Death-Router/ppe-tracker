@@ -10,3 +10,7 @@ class UnitCreate(UnitBase):
 class UnitRead(UnitBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+
+class UnitUpdate(BaseModel):
+    name: str | None = Field(None, max_length=50)
+    short_name: str | None = Field(None, max_length=10)
