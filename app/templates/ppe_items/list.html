@@ -43,6 +43,22 @@
                 <option value="">Загрузка...</option>
             </select>
           </div>
+
+          <div class="mb-3">
+            <label class="form-label">Размеры (опционально)</label>
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" id="new-size-input" placeholder="Например, 42">
+                <select class="form-select" id="new-size-gender" style="max-width: 120px;">
+                    <option value="">Унисекс</option>
+                    <option value="М">Мужской</option>
+                    <option value="Ж">Женский</option>
+                </select>
+                <button class="btn btn-outline-success" type="button" id="add-size-to-create-btn">+</button>
+            </div>
+            <ul class="list-group" id="create-sizes-list" style="max-height: 150px; overflow-y: auto;">
+                <!-- Добавленные размеры будут здесь -->
+            </ul>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>

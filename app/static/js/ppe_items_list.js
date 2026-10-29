@@ -3,12 +3,20 @@
   const createForm = document.getElementById('create-form');
   const createCategorySelect = document.getElementById('create-category');
   
-  // Элементы модалки размеров
+  // Элементы модалки размеров (существующие)
   const sizesModalElement = document.getElementById('sizesModal');
   const sizeForm = document.getElementById('size-form');
   const sizesList = document.getElementById('sizes-list');
   const sizeItemName = document.getElementById('size-item-name');
   const sizeItemIdInput = document.getElementById('size-item-id');
+
+  // Элементы для добавления размеров при создании СИЗ
+  const newSizeInput = document.getElementById('new-size-input');
+  const newSizeGender = document.getElementById('new-size-gender');
+  const addSizeToCreateBtn = document.getElementById('add-size-to-create-btn');
+  const createSizesList = document.getElementById('create-sizes-list');
+
+  let pendingSizes = []; // Массив для хранения размеров, добавляемых при создании
 
   async function loadItems() {
     try {
@@ -49,6 +57,36 @@
     `).join('');
   }
 
+  // --- Добавление размера в список создания ---
+  function renderPendingSizes() {
+    if (!pendingSizes.length) {
+      createSizesList.innerHTML = '<li class="list-group-item text-muted small">Размеры не добавлены</li>';
+      return;
+    }
+    createSizesList.innerHTML = pendingSizes.map((s, idx) => {
+      const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+      return `
+        <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+          <span>${escapeHtml(s.size_value)}${genderLabel}</span>
+          <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removePendingSize(${idx})">✕</button>
+        </li>
+      `;
+    }).join('');
+  }
+
+  window.removePendingSize = (idx) => {
+    pendingSizes.splice(idx, 1);
+    renderPendingSizes();
+  };
+
+  addSizeToCreateBtn.addEventListener('click', () => {
+    const val = newSizeInput.value.trim();
+    if (!val) return;
+    pendingSizes.push({ size_value: val, gender: newSizeGender.value || null });
+    newSizeInput.value = '';
+    renderPendingSizes();
+  });
+
   // --- Создание СИЗ ---
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -57,12 +95,31 @@
     
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
+    
     try {
-      await API.post('/api/v1/ppe_items/', payload);
+      // 1. Создаем СИЗ
+      const createdItem = await API.post('/api/v1/ppe_items/', payload);
       window.showToast('Наименование создано', 'success');
+
+      // 2. Создаем размеры для него (если есть)
+      if (pendingSizes.length > 0) {
+        for (const size of pendingSizes) {
+          await API.post('/api/v1/ppe_sizes/', {
+            ppe_item_id: createdItem.id,
+            size_value: size.size_value,
+            gender: size.gender
+          });
+        }
+        window.showToast(`Добавлено размеров: ${pendingSizes.length}`, 'success');
+      }
+
+      // 3. Закрываем модалку и обновляем список
       bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
       createForm.reset();
+      pendingSizes = [];
+      renderPendingSizes();
       loadItems();
+      
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
@@ -82,17 +139,15 @@
     }
   };
 
-  // --- Управление размерами ---
+  // --- Управление размерами (модалка) ---
   window.openSizesModal = async (itemId, itemName) => {
     sizeItemIdInput.value = itemId;
     sizeItemName.textContent = itemName;
     sizesList.innerHTML = '<li class="list-group-item text-muted">Загрузка...</li>';
     
-    // Показываем модалку
     const modal = new bootstrap.Modal(sizesModalElement);
     modal.show();
 
-    // Загружаем размеры
     try {
       const sizes = await API.get(`/api/v1/ppe_sizes/?ppe_item_id=${itemId}`);
       renderSizesList(sizes);
@@ -116,20 +171,19 @@
     `}).join('');
   }
 
-  // Добавление размера
+  // Добавление размера в модалке
   sizeForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const itemId = Number(sizeItemIdInput.value);
     const sizeValue = sizeForm.elements['size_value'].value.trim();
+    const gender = sizeForm.elements['gender'].value || null;
     if (!sizeValue) return;
 
     try {
-      const gender = sizeForm.elements['gender'].value || null;
       await API.post('/api/v1/ppe_sizes/', { ppe_item_id: itemId, size_value: sizeValue, gender: gender });
       window.showToast('Размер добавлен', 'success');
       sizeForm.reset();
       
-      // Перезагружаем список
       const sizes = await API.get(`/api/v1/ppe_sizes/?ppe_item_id=${itemId}`);
       renderSizesList(sizes);
     } catch (err) {
@@ -137,16 +191,14 @@
     }
   });
 
-  // Удаление размера
+  // Удаление размера в модалке
   window.deleteSize = async (sizeId) => {
     if (!confirm('Удалить этот размер?')) return;
     try {
       await API.request(`/api/v1/ppe_sizes/${sizeId}`, { method: 'DELETE' });
       window.showToast('Размер удален', 'success');
-      
-      // Перезагружаем список
       const itemId = Number(sizeItemIdInput.value);
-      const sizes = await API.get('/api/v1/ppe_sizes/?ppe_item_id=' + itemId);
+      const sizes = await API.get(`/api/v1/ppe_sizes/?ppe_item_id=${itemId}`);
       renderSizesList(sizes);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
@@ -160,6 +212,8 @@
     }
   });
 
+  // Инициализация
+  renderPendingSizes();
   loadCategoriesForSelect();
   loadItems();
 })();
