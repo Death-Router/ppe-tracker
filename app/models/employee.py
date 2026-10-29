@@ -6,6 +6,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.employee_ppe_size import EmployeePpeSize
+    from app.models.employee_ppe_issue import EmployeePpeIssue
     from app.models.department import Department
     from app.models.position import Position
 
@@ -27,5 +28,6 @@ class Employee(Base):
     version: Mapped[int] = mapped_column(default=1, server_default="1", nullable=False)
 
     ppe_sizes: Mapped[list["EmployeePpeSize"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    ppe_issues: Mapped[list["EmployeePpeIssue"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
     department_rel: Mapped["Department"] = relationship(back_populates="employees")
     position_rel: Mapped["Position"] = relationship(back_populates="employees")

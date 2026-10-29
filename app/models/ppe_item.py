@@ -8,6 +8,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.employee_ppe_size import EmployeePpeSize
     from app.models.position_ppe_norm import PositionPpeNorm
+    from app.models.employee_ppe_issue import EmployeePpeIssue
     from app.models.ppe_category import PpeCategory
 
 
@@ -28,3 +29,4 @@ class PpeItem(Base):
         back_populates="ppe_item"
     )
     position_norms: Mapped[list["PositionPpeNorm"]] = relationship(back_populates="ppe_item", cascade="all, delete-orphan")
+    employee_issues: Mapped[list["EmployeePpeIssue"]] = relationship(back_populates="ppe_item", cascade="all, delete-orphan")

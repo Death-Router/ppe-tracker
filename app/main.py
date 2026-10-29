@@ -42,6 +42,7 @@ app.include_router(employees.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
 app.include_router(positions.router, prefix="/api/v1")
 app.include_router(position_ppe_norms.router, prefix="/api/v1")
+app.include_router(employee_ppe_issues.router, prefix="/api/v1")
 app.include_router(ppe_categories.router, prefix="/api/v1")
 app.include_router(ppe_items.router, prefix="/api/v1")
 
