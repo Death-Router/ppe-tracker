@@ -6,95 +6,78 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Принудительно добавляем formatPeriod в employee_edit.js..."
+echo "🔧 Меняем формат отображения норм в карточке сотрудника..."
 
 python3 - << 'PYEOF'
 with open('app/static/js/employee_edit.js', 'r') as f:
     content = f.read()
 
-# Если функции нет, добавляем её в самое начало файла (после IIFE)
-if 'function formatPeriod' not in content:
-    # Находим начало файла (первые строки)
-    # Вставляем функцию сразу после (() => {
-    insertion = '''
-  function formatPeriod(value, unit) {
-    if (!value) return '—';
-    const num = parseInt(value, 10);
-    if (isNaN(num)) return `${value} ${unit}`;
+# Ищем блок формирования строки нормы (старый или новый формат)
+# Вариант 1: Если у нас уже используется formattedPeriod и formattedQuantity
+old_block = '''      // Форматируем срок (5 лет) и количество (5 шт)
+      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
+      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
 
-    if (unit === 'год') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} лет`;
-      if (lastDigit === 1) return `${num} год`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} года`;
-      return `${num} лет`;
-    }
-    if (unit === 'месяц') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} месяцев`;
-      if (lastDigit === 1) return `${num} месяц`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} месяца`;
-      return `${num} месяцев`;
-    }
-    if (unit === 'день') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} дней`;
-      if (lastDigit === 1) return `${num} день`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} дня`;
-      return `${num} дней`;
-    }
-    if (unit === 'смена') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} смен`;
-      if (lastDigit === 1) return `${num} смена`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} смены`;
-      return `${num} смен`;
-    }
-    return `${value} ${unit}`;
-  }
+      return `
+        <tr>
+          <td>${norm.ppe_item?.name ?? '—'}</td>
+          <td>${formattedPeriod} (${formattedQuantity})</td>'''
 
-  function formatUnit(value, shortName) {
-    if (!shortName) return value;
-    const num = parseInt(value, 10);
-    if (isNaN(num)) return `${value} ${shortName}`;
+new_block = '''      // Форматируем срок и количество
+      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
+      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
 
-    if (shortName.toLowerCase() === 'пара') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} пар`;
-      if (lastDigit === 1) return `${num} пара`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} пары`;
-      return `${num} пар`;
-    }
-    if (shortName.toLowerCase() === 'штука' || shortName.toLowerCase() === 'шт') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} штук`;
-      if (lastDigit === 1) return `${num} штука`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} штуки`;
-      return `${num} штук`;
-    }
-    if (shortName.toLowerCase() === 'комплект') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} комплектов`;
-      if (lastDigit === 1) return `${num} комплект`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} комплекта`;
-      return `${num} комплектов`;
-    }
-    return `${num} ${shortName}`;
-  }
-'''
+      return `
+        <tr>
+          <td>${norm.ppe_item?.name ?? '—'}</td>
+          <td>${formattedQuantity} на ${formattedPeriod}</td>'''
 
-    # Вставляем после (() => {
-    content = content.replace('(() => {', '(() => {\n' + insertion, 1)
-    print("✅ Функции formatPeriod и formatUnit добавлены в начало employee_edit.js.")
+if old_block in content:
+    content = content.replace(old_block, new_block)
+    print("✅ Формат 'Количество на Срок' добавлен (вариант 1).")
 else:
-    print("ℹ️ Функция formatPeriod уже есть.")
+    # Вариант 2: Если структура немного отличается (например, без комментария)
+    old_block_alt = '''      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
+      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
+
+      return `
+        <tr>
+          <td>${norm.ppe_item?.name ?? '—'}</td>
+          <td>${formattedPeriod} (${formattedQuantity})</td>'''
+
+    new_block_alt = '''      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
+      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
+
+      return `
+        <tr>
+          <td>${norm.ppe_item?.name ?? '—'}</td>
+          <td>${formattedQuantity} на ${formattedPeriod}</td>'''
+
+    if old_block_alt in content:
+        content = content.replace(old_block_alt, new_block_alt)
+        print("✅ Формат 'Количество на Срок' добавлен (вариант 2).")
+    else:
+        # Вариант 3: Самая старая версия (через periodStr)
+        old_block_old = '''      const periodStr = `${norm.wear_period_value} ${norm.wear_period_unit}`;
+
+      return `
+        <tr>
+          <td>${norm.ppe_item?.name ?? '—'}</td>
+          <td>${periodStr} (${requiredQty} ${norm.quantity.includes('пар') ? 'пар' : 'шт'})</td>'''
+
+        new_block_old = '''      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
+      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
+
+      return `
+        <tr>
+          <td>${norm.ppe_item?.name ?? '—'}</td>
+          <td>${formattedQuantity} на ${formattedPeriod}</td>'''
+
+        if old_block_old in content:
+            content = content.replace(old_block_old, new_block_old)
+            print("✅ Формат 'Количество на Срок' добавлен (вариант 3 - старый код).")
+        else:
+            print("⚠️ Не удалось найти блок формирования строки нормы. Возможно, структура изменилась.")
 
 with open('app/static/js/employee_edit.js', 'w') as f:
     f.write(content)
@@ -104,9 +87,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Ошибка formatPeriod исправлена."
+echo "✅ ГОТОВО! Теперь нормы отображаются как '5 пар на 5 лет'."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: add formatPeriod and formatUnit to employee_edit.js"
+git commit -m "ui: change norm format to 'quantity on period' (e.g., 5 пар на 5 лет)"

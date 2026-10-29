@@ -305,14 +305,14 @@
         statusText = `Не хватает ${remaining}`;
       }
 
-      // Форматируем срок (5 лет) и количество (5 шт)
+      // Форматируем срок и количество
       const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
       const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
 
       return `
         <tr>
           <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${formattedPeriod} (${formattedQuantity})</td>
+          <td>${formattedQuantity} на ${formattedPeriod}</td>
           <td>${issued}</td>
           <td class="${statusClass}">${statusText}</td>
           <td class="text-center">
