@@ -35,6 +35,7 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+            
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Фамилия <span class="text-danger">*</span></label>
@@ -46,8 +47,9 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Отчество <span class="text-danger">*</span></label>
-                    <input class="form-control" name="middle_name" maxlength="100" required>
+                    <input class="form-control" name="middle_name" required maxlength="100">
                 </div>
+
                 <div class="col-md-4">
                     <label class="form-label">Табельный номер <span class="text-danger">*</span></label>
                     <input class="form-control" name="personnel_number" required maxlength="20">
@@ -55,7 +57,7 @@
                 <div class="col-md-4">
                     <label class="form-label">Подразделение <span class="text-danger">*</span></label>
                     <select class="form-select" name="department_id" id="create-dept" required>
-                        <option value="">Загрузка...</option>
+                        <option value="">Выберите подразделение...</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -64,6 +66,7 @@
                         <option value="">Сначала выберите подразделение</option>
                     </select>
                 </div>
+
                 <div class="col-md-3">
                     <label class="form-label">Дата приема <span class="text-danger">*</span></label>
                     <input type="date" class="form-control" name="hire_date" required>
@@ -85,6 +88,7 @@
                     <input class="form-control" name="height" placeholder="Например, 182" maxlength="10" required>
                 </div>
             </div>
+    
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
