@@ -6,58 +6,52 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Убираем циклический импорт из app/db/base.py..."
-
-# Оставляем только Base
-cat > app/db/base.py << 'EOF'
-from sqlalchemy.orm import DeclarativeBase
-
-class Base(DeclarativeBase):
-    pass
-EOF
-
-echo "🔧 Обновляем alembic/env.py (чтобы Alembic видел все модели)..."
+echo "🔧 Исправляем импорт в main.py..."
 
 python3 - << 'PYEOF'
-with open('alembic/env.py', 'r') as f:
+with open('app/main.py', 'r') as f:
     content = f.read()
 
-imports = """
-from app.models.department import Department
-from app.models.position import Position
-from app.models.employee import Employee
-from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.ppe_category import PpeCategory
-from app.models.ppe_item import PpeItem
-from app.models.position_ppe_norm import PositionPpeNorm
-from app.models.employee_ppe_issue import EmployeePpeIssue
-"""
-
-# Добавляем импорты, если их еще нет (или обновляем)
-if 'from app.models.employee_ppe_issue import EmployeePpeIssue' not in content:
-    if 'target_metadata = ' in content:
-        content = content.replace('target_metadata = ', imports + '\ntarget_metadata = ')
+# Проверяем, есть ли уже employee_ppe_issues в импорте
+if 'employee_ppe_issues' not in content.split('app.include_router')[0]:
+    # Ищем строку импорта из app.api.v1.endpoints
+    import re
+    # Паттерн для строки from app.api.v1.endpoints import (...)
+    pattern = r'from app\.api\.v1\.endpoints import \(([^)]+)\)'
+    match = re.search(pattern, content, re.DOTALL)
+    
+    if match:
+        # Добавляем employee_ppe_issues в скобки
+        imports = match.group(1)
+        if 'employee_ppe_issues' not in imports:
+            new_imports = imports.strip() + ', employee_ppe_issues'
+            content = content.replace(match.group(0), f'from app.api.v1.endpoints import ({new_imports})')
+            print("✅ Импорт employee_ppe_issues добавлен в main.py.")
     else:
-        content += imports
+        # Если импорт не в скобках, ищем однострочный
+        pattern2 = r'from app\.api\.v1\.endpoints import (.*)'
+        match2 = re.search(pattern2, content)
+        if match2 and 'employee_ppe_issues' not in match2.group(1):
+            new_line = match2.group(1).strip() + ', employee_ppe_issues'
+            content = content.replace(match2.group(0), f'from app.api.v1.endpoints import {new_line}')
+            print("✅ Импорт employee_ppe_issues добавлен в main.py (однострочный).")
+else:
+    print("ℹ️ Импорт employee_ppe_issues уже есть в main.py.")
 
-with open('alembic/env.py', 'w') as f:
+with open('app/main.py', 'w') as f:
     f.write(content)
-print("✅ alembic/env.py обновлен.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 3
 
-echo "🔄 Генерируем миграцию..."
-docker compose exec -T api alembic revision --autogenerate -m "add employee_ppe_issues table (retry)"
+echo "🔄 Проверяем, что приложение запустилось..."
+docker compose logs api --tail 10
 
-echo "🔄 Применяем миграцию..."
-docker compose exec -T api alembic upgrade head
-
-echo "✅ ГОТОВО! Приложение должно подняться."
+echo "✅ ГОТОВО! Если в логах 'Application startup complete', то всё хорошо."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: resolve circular import for employee_ppe_issues"
+git commit -m "fix: add missing employee_ppe_issues import in main.py"

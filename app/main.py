@@ -6,15 +6,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api.v1.endpoints import (
-    departments,
+from app.api.v1.endpoints import (departments,
     employees,
     position_ppe_norms,
     positions,
     ppe_categories,
     ppe_items,
-    ws,
-)
+    ws,, employee_ppe_issues)
 
 BASE_DIR = Path(__file__).resolve().parent
 
