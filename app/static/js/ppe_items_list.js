@@ -27,6 +27,19 @@
     }
   }
 
+  async function loadUnitsForSelect() {
+    try {
+      const units = await API.get('/api/v1/units');
+      const unitSelect = document.getElementById('create-unit');
+      if (unitSelect) {
+        unitSelect.innerHTML = '<option value="">Не указана</option>' +
+          units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
+      }
+    } catch (err) {
+      console.error('Ошибка загрузки единиц:', err);
+    }
+  }
+
   function populateCategoryFilter(items) {
     const categories = [...new Set(items.map(i => i.category?.name).filter(Boolean))];
     categoryFilter.innerHTML = '<option value="">Все категории</option>' +
@@ -91,6 +104,11 @@
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
     payload.category_id = Number(payload.category_id);
+    if (payload.unit_id) {
+      payload.unit_id = Number(payload.unit_id);
+    } else {
+      payload.unit_id = null;
+    }
     
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
@@ -123,5 +141,6 @@
   });
 
   loadCategoriesForSelect();
+  loadUnitsForSelect();
   loadItems();
 })();
