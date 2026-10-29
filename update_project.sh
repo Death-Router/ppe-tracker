@@ -6,52 +6,43 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📐 Исправляем выравнивание в модалке создания сотрудника..."
+echo "📐 Правим тексты в модалке и карточке сотрудника..."
 
 python3 - << 'PYEOF'
+import os
+
+# 1. Обновляем модалку (list.html)
 with open('app/templates/employees/list.html', 'r') as f:
     content = f.read()
 
-# 1. Сокращаем тексты в select
+# Сокращаем текст подразделения
 content = content.replace(
-    '<option value="">Выберите подразделение...</option>',
-    '<option value="">Подразделение...</option>'
+    '<option value="">Подразделение...</option>',
+    '<option value="">Подразделение</option>'
 )
+# Меняем "Дата смены" на "Дата перевода"
 content = content.replace(
-    '<option value="">Сначала выберите подразделение</option>',
-    '<option value="">Сначала выберите цех</option>'
-)
-
-# 2. Для "Дата смены должности" добавляем класс text-nowrap к label, чтобы он не переносился
-content = content.replace(
-    '<label class="form-label">Дата смены должности</label>',
-    '<label class="form-label text-nowrap">Дата смены</label>'
-)
-
-# 3. Для "Дата приема" на всякий случай тоже оставляем коротким
-content = content.replace(
-    '<label class="form-label">Дата приема <span class="text-danger">*</span></label>',
-    '<label class="form-label text-nowrap">Дата приема <span class="text-danger">*</span></label>'
+    '<label class="form-label text-nowrap">Дата смены</label>',
+    '<label class="form-label text-nowrap">Дата перевода</label>'
 )
 
 with open('app/templates/employees/list.html', 'w') as f:
     f.write(content)
-print("✅ Тексты сокращены, лейблы выровнены.")
-PYEOF
+print("✅ Модалка обновлена.")
 
-# 4. Обновляем JS, чтобы при выборе подразделения placeholder в должности тоже был коротким
-python3 - << 'PYEOF'
-with open('app/static/js/employees_list.js', 'r') as f:
+# 2. Обновляем карточку (edit.html)
+with open('app/templates/employees/edit.html', 'r') as f:
     content = f.read()
 
+# Меняем "Дата смены должности" на "Дата перевода"
 content = content.replace(
-    "createPosSelect.innerHTML = '<option value=\"\">Сначала выберите подразделение</option>';",
-    "createPosSelect.innerHTML = '<option value=\"\">Сначала выберите цех</option>';"
+    '<label class="form-label" for="position_change_date">Дата смены должности</label>',
+    '<label class="form-label" for="position_change_date">Дата перевода</label>'
 )
 
-with open('app/static/js/employees_list.js', 'w') as f:
+with open('app/templates/employees/edit.html', 'w') as f:
     f.write(content)
-print("✅ JS обновлен (короткий placeholder для должности).")
+print("✅ Карточка сотрудника обновлена.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
@@ -63,4 +54,4 @@ echo "✅ ГОТОВО!"
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: fix alignment and shorten labels in employee creation modal"
+git commit -m "ui: fix department placeholder and rename 'Дата смены' to 'Дата перевода'"
