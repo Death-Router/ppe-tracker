@@ -6,65 +6,141 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Убираем устаревшую связь employee_sizes из PpeItem..."
+echo "🔧 Принудительно перезаписываем employees.py (правильные связи)..."
 
-cat > app/models/ppe_item.py << 'EOF'
-from typing import TYPE_CHECKING
-from sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+cat > app/api/v1/endpoints/employees.py << 'EOF'
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.exc import StaleDataError
 
-if TYPE_CHECKING:
-    from app.models.employee_ppe_issue import EmployeePpeIssue
-    from app.models.ppe_category import PpeCategory
-    from app.models.position_ppe_norm import PositionPpeNorm
+from app.api.v1.endpoints.ws import manager
+from app.db.session import get_db
+from app.models.employee import Employee
+from app.models.employee_ppe_size import EmployeePpeSize
+from app.models.employee_ppe_issue import EmployeePpeIssue
+from app.models.ppe_item import PpeItem
+from app.models.ppe_category import PpeCategory
+from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
+
+router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
 
-class PpeItem(Base):
-    __tablename__ = "ppe_items"
+def employee_options():
+    """Возвращает список опций для загрузки всех вложенных связей."""
+    return [
+        # Размеры привязаны к категориям
+        selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.category),
+        # Выдачи (привязаны к СИЗ)
+        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.category),
+        selectinload(Employee.department_rel),
+        selectinload(Employee.position_rel)
+    ]
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(150), index=True)
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("ppe_categories.id", ondelete="RESTRICT")
+
+async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Employee:
+    result = await db.execute(
+        select(Employee).where(Employee.id == employee_id).options(*employee_options())
     )
-    version: Mapped[int] = mapped_column(default=1, server_default="1", nullable=False)
+    return result.scalar_one()
 
-    category: Mapped["PpeCategory"] = relationship(back_populates="items")
-    
-    employee_issues: Mapped[list["EmployeePpeIssue"]] = relationship(
-        back_populates="ppe_item", cascade="all, delete-orphan"
-    )
-    position_norms: Mapped[list["PositionPpeNorm"]] = relationship(
-        back_populates="ppe_item", cascade="all, delete-orphan"
-    )
-EOF
 
-echo "🔧 Проверяем модель EmployeePpeSize (должна ссылаться на категорию)..."
+@router.post("/", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
+async def create_employee(employee_in: EmployeeCreate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Employee).where(Employee.personnel_number == employee_in.personnel_number))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Сотрудник с таким табельным номером уже существует")
 
-cat > app/models/employee_ppe_size.py << 'EOF'
-from typing import TYPE_CHECKING
-from sqlalchemy import String, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+    employee_data = employee_in.model_dump(exclude={"ppe_sizes"})
+    db_employee = Employee(**employee_data)
+    db.add(db_employee)
+    await db.flush()
 
-if TYPE_CHECKING:
-    from app.models.employee import Employee
-    from app.models.ppe_category import PpeCategory
+    if employee_in.ppe_sizes:
+        cat_ids = [size.category_id for size in employee_in.ppe_sizes]
+        cats_result = await db.execute(select(PpeCategory.id).where(PpeCategory.id.in_(cat_ids)))
+        if set(cat_ids) - set(cats_result.scalars().all()):
+            await db.rollback()
+            raise HTTPException(status_code=404, detail="Категории СИЗ не найдены")
+        for size_data in employee_in.ppe_sizes:
+            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
 
-class EmployeePpeSize(Base):
-    __tablename__ = "employee_ppe_sizes"
-    __table_args__ = (
-        UniqueConstraint("employee_id", "category_id", name="uq_employee_category_size"),
-    )
+    await db.commit()
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
-    category_id: Mapped[int] = mapped_column(ForeignKey("ppe_categories.id", ondelete="CASCADE"))
-    size_value: Mapped[str] = mapped_column(String(50), nullable=False)
+    try:
+        await manager.broadcast_to_employee(0, {"event": "employee_created", "employee_id": db_employee.id})
+    except Exception:
+        pass
 
-    employee: Mapped["Employee"] = relationship(back_populates="ppe_sizes")
-    category: Mapped["PpeCategory"] = relationship()
+    return await get_employee_with_relations(db, db_employee.id)
+
+
+@router.get("/", response_model=list[EmployeeRead])
+async def get_employees(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Employee).options(*employee_options()))
+    return result.scalars().all()
+
+
+@router.get("/{employee_id}", response_model=EmployeeRead)
+async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
+    employee = await get_employee_with_relations(db, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    return employee
+
+
+@router.put("/{employee_id}", response_model=EmployeeRead)
+async def update_employee(employee_id: int, employee_in: EmployeeUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    db_employee = result.scalar_one_or_none()
+    if not db_employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    if db_employee.version != employee_in.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
+
+    update_data = employee_in.model_dump(exclude_unset=True, exclude={"version", "ppe_sizes"})
+    for field, value in update_data.items():
+        setattr(db_employee, field, value)
+
+    if employee_in.ppe_sizes is not None:
+        await db.execute(delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id))
+        for size_data in employee_in.ppe_sizes:
+            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+
+    try:
+        await db.commit()
+    except StaleDataError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Конфликт версий")
+
+    try:
+        await manager.broadcast_to_employee(employee_id, {"event": "employee_updated", "employee_id": employee_id})
+    except Exception:
+        pass
+
+    return await get_employee_with_relations(db, employee_id)
+
+
+@router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    db_employee = result.scalar_one_or_none()
+    if not db_employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    try:
+        await db.delete(db_employee)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка удаления")
+
+    try:
+        await manager.broadcast_to_employee(0, {"event": "employee_updated", "employee_id": employee_id})
+    except Exception:
+        pass
 EOF
 
 echo "🚀 Перезапускаем контейнер..."
@@ -74,9 +150,9 @@ sleep 3
 echo "🔄 Проверяем логи..."
 docker compose logs api --tail 10
 
-echo "✅ ГОТОВО! Если в логах 'Application startup complete', значит, всё работает."
+echo "✅ ГОТОВО! Список сотрудников должен загрузиться."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: remove obsolete employee_sizes relationship from PpeItem"
+git commit -m "fix: force update employee options for category-based sizes"
