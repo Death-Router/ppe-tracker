@@ -13,7 +13,7 @@ class PpeItem(Base):
     __tablename__ = "ppe_items"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(150), index=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)  # Увеличили до 255
     category_id: Mapped[int] = mapped_column(
         ForeignKey("ppe_categories.id", ondelete="RESTRICT")
     )
