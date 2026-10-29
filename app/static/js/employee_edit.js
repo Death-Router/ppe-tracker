@@ -616,4 +616,44 @@
     .then(loadCategories)
     .then(loadAllPpeItems)
     .then(() => loadEmployee());
+
+  // Функция для отправки формы выдачи (вызывается по кнопке)
+  window.submitIssueForm = async (event) => {
+    if (event) event.preventDefault();
+    
+    const form = document.getElementById('issue-form');
+    if (!form) return;
+
+    const payload = FormHelper.serialize(form);
+    payload.employee_id = employeeId;
+    // Берем ID СИЗ из скрытого поля (мы его синхронизировали)
+    payload.ppe_item_id = Number(issueItemIdInput.value);
+    
+    if (!payload.ppe_item_id) {
+      window.showToast('Выберите СИЗ из списка', 'danger');
+      return;
+    }
+
+    if (!payload.issue_date) payload.issue_date = new Date().toISOString().split('T')[0];
+    if (payload.size_value === '') payload.size_value = null;
+
+    const btn = document.querySelector('button[onclick="submitIssueForm(event)"]');
+    if (btn) btn.disabled = true;
+
+    try {
+      await API.post('/api/v1/employee_ppe_issues/', payload);
+      window.showToast('СИЗ выдано', 'success');
+      bootstrap.Modal.getInstance(document.getElementById('issueModal')).hide();
+      form.reset();
+      // Сбрасываем скрытые поля
+      issueItemIdInput.value = '';
+      issueItemInput.value = '';
+      await loadIssues();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
 })();
