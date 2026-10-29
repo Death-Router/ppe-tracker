@@ -135,7 +135,9 @@ async def norms_page(request: Request):
 
 @app.get("/")
 async def root():
-    return {"message": "Привет! Сервер учета СИЗ работает."}
+    # Перенаправляем на список сотрудников
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/employees")
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
