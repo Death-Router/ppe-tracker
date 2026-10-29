@@ -6,38 +6,34 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Обновляем шаблон списка СИЗ (добавляем поиск и фильтр)..."
+echo "📝 Обновляем шаблон категорий (добавляем поиск)..."
 
-cat > app/templates/ppe_items/list.html << 'EOF'
+cat > app/templates/ppe_categories/list.html << 'EOF'
 {% extends "base.html" %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Наименования СИЗ</h1>
+    <h1 class="h3 mb-0">Категории СИЗ</h1>
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
 </div>
 
-<!-- Панель поиска и фильтрации -->
+<!-- Панель поиска -->
 <div class="row g-2 mb-3">
     <div class="col-md-5">
         <div class="input-group">
             <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+            <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию или описанию...">
         </div>
-    </div>
-    <div class="col-md-4">
-        <select class="form-select" id="category-filter">
-            <option value="">Все категории</option>
-        </select>
     </div>
 </div>
 
 <div class="card shadow-sm">
     <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0" id="items-table">
+        <table class="table table-sm table-hover align-middle mb-0" id="categories-table">
             <thead class="bg-brand-orange">
             <tr>
-                <th>Наименование</th>
-                <th>Категория</th>
+                <th>Название</th>
+                <th>Описание</th>
                 <th class="text-end">Действия</th>
             </tr>
             </thead>
@@ -54,19 +50,17 @@ cat > app/templates/ppe_items/list.html << 'EOF'
     <div class="modal-content">
       <form id="create-form">
         <div class="modal-header">
-          <h5 class="modal-title">Новое наименование СИЗ</h5>
+          <h5 class="modal-title">Новая категория</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">Наименование <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" name="name" required maxlength="255">
+            <label class="form-label">Название <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="name" required maxlength="100">
           </div>
           <div class="mb-3">
-            <label class="form-label">Категория <span class="text-danger">*</span></label>
-            <select class="form-select" name="category_id" id="create-category" required>
-                <option value="">Загрузка...</option>
-            </select>
+            <label class="form-label">Описание</label>
+            <textarea class="form-control" name="description" rows="2" maxlength="500"></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -77,49 +71,73 @@ cat > app/templates/ppe_items/list.html << 'EOF'
     </div>
   </div>
 </div>
+
+<!-- Модальное окно управления размерами категории -->
+<div class="modal fade" id="sizesModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="size-form">
+        <input type="hidden" name="category_id" id="size-category-id">
+        <div class="modal-header">
+          <h5 class="modal-title">Размеры для: <span id="size-category-name"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label">Новый размер</label>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <select class="form-select" name="gender">
+                            <option value="">Унисекс</option>
+                            <option value="М">Мужской</option>
+                            <option value="Ж">Женский</option>
+                        </select>
+                    </div>
+                    <div class="col-5">
+                        <input type="text" class="form-control" name="size_value" placeholder="Например, 42" required>
+                    </div>
+                    <div class="col-3">
+                        <button class="btn btn-primary w-100" type="submit">Добавить</button>
+                    </div>
+                </div>
+            </div>
+            <ul class="list-group" id="sizes-list">
+                <!-- Список размеров -->
+            </ul>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', path='js/ppe_items_list.js') }}"></script>
+<script src="{{ url_for('static', path='js/ppe_categories_list.js') }}"></script>
 {% endblock %}
 EOF
 
-echo "📝 Обновляем JS (поиск, фильтр, обрезка длинных названий)..."
+echo "📝 Обновляем JS категорий (компактный вывод, поиск)..."
 
-cat > app/static/js/ppe_items_list.js << 'EOF'
+cat > app/static/js/ppe_categories_list.js << 'EOF'
 (() => {
-  const tbody = document.querySelector('#items-table tbody');
+  const tbody = document.querySelector('#categories-table tbody');
   const createForm = document.getElementById('create-form');
-  const createCategorySelect = document.getElementById('create-category');
   const searchInput = document.getElementById('search-input');
-  const categoryFilter = document.getElementById('category-filter');
+  const sizesModalElement = document.getElementById('sizesModal');
+  const sizeForm = document.getElementById('size-form');
+  const sizesList = document.getElementById('sizes-list');
+  const sizeCategoryName = document.getElementById('size-category-name');
+  const sizeCategoryIdInput = document.getElementById('size-category-id');
 
-  let allItems = [];
+  let allCategories = [];
 
-  async function loadItems() {
+  async function loadCategories() {
     try {
-      allItems = await API.get('/api/v1/ppe_items');
-      populateCategoryFilter(allItems);
-      filterItems();
+      allCategories = await API.get('/api/v1/ppe_categories');
+      filterCategories();
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
-  }
-
-  async function loadCategoriesForSelect() {
-    try {
-      const categories = await API.get('/api/v1/ppe_categories');
-      createCategorySelect.innerHTML = '<option value="">Выберите категорию...</option>' +
-        categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-    } catch (err) {
-      createCategorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
-    }
-  }
-
-  function populateCategoryFilter(items) {
-    const categories = [...new Set(items.map(i => i.category?.name).filter(Boolean))];
-    categoryFilter.innerHTML = '<option value="">Все категории</option>' +
-      categories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
   }
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
@@ -130,62 +148,55 @@ cat > app/static/js/ppe_items_list.js << 'EOF'
     return str.substring(0, maxLength) + '...';
   }
 
-  function filterItems() {
+  function filterCategories() {
     const searchTerm = searchInput.value.toLowerCase().trim();
-    const selectedCategory = categoryFilter.value;
-
-    let filtered = allItems;
+    let filtered = allCategories;
 
     if (searchTerm) {
-      filtered = filtered.filter(item => 
-        item.name.toLowerCase().includes(searchTerm) || 
-        (item.category?.name || '').toLowerCase().includes(searchTerm)
+      filtered = filtered.filter(c => 
+        c.name.toLowerCase().includes(searchTerm) || 
+        (c.description || '').toLowerCase().includes(searchTerm)
       );
-    }
-
-    if (selectedCategory) {
-      filtered = filtered.filter(item => item.category?.name === selectedCategory);
     }
 
     renderTable(filtered);
   }
 
-  function renderTable(items) {
-    if (!items.length) {
+  function renderTable(categories) {
+    if (!categories.length) {
       tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Ничего не найдено</td></tr>`;
       return;
     }
-    tbody.innerHTML = items.map(i => {
-      const fullName = escapeHtml(i.name);
-      const shortName = escapeHtml(truncate(i.name, 60));
+    tbody.innerHTML = categories.map(c => {
+      const fullName = escapeHtml(c.name);
+      const shortName = escapeHtml(truncate(c.name, 50));
+      const shortDesc = escapeHtml(truncate(c.description ?? '', 60));
       return `
-      <tr data-item-id="${i.id}" style="height: 40px;">
-        <td class="py-1" title="${fullName}">${shortName}</td>
-        <td class="py-1"><span class="badge bg-secondary">${escapeHtml(i.category?.name ?? '—')}</span></td>
+      <tr data-category-id="${c.id}" style="height: 40px;">
+        <td class="py-1" title="${fullName}"><strong>${shortName}</strong></td>
+        <td class="py-1" title="${escapeHtml(c.description ?? '')}">${shortDesc || '—'}</td>
         <td class="py-1 text-end">
-          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteItem(${i.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSizesModal(${c.id}, '${fullName}')" title="Размеры"><i class="bi bi-rulers"></i></button>
+          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/ppe-categories/${c.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteCategory(${c.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
   }
 
-  searchInput.addEventListener('input', filterItems);
-  categoryFilter.addEventListener('change', filterItems);
+  searchInput.addEventListener('input', filterCategories);
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
-    payload.category_id = Number(payload.category_id);
-    
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {
-      await API.post('/api/v1/ppe_items/', payload);
-      window.showToast('Наименование создано', 'success');
+      await API.post('/api/v1/ppe_categories/', payload);
+      window.showToast('Категория создана', 'success');
       bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
       createForm.reset();
-      loadItems();
+      loadCategories();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
@@ -193,23 +204,86 @@ cat > app/static/js/ppe_items_list.js << 'EOF'
     }
   });
 
-  window.deleteItem = async (id, name) => {
-    if (!confirm(`Удалить наименование "${name}"?`)) return;
+  window.deleteCategory = async (id, name) => {
+    if (!confirm(`Удалить категорию "${name}"?`)) return;
     try {
-      await API.request(`/api/v1/ppe_items/${id}`, { method: 'DELETE' });
-      window.showToast('Наименование удалено', 'success');
-      loadItems();
+      await API.request(`/api/v1/ppe_categories/${id}`, { method: 'DELETE' });
+      window.showToast('Категория удалена', 'success');
+      loadCategories();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
+
+  // --- Управление размерами ---
+  window.openSizesModal = async (categoryId, categoryName) => {
+    sizeCategoryIdInput.value = categoryId;
+    sizeCategoryName.textContent = categoryName;
+    sizesList.innerHTML = '<li class="list-group-item text-muted">Загрузка...</li>';
+    
+    const modal = new bootstrap.Modal(sizesModalElement);
+    modal.show();
+
+    try {
+      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);
+      renderSizesList(sizes);
+    } catch (err) {
+      sizesList.innerHTML = `<li class="list-group-item text-danger">Ошибка: ${err.message}</li>`;
+    }
+  };
+
+  function renderSizesList(sizes) {
+    if (!sizes.length) {
+      sizesList.innerHTML = '<li class="list-group-item text-muted">Нет добавленных размеров</li>';
+      return;
+    }
+    sizesList.innerHTML = sizes.map(s => {
+      const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+      return `
+      <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+        ${escapeHtml(s.size_value)}${genderLabel}
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteSize(${s.id})">✕</button>
+      </li>
+    `}).join('');
+  }
+
+  sizeForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const categoryId = Number(sizeCategoryIdInput.value);
+    const sizeValue = sizeForm.elements['size_value'].value.trim();
+    const gender = sizeForm.elements['gender'].value || null;
+    if (!sizeValue) return;
+
+    try {
+      await API.post('/api/v1/ppe_sizes/', { category_id: categoryId, size_value: sizeValue, gender: gender });
+      window.showToast('Размер добавлен', 'success');
+      sizeForm.reset();
+      
+      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);
+      renderSizesList(sizes);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  });
+
+  window.deleteSize = async (sizeId) => {
+    if (!confirm('Удалить этот размер?')) return;
+    try {
+      await API.request(`/api/v1/ppe_sizes/${sizeId}`, { method: 'DELETE' });
+      window.showToast('Размер удален', 'success');
+      const categoryId = Number(sizeCategoryIdInput.value);
+      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);
+      renderSizesList(sizes);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
   };
 
   WS.subscribe((data) => {
-    if (data.event === 'item_updated') loadItems();
+    if (data.event === 'category_updated') loadCategories();
   });
 
-  loadCategoriesForSelect();
-  loadItems();
+  loadCategories();
 })();
 EOF
 
@@ -217,9 +291,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Таблица стала компактнее, добавлены поиск и фильтр."
+echo "✅ ГОТОВО! Категории стали компактными, добавлен поиск."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: compact ppe_items table with search, filter, and truncated names"
+git commit -m "ui: compact categories table with search and truncated text"
