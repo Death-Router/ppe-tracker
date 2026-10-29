@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.ppe_category import PpeCategoryRead
+from app.schemas.unit import UnitRead
 
 class PpeItemBase(BaseModel):
     name: str = Field(..., max_length=255, description="Наименование СИЗ")
@@ -13,7 +14,7 @@ class PpeItemRead(PpeItemBase):
     id: int
     version: int
     category: PpeCategoryRead | None = None
-    unit: dict | None = None
+    unit: UnitRead | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class PpeItemUpdate(PpeItemBase):
