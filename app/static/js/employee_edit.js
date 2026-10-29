@@ -1,5 +1,5 @@
 (() => {
-  console.log('🚀 employee_edit.js загружен (финальная версия)');
+  console.log('🚀 employee_edit.js загружен (финальная версия с категориями)');
   
   const employeeId = window.EMPLOYEE_ID;
   const form = document.getElementById('employee-form');
@@ -17,8 +17,9 @@
   const issuesTableBody = document.querySelector('#issues-table tbody');
   const normsTableBody = document.querySelector('#norms-table tbody');
   
+  let allCategories = [];
   let allPpeItems = [];
-  let allSizesCache = {}; // Кэш размеров: {category_id: [sizes]}
+  let allSizesCache = {};
   let currentNorms = [];
   let currentIssues = [];
   let isDirty = false; 
@@ -42,6 +43,10 @@
       filtered.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${p.name}</option>`).join('');
   }
 
+  async function loadCategories() {
+    allCategories = await API.get('/api/v1/ppe_categories');
+  }
+
   async function loadAllPpeItems() {
     allPpeItems = await API.get('/api/v1/ppe_items');
   }
@@ -53,30 +58,26 @@
       allSizesCache[categoryId] = sizes;
       return sizes;
     } catch (err) {
-      console.error('Ошибка загрузки размеров:', err);
       return [];
     }
   }
 
   deptSelect.addEventListener('change', (e) => loadPositions(e.target.value));
 
-  // --- Создание строки размера в карточке сотрудника ---
-  async function createSizeRow(itemId = '', sizeValue = '') {
+  // --- Создание строки размера (ПО КАТЕГОРИЯМ) ---
+  async function createSizeRow(categoryId = '', sizeValue = '') {
     const tr = document.createElement('tr');
     const currentGender = genderSelect.value || null;
     
-    // Находим выбранный СИЗ, чтобы взять его category_id
-    const selectedItem = itemId ? allPpeItems.find(i => i.id === Number(itemId)) : null;
-    
-    // Формируем опции для выпадающего списка СИЗ
-    const options = allPpeItems.map(item => 
-      `<option value="${item.id}" ${item.id === Number(itemId) ? 'selected' : ''}>${item.name} (${item.category?.name ?? ''})</option>`
+    // Опции для категорий
+    const categoryOptions = allCategories.map(c => 
+      `<option value="${c.id}" ${c.id === Number(categoryId) ? 'selected' : ''}>${c.name}</option>`
     ).join('');
 
-    // Получаем размеры для категории выбранного СИЗ
+    // Получаем размеры для выбранной категории
     let sizeOptionsHtml = '';
-    if (selectedItem && selectedItem.category_id) {
-      const sizes = await getSizesForCategory(selectedItem.category_id);
+    if (categoryId) {
+      const sizes = await getSizesForCategory(categoryId);
       let filteredSizes = sizes;
       if (currentGender) {
         filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
@@ -93,35 +94,28 @@
 
     const hasSizes = sizeOptionsHtml !== '';
     const sizeInputHtml = hasSizes 
-      ? `<select class="form-select form-select-sm size-value-input" required>
-           ${sizeOptionsHtml}
-         </select>`
+      ? `<select class="form-select form-select-sm size-value-input" required>${sizeOptionsHtml}</select>`
       : `<input type="text" class="form-control form-control-sm size-value-input" value="${sizeValue}" placeholder="Размер" required maxlength="50">`;
 
     tr.innerHTML = `
       <td>
-        <select class="form-select form-select-sm ppe-item-select" required>
-          <option value="">Выберите СИЗ...</option>
-          ${options}
+        <select class="form-select form-select-sm category-select" required>
+          <option value="">Выберите категорию...</option>
+          ${categoryOptions}
         </select>
       </td>
-      <td>
-        ${sizeInputHtml}
-      </td>
-      <td class="text-center">
-        <button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button>
-      </td>
+      <td>${sizeInputHtml}</td>
+      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button></td>
     `;
     
-    // Обработчик изменения СИЗ — перерисовываем строку с новыми размерами
-    const itemSelect = tr.querySelector('.ppe-item-select');
-    itemSelect.addEventListener('change', async () => {
-      const newItemId = Number(itemSelect.value);
-      const newSelectedItem = allPpeItems.find(i => i.id === newItemId);
+    // Обработчик изменения категории — перерисовываем размеры
+    const catSelect = tr.querySelector('.category-select');
+    catSelect.addEventListener('change', async () => {
+      const newCatId = Number(catSelect.value);
       const sizeCell = tr.children[1];
       
-      if (newSelectedItem && newSelectedItem.category_id) {
-        const sizes = await getSizesForCategory(newSelectedItem.category_id);
+      if (newCatId) {
+        const sizes = await getSizesForCategory(newCatId);
         const currentGender = genderSelect.value || null;
         let filteredSizes = sizes;
         if (currentGender) {
@@ -178,11 +172,11 @@
       deptSelect.value = emp.department_id ?? '';
       await loadPositions(emp.department_id, emp.position_id);
 
-      // Отрисовка размеров (асинхронно, последовательно)
+      // Отрисовка размеров по категориям
       sizesTableBody.innerHTML = '';
       if (emp.ppe_sizes && emp.ppe_sizes.length > 0) {
         for (const size of emp.ppe_sizes) {
-          const tr = await createSizeRow(size.ppe_item_id, size.size_value);
+          const tr = await createSizeRow(size.category_id, size.size_value);
           sizesTableBody.appendChild(tr);
         }
       }
@@ -190,7 +184,6 @@
       versionInput.value = emp.version ?? '';
       isDirty = false;
       
-      // Загружаем выдачи и нормы
       await loadIssues();
       await loadNorms(emp.position_id);
 
@@ -200,7 +193,7 @@
     }
   }
 
-  // --- Нормы ---
+  // --- Нормы и выдачи ---
   async function loadNorms(positionId) {
     if (!positionId) {
       normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">У сотрудника не указана должность</td></tr>`;
@@ -255,7 +248,6 @@
     }).join('');
   }
 
-  // --- Выдачи ---
   async function loadIssues() {
     try {
       currentIssues = await API.get(`/api/v1/employee_ppe_issues/?employee_id=${employeeId}`);
@@ -328,11 +320,24 @@
       }
       
       if (filteredSizes.length > 0) {
-        issueSizeSelect.innerHTML = '<option value="">Выберите размер...</option>' + 
-          filteredSizes.map(s => {
-            const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
-            return `<option value="${s.size_value}">${s.size_value}${genderLabel}</option>`;
-          }).join('');
+        let opts = '<option value="">Выберите размер...</option>';
+        let defaultSize = '';
+        const sizeRows = sizesTableBody.querySelectorAll('tr');
+        sizeRows.forEach(row => {
+          const catSel = row.querySelector('.category-select');
+          const sizeInp = row.querySelector('.size-value-input');
+          if (catSel && sizeInp && Number(catSel.value) === Number(categoryId)) {
+             defaultSize = sizeInp.value;
+          }
+        });
+
+        opts += filteredSizes.map(s => {
+          const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+          const selected = s.size_value === defaultSize ? 'selected' : '';
+          return `<option value="${s.size_value}" ${selected}>${s.size_value}${genderLabel}</option>`;
+        }).join('');
+        
+        issueSizeSelect.innerHTML = opts;
       } else {
         issueSizeSelect.innerHTML = '<option value="">Нет размеров</option>';
       }
@@ -409,16 +414,16 @@
     let hasErrors = false;
 
     rows.forEach(tr => {
-      const select = tr.querySelector('.ppe-item-select');
+      const catSelect = tr.querySelector('.category-select');
       const sizeInput = tr.querySelector('.size-value-input');
-      const itemId = Number(select.value);
+      const categoryId = Number(catSelect.value);
       const sizeVal = sizeInput.value.trim();
-      if (!itemId || !sizeVal) {
+      if (!categoryId || !sizeVal) {
         hasErrors = true;
-        select.classList.add('is-invalid');
+        catSelect.classList.add('is-invalid');
         sizeInput.classList.add('is-invalid');
       } else {
-        ppeSizes.push({ ppe_item_id: itemId, size_value: sizeVal });
+        ppeSizes.push({ category_id: categoryId, size_value: sizeVal });
       }
     });
 
@@ -459,6 +464,7 @@
 
   // Инициализация
   loadDepartments()
+    .then(loadCategories)
     .then(loadAllPpeItems)
     .then(() => loadEmployee());
 })();

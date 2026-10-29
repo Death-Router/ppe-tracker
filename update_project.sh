@@ -6,153 +6,488 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Принудительно перезаписываем employees.py (правильные связи)..."
+echo "📝 Полностью перезаписываем employee_edit.js (размеры по категориям)..."
 
-cat > app/api/v1/endpoints/employees.py << 'EOF'
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from sqlalchemy.orm.exc import StaleDataError
+cat > app/static/js/employee_edit.js << 'EOF'
+(() => {
+  console.log('🚀 employee_edit.js загружен (финальная версия с категориями)');
+  
+  const employeeId = window.EMPLOYEE_ID;
+  const form = document.getElementById('employee-form');
+  const btnSubmit = document.getElementById('btn-submit');
+  const conflictAlert = document.getElementById('conflict-alert');
+  const versionInput = document.getElementById('version');
+  const deptSelect = document.getElementById('department_id');
+  const posSelect = document.getElementById('position_id');
+  const genderSelect = form.elements['gender']; 
+  
+  const sizesTableBody = document.querySelector('#sizes-table tbody');
+  const addSizeBtn = document.getElementById('add-size-btn');
 
-from app.api.v1.endpoints.ws import manager
-from app.db.session import get_db
-from app.models.employee import Employee
-from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.employee_ppe_issue import EmployeePpeIssue
-from app.models.ppe_item import PpeItem
-from app.models.ppe_category import PpeCategory
-from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
+  const issueForm = document.getElementById('issue-form');
+  const issuesTableBody = document.querySelector('#issues-table tbody');
+  const normsTableBody = document.querySelector('#norms-table tbody');
+  
+  let allCategories = [];
+  let allPpeItems = [];
+  let allSizesCache = {};
+  let currentNorms = [];
+  let currentIssues = [];
+  let isDirty = false; 
+  form.addEventListener('input', () => { isDirty = true; });
 
-router = APIRouter(prefix="/employees", tags=["Сотрудники"])
+  // --- Загрузка справочников ---
+  async function loadDepartments() {
+    const depts = await API.get('/api/v1/departments');
+    deptSelect.innerHTML = '<option value="">Выберите...</option>' + 
+      depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  }
 
+  async function loadPositions(deptId, selectedId = null) {
+    if (!deptId) {
+      posSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
+      return;
+    }
+    const positions = await API.get('/api/v1/positions');
+    const filtered = positions.filter(p => p.department_id === Number(deptId));
+    posSelect.innerHTML = '<option value="">Выберите...</option>' + 
+      filtered.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${p.name}</option>`).join('');
+  }
 
-def employee_options():
-    """Возвращает список опций для загрузки всех вложенных связей."""
-    return [
-        # Размеры привязаны к категориям
-        selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.category),
-        # Выдачи (привязаны к СИЗ)
-        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.category),
-        selectinload(Employee.department_rel),
-        selectinload(Employee.position_rel)
-    ]
+  async function loadCategories() {
+    allCategories = await API.get('/api/v1/ppe_categories');
+  }
 
+  async function loadAllPpeItems() {
+    allPpeItems = await API.get('/api/v1/ppe_items');
+  }
 
-async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Employee:
-    result = await db.execute(
-        select(Employee).where(Employee.id == employee_id).options(*employee_options())
-    )
-    return result.scalar_one()
+  async function getSizesForCategory(categoryId) {
+    if (allSizesCache[categoryId]) return allSizesCache[categoryId];
+    try {
+      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);
+      allSizesCache[categoryId] = sizes;
+      return sizes;
+    } catch (err) {
+      return [];
+    }
+  }
 
+  deptSelect.addEventListener('change', (e) => loadPositions(e.target.value));
 
-@router.post("/", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
-async def create_employee(employee_in: EmployeeCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Employee).where(Employee.personnel_number == employee_in.personnel_number))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Сотрудник с таким табельным номером уже существует")
+  // --- Создание строки размера (ПО КАТЕГОРИЯМ) ---
+  async function createSizeRow(categoryId = '', sizeValue = '') {
+    const tr = document.createElement('tr');
+    const currentGender = genderSelect.value || null;
+    
+    // Опции для категорий
+    const categoryOptions = allCategories.map(c => 
+      `<option value="${c.id}" ${c.id === Number(categoryId) ? 'selected' : ''}>${c.name}</option>`
+    ).join('');
 
-    employee_data = employee_in.model_dump(exclude={"ppe_sizes"})
-    db_employee = Employee(**employee_data)
-    db.add(db_employee)
-    await db.flush()
+    // Получаем размеры для выбранной категории
+    let sizeOptionsHtml = '';
+    if (categoryId) {
+      const sizes = await getSizesForCategory(categoryId);
+      let filteredSizes = sizes;
+      if (currentGender) {
+        filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
+      }
 
-    if employee_in.ppe_sizes:
-        cat_ids = [size.category_id for size in employee_in.ppe_sizes]
-        cats_result = await db.execute(select(PpeCategory.id).where(PpeCategory.id.in_(cat_ids)))
-        if set(cat_ids) - set(cats_result.scalars().all()):
-            await db.rollback()
-            raise HTTPException(status_code=404, detail="Категории СИЗ не найдены")
-        for size_data in employee_in.ppe_sizes:
-            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+      if (filteredSizes.length > 0) {
+        sizeOptionsHtml = '<option value="">Размер...</option>' + 
+          filteredSizes.map(s => {
+            const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+            return `<option value="${s.size_value}" ${s.size_value === sizeValue ? 'selected' : ''}>${s.size_value}${genderLabel}</option>`;
+          }).join('');
+      }
+    }
 
-    await db.commit()
+    const hasSizes = sizeOptionsHtml !== '';
+    const sizeInputHtml = hasSizes 
+      ? `<select class="form-select form-select-sm size-value-input" required>${sizeOptionsHtml}</select>`
+      : `<input type="text" class="form-control form-control-sm size-value-input" value="${sizeValue}" placeholder="Размер" required maxlength="50">`;
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "employee_created", "employee_id": db_employee.id})
-    except Exception:
-        pass
+    tr.innerHTML = `
+      <td>
+        <select class="form-select form-select-sm category-select" required>
+          <option value="">Выберите категорию...</option>
+          ${categoryOptions}
+        </select>
+      </td>
+      <td>${sizeInputHtml}</td>
+      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button></td>
+    `;
+    
+    // Обработчик изменения категории — перерисовываем размеры
+    const catSelect = tr.querySelector('.category-select');
+    catSelect.addEventListener('change', async () => {
+      const newCatId = Number(catSelect.value);
+      const sizeCell = tr.children[1];
+      
+      if (newCatId) {
+        const sizes = await getSizesForCategory(newCatId);
+        const currentGender = genderSelect.value || null;
+        let filteredSizes = sizes;
+        if (currentGender) {
+          filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
+        }
 
-    return await get_employee_with_relations(db, db_employee.id)
+        if (filteredSizes.length > 0) {
+          const opts = '<option value="">Размер...</option>' + 
+            filteredSizes.map(s => {
+              const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+              return `<option value="${s.size_value}">${s.size_value}${genderLabel}</option>`;
+            }).join('');
+          sizeCell.innerHTML = `<select class="form-select form-select-sm size-value-input" required>${opts}</select>`;
+        } else {
+          sizeCell.innerHTML = `<input type="text" class="form-control form-control-sm size-value-input" placeholder="Размер" required maxlength="50">`;
+        }
+      } else {
+        sizeCell.innerHTML = `<input type="text" class="form-control form-control-sm size-value-input" placeholder="Размер" required maxlength="50">`;
+      }
+    });
+    
+    tr.querySelector('.remove-size-btn').addEventListener('click', () => {
+      tr.remove();
+      isDirty = true;
+    });
+    
+    return tr;
+  }
 
+  addSizeBtn.addEventListener('click', async () => {
+    const tr = await createSizeRow();
+    sizesTableBody.appendChild(tr);
+    isDirty = true;
+  });
 
-@router.get("/", response_model=list[EmployeeRead])
-async def get_employees(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Employee).options(*employee_options()))
-    return result.scalars().all()
+  // --- Загрузка сотрудника ---
+  async function loadEmployee(isWsUpdate = false) {
+    try {
+      const emp = await API.get(`/api/v1/employees/${employeeId}`);
+      if (isWsUpdate && isDirty) {
+        window.showToast('Сотрудник изменён другим пользователем.', 'warning');
+        versionInput.value = emp.version ?? '';
+        return;
+      }
 
+      const FIELDS = ['personnel_number', 'last_name', 'first_name', 'middle_name', 'hire_date', 'position_change_date', 'gender', 'height'];
+      for (const f of FIELDS) {
+        if (form.elements[f]) {
+          if (f.includes('_date') && emp[f]) form.elements[f].value = emp[f].split('T')[0];
+          else form.elements[f].value = emp[f] ?? '';
+        }
+      }
+      
+      deptSelect.value = emp.department_id ?? '';
+      await loadPositions(emp.department_id, emp.position_id);
 
-@router.get("/{employee_id}", response_model=EmployeeRead)
-async def get_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
-    employee = await get_employee_with_relations(db, employee_id)
-    if not employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
-    return employee
+      // Отрисовка размеров по категориям
+      sizesTableBody.innerHTML = '';
+      if (emp.ppe_sizes && emp.ppe_sizes.length > 0) {
+        for (const size of emp.ppe_sizes) {
+          const tr = await createSizeRow(size.category_id, size.size_value);
+          sizesTableBody.appendChild(tr);
+        }
+      }
 
+      versionInput.value = emp.version ?? '';
+      isDirty = false;
+      
+      await loadIssues();
+      await loadNorms(emp.position_id);
 
-@router.put("/{employee_id}", response_model=EmployeeRead)
-async def update_employee(employee_id: int, employee_in: EmployeeUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Employee).where(Employee.id == employee_id))
-    db_employee = result.scalar_one_or_none()
-    if not db_employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+      if (isWsUpdate) window.showToast('Карточка обновлена', 'info');
+    } catch (err) {
+      window.showToast(`Ошибка загрузки: ${err.message}`, 'danger');
+    }
+  }
 
-    if db_employee.version != employee_in.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
+  // --- Нормы и выдачи ---
+  async function loadNorms(positionId) {
+    if (!positionId) {
+      normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">У сотрудника не указана должность</td></tr>`;
+      return;
+    }
+    try {
+      const allNorms = await API.get('/api/v1/position_ppe_norms');
+      currentNorms = allNorms.filter(n => n.position_id === Number(positionId));
+      renderNormsTable();
+    } catch (err) {
+      normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-2">Ошибка: ${err.message}</td></tr>`;
+    }
+  }
 
-    update_data = employee_in.model_dump(exclude_unset=True, exclude={"version", "ppe_sizes"})
-    for field, value in update_data.items():
-        setattr(db_employee, field, value)
+  function renderNormsTable() {
+    if (!currentNorms.length) {
+      normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Для этой должности нормы не заданы</td></tr>`;
+      return;
+    }
 
-    if employee_in.ppe_sizes is not None:
-        await db.execute(delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id))
-        for size_data in employee_in.ppe_sizes:
-            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+    normsTableBody.innerHTML = currentNorms.map(norm => {
+      const issued = currentIssues
+        .filter(i => i.ppe_item_id === norm.ppe_item_id)
+        .reduce((sum, i) => sum + (parseInt(i.quantity) || 1), 0);
 
-    try:
-        await db.commit()
-    except StaleDataError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Конфликт версий")
+      const requiredQty = parseInt(norm.quantity) || 1;
+      const remaining = requiredQty - issued;
+      
+      let statusClass = '';
+      let statusText = '';
+      if (remaining <= 0) {
+        statusClass = 'text-success fw-bold';
+        statusText = 'Выдано';
+      } else {
+        statusClass = 'text-danger fw-bold';
+        statusText = `Не хватает ${remaining}`;
+      }
 
-    try:
-        await manager.broadcast_to_employee(employee_id, {"event": "employee_updated", "employee_id": employee_id})
-    except Exception:
-        pass
+      const periodStr = `${norm.wear_period_value} ${norm.wear_period_unit}`;
 
-    return await get_employee_with_relations(db, employee_id)
+      return `
+        <tr>
+          <td>${norm.ppe_item?.name ?? '—'}</td>
+          <td>${periodStr} (${requiredQty} ${norm.quantity.includes('пар') ? 'пар' : 'шт'})</td>
+          <td>${issued}</td>
+          <td class="${statusClass}">${statusText}</td>
+          <td class="text-center">
+            ${remaining > 0 ? `<button class="btn btn-sm btn-outline-success" onclick="openIssueModalForNorm(${norm.ppe_item_id})" title="Выдать"><i class="bi bi-box-arrow-up"></i></button>` : ''}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
 
+  async function loadIssues() {
+    try {
+      currentIssues = await API.get(`/api/v1/employee_ppe_issues/?employee_id=${employeeId}`);
+      renderIssuesTable();
+      renderNormsTable(); 
+    } catch (err) {
+      console.error('Ошибка загрузки выдач:', err);
+      issuesTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-2">Ошибка: ${err.message}</td></tr>`;
+    }
+  }
 
-@router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_employee(employee_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Employee).where(Employee.id == employee_id))
-    db_employee = result.scalar_one_or_none()
-    if not db_employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+  function renderIssuesTable() {
+    if (!currentIssues || !currentIssues.length) {
+      issuesTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Нет выданных СИЗ</td></tr>`;
+      return;
+    }
+    issuesTableBody.innerHTML = currentIssues.map(issue => {
+      const isExpired = issue.expiry_date && new Date(issue.expiry_date) < new Date();
+      const rowClass = isExpired ? 'table-danger' : '';
+      const expiryStr = issue.expiry_date ? new Date(issue.expiry_date).toLocaleDateString('ru-RU') : '—';
+      return `
+        <tr class="${rowClass}">
+          <td>${issue.ppe_item?.name ?? '—'}</td>
+          <td>${new Date(issue.issue_date).toLocaleDateString('ru-RU')}</td>
+          <td>${expiryStr}</td>
+          <td>${issue.quantity}</td>
+          <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteIssue(${issue.id})">✕</button></td>
+        </tr>
+      `;
+    }).join('');
+  }
 
-    try:
-        await db.delete(db_employee)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+  // --- Модалка выдачи ---
+  const issueModalElement = document.getElementById('issueModal');
+  const issueItemSelect = document.getElementById('issue-item-select');
+  const issueSizeSelect = document.getElementById('issue-size-select');
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "employee_updated", "employee_id": employee_id})
-    except Exception:
-        pass
+  window.openIssueModalForNorm = (ppeItemId) => {
+    const modal = new bootstrap.Modal(issueModalElement);
+    
+    fetch('/api/v1/ppe_items')
+      .then(r => r.json())
+      .then(data => {
+        issueItemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
+          data.map(i => `<option value="${i.id}" data-category-id="${i.category_id}" ${i.id === ppeItemId ? 'selected' : ''}>${i.name} (${i.category?.name ?? ''})</option>`).join('');
+        
+        if (ppeItemId) {
+          const selectedOption = issueItemSelect.options[issueItemSelect.selectedIndex];
+          const categoryId = selectedOption.getAttribute('data-category-id');
+          fillIssueSizes(categoryId);
+        } else {
+          issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
+        }
+        
+        modal.show();
+      });
+  };
+
+  async function fillIssueSizes(categoryId) {
+    if (!categoryId) {
+      issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
+      return;
+    }
+    try {
+      const sizes = await getSizesForCategory(categoryId);
+      const empGender = genderSelect.value || null;
+      let filteredSizes = sizes;
+      if (empGender) {
+        filteredSizes = sizes.filter(s => !s.gender || s.gender === empGender);
+      }
+      
+      if (filteredSizes.length > 0) {
+        let opts = '<option value="">Выберите размер...</option>';
+        let defaultSize = '';
+        const sizeRows = sizesTableBody.querySelectorAll('tr');
+        sizeRows.forEach(row => {
+          const catSel = row.querySelector('.category-select');
+          const sizeInp = row.querySelector('.size-value-input');
+          if (catSel && sizeInp && Number(catSel.value) === Number(categoryId)) {
+             defaultSize = sizeInp.value;
+          }
+        });
+
+        opts += filteredSizes.map(s => {
+          const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+          const selected = s.size_value === defaultSize ? 'selected' : '';
+          return `<option value="${s.size_value}" ${selected}>${s.size_value}${genderLabel}</option>`;
+        }).join('');
+        
+        issueSizeSelect.innerHTML = opts;
+      } else {
+        issueSizeSelect.innerHTML = '<option value="">Нет размеров</option>';
+      }
+    } catch (err) {
+      issueSizeSelect.innerHTML = '<option value="">Ошибка</option>';
+    }
+  }
+
+  if (issueModalElement) {
+    issueModalElement.addEventListener('show.bs.modal', () => {
+      fetch('/api/v1/ppe_items')
+        .then(r => r.json())
+        .then(data => {
+          if (issueItemSelect) {
+            issueItemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
+              data.map(i => `<option value="${i.id}" data-category-id="${i.category_id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
+          }
+          if (issueSizeSelect) issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
+        });
+    });
+  }
+
+  if (issueItemSelect) {
+    issueItemSelect.addEventListener('change', (e) => {
+      const selectedOption = e.target.options[e.target.selectedIndex];
+      const categoryId = selectedOption.getAttribute('data-category-id');
+      fillIssueSizes(categoryId);
+    });
+  }
+
+  if (issueForm) {
+    issueForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = FormHelper.serialize(issueForm);
+      payload.employee_id = employeeId;
+      payload.ppe_item_id = Number(payload.ppe_item_id);
+      if (!payload.issue_date) payload.issue_date = new Date().toISOString().split('T')[0];
+      if (payload.size_value === '') payload.size_value = null;
+
+      const btn = issueForm.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        await API.post('/api/v1/employee_ppe_issues/', payload);
+        window.showToast('СИЗ выдано', 'success');
+        bootstrap.Modal.getInstance(issueModalElement).hide();
+        issueForm.reset();
+        await loadIssues();
+      } catch (err) {
+        window.showToast(`Ошибка: ${err.message}`, 'danger');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  window.deleteIssue = async (issueId) => {
+    if (!confirm('Удалить запись о выдаче?')) return;
+    try {
+      await API.request(`/api/v1/employee_ppe_issues/${issueId}`, { method: 'DELETE' });
+      window.showToast('Запись удалена', 'success');
+      await loadIssues();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
+
+  // --- Сохранение сотрудника ---
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btnSubmit.disabled = true;
+    
+    const ppeSizes = [];
+    const rows = sizesTableBody.querySelectorAll('tr');
+    let hasErrors = false;
+
+    rows.forEach(tr => {
+      const catSelect = tr.querySelector('.category-select');
+      const sizeInput = tr.querySelector('.size-value-input');
+      const categoryId = Number(catSelect.value);
+      const sizeVal = sizeInput.value.trim();
+      if (!categoryId || !sizeVal) {
+        hasErrors = true;
+        catSelect.classList.add('is-invalid');
+        sizeInput.classList.add('is-invalid');
+      } else {
+        ppeSizes.push({ category_id: categoryId, size_value: sizeVal });
+      }
+    });
+
+    if (hasErrors) {
+      window.showToast('Заполните все поля в таблице размеров', 'danger');
+      btnSubmit.disabled = false;
+      return;
+    }
+
+    const payload = FormHelper.serialize(form);
+    payload.department_id = Number(payload.department_id);
+    payload.position_id = Number(payload.position_id);
+    if (!payload.hire_date) payload.hire_date = null;
+    if (!payload.position_change_date) payload.position_change_date = null;
+    payload.ppe_sizes = ppeSizes;
+
+    try {
+      const updated = await API.put(`/api/v1/employees/${employeeId}`, payload);
+      if (updated?.version != null) versionInput.value = updated.version;
+      isDirty = false;
+      window.showToast('Изменения сохранены', 'success');
+    } catch (err) {
+      if (err.isConflict) {
+        conflictAlert.classList.remove('d-none');
+        conflictAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        window.showToast(`Ошибка: ${err.message}`, 'danger');
+      }
+    } finally {
+      btnSubmit.disabled = false;
+    }
+  });
+
+  WS.subscribe((data) => {
+    if (data.event === 'employee_updated' && data.employee_id === employeeId) loadEmployee(true);
+    if (data.event === 'issue_updated') loadIssues();
+  });
+
+  // Инициализация
+  loadDepartments()
+    .then(loadCategories)
+    .then(loadAllPpeItems)
+    .then(() => loadEmployee());
+})();
 EOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
-sleep 3
+sleep 2
 
-echo "🔄 Проверяем логи..."
-docker compose logs api --tail 10
-
-echo "✅ ГОТОВО! Список сотрудников должен загрузиться."
+echo "✅ ГОТОВО!"
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: force update employee options for category-based sizes"
+git commit -m "fix: force employee sizes by category in employee_edit.js"
