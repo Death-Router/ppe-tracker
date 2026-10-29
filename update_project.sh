@@ -6,267 +6,382 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Обновляем API сотрудников (фильтрация по подразделению)..."
+echo "📝 Обновляем import_data.py (добавляем импорт СИЗ и Норм)..."
 
-cat > app/api/v1/endpoints/employees.py << 'EOF'
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+cat > app/api/v1/endpoints/import_data.py << 'EOF'
+import pandas as pd
+from io import BytesIO
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from sqlalchemy.orm.exc import StaleDataError
-
-from app.api.v1.endpoints.ws import manager
 from app.db.session import get_db
 from app.models.employee import Employee
-from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.employee_ppe_issue import EmployeePpeIssue
-from app.models.ppe_item import PpeItem
+from app.models.department import Department
+from app.models.position import Position
 from app.models.ppe_category import PpeCategory
-from app.models.user import User
-from app.core.deps import get_current_active_user, get_current_user
-from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
+from app.models.ppe_item import PpeItem
+from app.models.position_ppe_norm import PositionPpeNorm
 
-router = APIRouter(prefix="/employees", tags=["Сотрудники"])
+router = APIRouter(prefix="/import", tags=["Импорт данных"])
 
-
-def employee_options():
-    return [
-        selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.category),
-        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.category),
-        selectinload(Employee.department_rel),
-        selectinload(Employee.position_rel)
-    ]
-
-
-async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Employee:
-    result = await db.execute(
-        select(Employee).where(Employee.id == employee_id).options(*employee_options())
-    )
-    return result.scalar_one()
-
-
-@router.post("/", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
-async def create_employee(
-    employee_in: EmployeeCreate, 
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+@router.post("/employees")
+async def import_employees(
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
 ):
-    # Проверка прав: safety_officer может создавать только в своем подразделении
-    if current_user.role == "safety_officer":
-        if current_user.department_id != employee_in.department_id:
-            raise HTTPException(status_code=403, detail="Вы можете создавать сотрудников только в своем подразделении")
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Пожалуйста, загрузите файл Excel (.xlsx или .xls)")
 
-    result = await db.execute(select(Employee).where(Employee.personnel_number == employee_in.personnel_number))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Сотрудник с таким табельным номером уже существует")
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        if 'ID' in df.columns:
+            df = df.drop(columns=['ID'])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {str(e)}")
 
-    employee_data = employee_in.model_dump(exclude={"ppe_sizes"})
-    db_employee = Employee(**employee_data)
-    db.add(db_employee)
-    await db.flush()
+    required_cols = ["Табельный номер", "Фамилия", "Имя"]
+    for col in required_cols:
+        if col not in df.columns:
+            raise HTTPException(status_code=400, detail=f"В файле отсутствует колонка: {col}")
 
-    if employee_in.ppe_sizes:
-        cat_ids = [size.category_id for size in employee_in.ppe_sizes]
-        cats_result = await db.execute(select(PpeCategory.id).where(PpeCategory.id.in_(cat_ids)))
-        if set(cat_ids) - set(cats_result.scalars().all()):
-            await db.rollback()
-            raise HTTPException(status_code=404, detail="Категории СИЗ не найдены")
-        for size_data in employee_in.ppe_sizes:
-            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+    created_count = 0
+    updated_count = 0
+    errors = []
+
+    for index, row in df.iterrows():
+        try:
+            personnel_number = str(row["Табельный номер"]).strip()
+            last_name = str(row["Фамилия"]).strip()
+            first_name = str(row["Имя"]).strip()
+            middle_name = str(row.get("Отчество", "")).strip() if pd.notna(row.get("Отчество")) else None
+            
+            result = await db.execute(select(Employee).where(Employee.personnel_number == personnel_number))
+            db_employee = result.scalar_one_or_none()
+
+            department_name = str(row.get("Подразделение", "")).strip() if pd.notna(row.get("Подразделение")) else ""
+            position_name = str(row.get("Должность", "")).strip() if pd.notna(row.get("Должность")) else ""
+
+            department_id = None
+            if department_name:
+                dept_res = await db.execute(select(Department).where(Department.name == department_name))
+                dept = dept_res.scalar_one_or_none()
+                if not dept:
+                    dept = Department(name=department_name)
+                    db.add(dept)
+                    await db.flush()
+                department_id = dept.id
+
+            position_id = None
+            if position_name and department_id:
+                pos_res = await db.execute(select(Position).where(Position.name == position_name, Position.department_id == department_id))
+                pos = pos_res.scalar_one_or_none()
+                if not pos:
+                    pos = Position(name=position_name, department_id=department_id)
+                    db.add(pos)
+                    await db.flush()
+                position_id = pos.id
+
+            if db_employee:
+                db_employee.last_name = last_name
+                db_employee.first_name = first_name
+                db_employee.middle_name = middle_name
+                db_employee.department_id = department_id
+                db_employee.position_id = position_id
+                updated_count += 1
+            else:
+                new_emp = Employee(
+                    personnel_number=personnel_number,
+                    last_name=last_name,
+                    first_name=first_name,
+                    middle_name=middle_name,
+                    department_id=department_id,
+                    position_id=position_id,
+                    version=1
+                )
+                db.add(new_emp)
+                created_count += 1
+                
+        except Exception as e:
+            errors.append(f"Строка {index + 2}: {str(e)}")
 
     await db.commit()
-
-    try:
-        await manager.broadcast_to_employee(0, {"event": "employee_created", "employee_id": db_employee.id})
-    except Exception:
-        pass
-
-    return await get_employee_with_relations(db, db_employee.id)
+    return {"message": "Импорт завершен", "created": created_count, "updated": updated_count, "errors": errors}
 
 
-@router.get("/", response_model=list[EmployeeRead])
-async def get_employees(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+@router.post("/ppe-items")
+async def import_ppe_items(
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
 ):
-    query = select(Employee).options(*employee_options())
-    
-    # Фильтрация для safety_officer
-    if current_user.role == "safety_officer" and current_user.department_id:
-        if current_user.include_subdepartments:
-            # Если включены дочерние подразделения, берем все сотрудники, чей department_id входит в список доступных
-            # Пока реализуем простую версию: только его подразделение. 
-            # Для иерархии нужно рекурсивно собрать все дочерние ID.
-            # (Упрощенно: только его department_id)
-            query = query.where(Employee.department_id == current_user.department_id)
-        else:
-            query = query.where(Employee.department_id == current_user.department_id)
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Пожалуйста, загрузите файл Excel")
 
-    result = await db.execute(query)
-    return result.scalars().all()
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        if 'ID' in df.columns:
+            df = df.drop(columns=['ID'])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {str(e)}")
+
+    required_cols = ["Наименование", "Категория"]
+    for col in required_cols:
+        if col not in df.columns:
+            raise HTTPException(status_code=400, detail=f"В файле отсутствует колонка: {col}")
+
+    created_count = 0
+    errors = []
+
+    for index, row in df.iterrows():
+        try:
+            name = str(row["Наименование"]).strip()
+            category_name = str(row["Категория"]).strip()
+
+            # Ищем категорию
+            cat_res = await db.execute(select(PpeCategory).where(PpeCategory.name == category_name))
+            category = cat_res.scalar_one_or_none()
+            if not category:
+                category = PpeCategory(name=category_name)
+                db.add(category)
+                await db.flush()
+
+            # Проверяем, есть ли уже такое СИЗ в этой категории
+            item_res = await db.execute(select(PpeItem).where(PpeItem.name == name, PpeItem.category_id == category.id))
+            existing = item_res.scalar_one_or_none()
+            if not existing:
+                new_item = PpeItem(name=name, category_id=category.id, version=1)
+                db.add(new_item)
+                created_count += 1
+        except Exception as e:
+            errors.append(f"Строка {index + 2}: {str(e)}")
+
+    await db.commit()
+    return {"message": "Импорт СИЗ завершен", "created": created_count, "errors": errors}
 
 
-@router.get("/{employee_id}", response_model=EmployeeRead)
-async def get_employee(
-    employee_id: int, 
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+@router.post("/norms")
+async def import_norms(
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
 ):
-    employee = await get_employee_with_relations(db, employee_id)
-    if not employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
-    
-    # Проверка прав на просмотр
-    if current_user.role == "safety_officer" and current_user.department_id != employee.department_id:
-        raise HTTPException(status_code=403, detail="Доступ запрещен")
-
-    return employee
-
-
-@router.put("/{employee_id}", response_model=EmployeeRead)
-async def update_employee(
-    employee_id: int, 
-    employee_in: EmployeeUpdate, 
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    result = await db.execute(select(Employee).where(Employee.id == employee_id))
-    db_employee = result.scalar_one_or_none()
-    if not db_employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
-
-    # Проверка прав на редактирование
-    if current_user.role == "safety_officer" and current_user.department_id != db_employee.department_id:
-        raise HTTPException(status_code=403, detail="Доступ запрещен")
-
-    if db_employee.version != employee_in.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
-
-    update_data = employee_in.model_dump(exclude_unset=True, exclude={"version", "ppe_sizes"})
-    for field, value in update_data.items():
-        setattr(db_employee, field, value)
-
-    if employee_in.ppe_sizes is not None:
-        await db.execute(delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id))
-        for size_data in employee_in.ppe_sizes:
-            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Пожалуйста, загрузите файл Excel")
 
     try:
-        await db.commit()
-    except StaleDataError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Конфликт версий")
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        if 'ID' in df.columns:
+            df = df.drop(columns=['ID'])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {str(e)}")
 
-    try:
-        await manager.broadcast_to_employee(employee_id, {"event": "employee_updated", "employee_id": employee_id})
-    except Exception:
-        pass
+    required_cols = ["Подразделение", "Должность", "СИЗ", "Срок", "Количество"]
+    for col in required_cols:
+        if col not in df.columns:
+            raise HTTPException(status_code=400, detail=f"В файле отсутствует колонка: {col}")
 
-    return await get_employee_with_relations(db, employee_id)
+    created_count = 0
+    errors = []
 
+    for index, row in df.iterrows():
+        try:
+            dept_name = str(row["Подразделение"]).strip()
+            pos_name = str(row["Должность"]).strip()
+            item_name = str(row["СИЗ"]).strip()
+            period_str = str(row["Срок"]).strip()
+            quantity = str(row["Количество"]).strip()
 
-@router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_employee(
-    employee_id: int, 
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    result = await db.execute(select(Employee).where(Employee.id == employee_id))
-    db_employee = result.scalar_one_or_none()
-    if not db_employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+            # Ищем подразделение
+            dept_res = await db.execute(select(Department).where(Department.name == dept_name))
+            dept = dept_res.scalar_one_or_none()
+            if not dept:
+                errors.append(f"Строка {index + 2}: Подразделение '{dept_name}' не найдено")
+                continue
 
-    if current_user.role == "safety_officer" and current_user.department_id != db_employee.department_id:
-        raise HTTPException(status_code=403, detail="Доступ запрещен")
+            # Ищем должность
+            pos_res = await db.execute(select(Position).where(Position.name == pos_name, Position.department_id == dept.id))
+            pos = pos_res.scalar_one_or_none()
+            if not pos:
+                errors.append(f"Строка {index + 2}: Должность '{pos_name}' не найдена в '{dept_name}'")
+                continue
 
-    try:
-        await db.delete(db_employee)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+            # Ищем СИЗ
+            item_res = await db.execute(select(PpeItem).where(PpeItem.name == item_name))
+            item = item_res.scalar_one_or_none()
+            if not item:
+                errors.append(f"Строка {index + 2}: СИЗ '{item_name}' не найдено")
+                continue
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "employee_updated", "employee_id": employee_id})
-    except Exception:
-        pass
+            # Парсим срок (например "1 год" или "12 месяцев")
+            parts = period_str.split()
+            if len(parts) != 2:
+                errors.append(f"Строка {index + 2}: Неверный формат срока '{period_str}'")
+                continue
+            period_value, period_unit = parts
+
+            # Проверяем, нет ли уже такой нормы
+            norm_res = await db.execute(select(PositionPpeNorm).where(
+                PositionPpeNorm.position_id == pos.id,
+                PositionPpeNorm.ppe_item_id == item.id
+            ))
+            existing = norm_res.scalar_one_or_none()
+
+            if existing:
+                existing.wear_period_value = period_value
+                existing.wear_period_unit = period_unit
+                existing.quantity = quantity
+            else:
+                new_norm = PositionPpeNorm(
+                    position_id=pos.id,
+                    ppe_item_id=item.id,
+                    wear_period_value=period_value,
+                    wear_period_unit=period_unit,
+                    quantity=quantity,
+                    version=1
+                )
+                db.add(new_norm)
+                created_count += 1
+        except Exception as e:
+            errors.append(f"Строка {index + 2}: {str(e)}")
+
+    await db.commit()
+    return {"message": "Импорт норм завершен", "created": created_count, "errors": errors}
 EOF
 
-echo "🔧 Защищаем HTML-маршруты в main.py (редирект на /login)..."
+echo "🔧 Обновляем страницу настроек (добавляем формы импорта)..."
 
 python3 - << 'PYEOF'
-with open('app/main.py', 'r') as f:
+with open('app/templates/settings.html', 'r') as f:
     content = f.read()
 
-# Функция-хелпер для проверки сессии
-# Вставляем в начало файла после импортов
-helper = '''
-def check_auth(request: Request):
-    """Проверяет наличие сессии. Если нет — возвращает RedirectResponse."""
-    if not request.session.get("user_id"):
-        return RedirectResponse(url="/login", status_code=303)
-    return None
+# Добавляем формы для импорта СИЗ и Норм перед закрытием блока content
+new_cards = '''
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 text-secondary"><i class="bi bi-upload"></i> Импорт СИЗ (Наименования)</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Загрузите Excel-файл с колонками: "Наименование", "Категория".</p>
+                <form id="import-items-form" enctype="multipart/form-data">
+                    <div class="input-group mb-3">
+                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls" required>
+                        <button type="submit" class="btn btn-success">Загрузить</button>
+                    </div>
+                    <div id="import-items-result" class="mt-3"></div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 text-secondary"><i class="bi bi-upload"></i> Импорт Норм выдачи</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Загрузите Excel-файл с колонками: "Подразделение", "Должность", "СИЗ", "Срок", "Количество".</p>
+                <form id="import-norms-form" enctype="multipart/form-data">
+                    <div class="input-group mb-3">
+                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls" required>
+                        <button type="submit" class="btn btn-success">Загрузить</button>
+                    </div>
+                    <div id="import-norms-result" class="mt-3"></div>
+                </form>
+            </div>
+        </div>
 '''
 
-if 'def check_auth' not in content:
-    # Вставляем после импортов (после BASE_DIR)
-    content = content.replace(
-        'BASE_DIR = Path(__file__).resolve().parent',
-        'BASE_DIR = Path(__file__).resolve().parent\n' + helper
-    )
+# Вставляем перед последним </div> (закрытие row)
+content = content.replace('    </div>\n</div>\n{% endblock %}', new_cards + '    </div>\n</div>\n{% endblock %}')
 
-# Теперь добавляем проверку в каждый HTML-маршрут (кроме /login и /)
-import re
+# Добавляем JS для обработки форм
+old_script_end = '</script>'
+new_script = '''
+// Обработка импорта СИЗ
+document.getElementById('import-items-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const fileInput = form.querySelector('input[type="file"]');
+    const resultDiv = document.getElementById('import-items-result');
+    const btn = form.querySelector('button[type="submit"]');
 
-# Список маршрутов, которые нужно защитить
-protected_routes = [
-    '/employees', '/employees/{employee_id}/edit',
-    '/ppe-categories', '/ppe-categories/{category_id}/edit',
-    '/ppe-items', '/ppe-items/{item_id}/edit',
-    '/departments', '/departments/{dept_id}/edit',
-    '/positions', '/positions/{pos_id}/edit',
-    '/norms', '/settings'
-]
+    if (!fileInput.files.length) {
+        window.showToast('Выберите файл', 'warning');
+        return;
+    }
 
-# Для каждого маршрута добавляем проверку в начало функции
-for route in protected_routes:
-    # Ищем функцию с этим маршрутом
-    pattern = r'(@app\.get\("' + re.escape(route) + r'", response_class=HTMLResponse\)\s*async def \w+\(request: Request[^)]*\):)(\s*)'
-    match = re.search(pattern, content)
-    if match:
-        # Добавляем проверку после объявления функции
-        replacement = match.group(1) + '\n    redirect = check_auth(request)\n    if redirect: return redirect' + match.group(2)
-        content = content.replace(match.group(0), replacement)
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
 
-with open('app/main.py', 'w') as f:
+    btn.disabled = true;
+    btn.textContent = 'Загрузка...';
+    resultDiv.innerHTML = '';
+
+    try {
+        const resp = await fetch('/api/v1/import/ppe-items', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Ошибка импорта');
+
+        let html = `<div class="alert alert-success">Создано: ${data.created}</div>`;
+        if (data.errors && data.errors.length > 0) {
+            html += `<div class="alert alert-warning mt-2">Ошибки: ${data.errors.join('<br>')}</div>`;
+        }
+        resultDiv.innerHTML = html;
+        window.showToast('Импорт СИЗ выполнен', 'success');
+        form.reset();
+    } catch (err) {
+        resultDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        window.showToast(err.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Загрузить';
+    }
+});
+
+// Обработка импорта Норм
+document.getElementById('import-norms-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const fileInput = form.querySelector('input[type="file"]');
+    const resultDiv = document.getElementById('import-norms-result');
+    const btn = form.querySelector('button[type="submit"]');
+
+    if (!fileInput.files.length) {
+        window.showToast('Выберите файл', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    btn.disabled = true;
+    btn.textContent = 'Загрузка...';
+    resultDiv.innerHTML = '';
+
+    try {
+        const resp = await fetch('/api/v1/import/norms', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Ошибка импорта');
+
+        let html = `<div class="alert alert-success">Создано: ${data.created}</div>`;
+        if (data.errors && data.errors.length > 0) {
+            html += `<div class="alert alert-warning mt-2">Ошибки: ${data.errors.join('<br>')}</div>`;
+        }
+        resultDiv.innerHTML = html;
+        window.showToast('Импорт норм выполнен', 'success');
+        form.reset();
+    } catch (err) {
+        resultDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        window.showToast(err.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Загрузить';
+    }
+});
+</script>'''
+
+# Заменяем последний </script> на новый блок
+content = content.replace(old_script_end, new_script)
+
+with open('app/templates/settings.html', 'w') as f:
     f.write(content)
-print("✅ HTML-маршруты защищены (редирект на /login).")
-PYEOF
-
-echo "🔧 Обновляем навбар (добавляем кнопку 'Выйти')..."
-
-python3 - << 'PYEOF'
-with open('app/templates/base.html', 'r') as f:
-    content = f.read()
-
-# Добавляем кнопку "Выйти" перед закрытием навбара
-logout_btn = '''
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="/api/v1/auth/logout" onclick="event.preventDefault(); fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => window.location.href='/login');">Выйти</a>
-                </li>
-            </ul>
-'''
-
-if 'Выйти' not in content:
-    content = content.replace(
-        '            </ul>\n        </div>\n    </div>\n</nav>',
-        '            </ul>' + logout_btn + '\n        </div>\n    </div>\n</nav>'
-    )
-
-with open('app/templates/base.html', 'w') as f:
-    f.write(content)
-print("✅ Кнопка 'Выйти' добавлена в навбар.")
+print("✅ Страница настроек обновлена (добавлены формы импорта СИЗ и Норм).")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
@@ -281,4 +396,4 @@ echo "✅ ГОТОВО!"
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "feat: protect routes, filter by department, add logout"
+git commit -m "feat: add import for ppe_items and norms"
