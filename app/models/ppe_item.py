@@ -4,7 +4,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
-    from app.models.employee_ppe_size import EmployeePpeSize
     from app.models.employee_ppe_issue import EmployeePpeIssue
     from app.models.ppe_category import PpeCategory
     from app.models.position_ppe_norm import PositionPpeNorm
@@ -22,9 +21,6 @@ class PpeItem(Base):
 
     category: Mapped["PpeCategory"] = relationship(back_populates="items")
     
-    employee_sizes: Mapped[list["EmployeePpeSize"]] = relationship(
-        back_populates="ppe_item"
-    )
     employee_issues: Mapped[list["EmployeePpeIssue"]] = relationship(
         back_populates="ppe_item", cascade="all, delete-orphan"
     )
