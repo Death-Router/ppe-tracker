@@ -6,78 +6,54 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Меняем формат отображения норм в карточке сотрудника..."
+echo "📝 Обновляем шаблон карточки (добавляем ID заголовку)..."
+
+python3 - << 'PYEOF'
+with open('app/templates/employees/edit.html', 'r') as f:
+    content = f.read()
+
+# Заменяем заголовок на элемент с id="employee-title"
+old_title = '<h1 class="h3 mb-0">Редактирование сотрудника</h1>'
+new_title = '<h1 class="h3 mb-0" id="employee-title">Редактирование сотрудника</h1>'
+
+if old_title in content:
+    content = content.replace(old_title, new_title)
+    with open('app/templates/employees/edit.html', 'w') as f:
+        f.write(content)
+    print("✅ Заголовку добавлен id.")
+else:
+    print("⚠️ Не удалось найти заголовок в edit.html.")
+PYEOF
+
+echo "📝 Обновляем JS (меняем заголовок на ФИО)..."
 
 python3 - << 'PYEOF'
 with open('app/static/js/employee_edit.js', 'r') as f:
     content = f.read()
 
-# Ищем блок формирования строки нормы (старый или новый формат)
-# Вариант 1: Если у нас уже используется formattedPeriod и formattedQuantity
-old_block = '''      // Форматируем срок (5 лет) и количество (5 шт)
-      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
-      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
+# В функции loadEmployee после заполнения полей добавляем смену заголовка
+old_code = '''      versionInput.value = emp.version ?? '';
+      isDirty = false;
+      
+      // Загружаем выдачи и нормы'''
 
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${formattedPeriod} (${formattedQuantity})</td>'''
+new_code = '''      versionInput.value = emp.version ?? '';
+      isDirty = false;
 
-new_block = '''      // Форматируем срок и количество
-      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
-      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
+      // Меняем заголовок на ФИО сотрудника
+      const titleEl = document.getElementById('employee-title');
+      if (titleEl) {
+        const fio = [emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ');
+        titleEl.textContent = `Редактирование: ${fio}`;
+      }
+      
+      // Загружаем выдачи и нормы'''
 
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${formattedQuantity} на ${formattedPeriod}</td>'''
-
-if old_block in content:
-    content = content.replace(old_block, new_block)
-    print("✅ Формат 'Количество на Срок' добавлен (вариант 1).")
+if old_code in content:
+    content = content.replace(old_code, new_code)
+    print("✅ Логика смены заголовка добавлена.")
 else:
-    # Вариант 2: Если структура немного отличается (например, без комментария)
-    old_block_alt = '''      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
-      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
-
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${formattedPeriod} (${formattedQuantity})</td>'''
-
-    new_block_alt = '''      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
-      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
-
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${formattedQuantity} на ${formattedPeriod}</td>'''
-
-    if old_block_alt in content:
-        content = content.replace(old_block_alt, new_block_alt)
-        print("✅ Формат 'Количество на Срок' добавлен (вариант 2).")
-    else:
-        # Вариант 3: Самая старая версия (через periodStr)
-        old_block_old = '''      const periodStr = `${norm.wear_period_value} ${norm.wear_period_unit}`;
-
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${periodStr} (${requiredQty} ${norm.quantity.includes('пар') ? 'пар' : 'шт'})</td>'''
-
-        new_block_old = '''      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
-      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
-
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${formattedQuantity} на ${formattedPeriod}</td>'''
-
-        if old_block_old in content:
-            content = content.replace(old_block_old, new_block_old)
-            print("✅ Формат 'Количество на Срок' добавлен (вариант 3 - старый код).")
-        else:
-            print("⚠️ Не удалось найти блок формирования строки нормы. Возможно, структура изменилась.")
+    print("⚠️ Не удалось найти блок загрузки сотрудника для вставки логики.")
 
 with open('app/static/js/employee_edit.js', 'w') as f:
     f.write(content)
@@ -87,9 +63,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Теперь нормы отображаются как '5 пар на 5 лет'."
+echo "✅ ГОТОВО! Теперь в заголовке отображается ФИО сотрудника."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: change norm format to 'quantity on period' (e.g., 5 пар на 5 лет)"
+git commit -m "ui: display employee full name in card header"
