@@ -9,7 +9,7 @@
       const employees = await API.get('/api/v1/employees');
       renderTable(employees);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -19,7 +19,7 @@
 
   function renderTable(employees) {
     if (!employees.length) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = employees.map(e => {
@@ -42,10 +42,10 @@
   async function loadDepartmentsForSelect() {
     try {
       const depts = await API.get('/api/v1/departments');
-      createDeptSelect.innerHTML = '<option value="">Выберите подразделение...</option>' +
+      createDeptSelect.innerHTML = '<option value="">Подразделение</option>' +
         depts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
     } catch (err) {
-      createDeptSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+      createDeptSelect.innerHTML = '<option value="">Ошибка</option>';
     }
   }
 
@@ -57,19 +57,17 @@
     try {
       const positions = await API.get('/api/v1/positions');
       const filtered = positions.filter(p => p.department_id === Number(deptId));
-      createPosSelect.innerHTML = '<option value="">Выберите должность...</option>' +
+      createPosSelect.innerHTML = '<option value="">Должность</option>' +
         filtered.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
     } catch (err) {
-      createPosSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+      createPosSelect.innerHTML = '<option value="">Ошибка</option>';
     }
   }
 
-  // Обработчик смены подразделения в модалке
   createDeptSelect.addEventListener('change', (e) => {
     loadPositionsForSelect(e.target.value);
   });
 
-  // Создание сотрудника
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
@@ -93,7 +91,6 @@
     }
   });
 
-  // Удаление
   window.deleteEmployee = async (id, fio) => {
     if (!confirm(`Удалить сотрудника "${fio}"?`)) return;
     try {
