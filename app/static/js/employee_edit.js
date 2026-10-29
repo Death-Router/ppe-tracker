@@ -290,11 +290,56 @@
           const select = document.getElementById('issue-item-select');
           if (select) {
             select.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
-              data.map(i => `<option value="${i.id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
+              data.map(i => `<option value="${i.id}" data-category-id="${i.category_id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
+          }
+          // Очищаем select размера при открытии
+          const sizeSelect = document.getElementById('issue-size-select');
+          if (sizeSelect) {
+            sizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
           }
         })
         .catch(err => console.error('Ошибка загрузки СИЗ:', err));
     });
+
+    // Обработчик изменения СИЗ в модалке
+    const issueItemSelect = document.getElementById('issue-item-select');
+    if (issueItemSelect) {
+      issueItemSelect.addEventListener('change', async (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const categoryId = selectedOption.getAttribute('data-category-id');
+        const sizeSelect = document.getElementById('issue-size-select');
+        
+        if (!categoryId) {
+          if (sizeSelect) sizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
+          return;
+        }
+
+        try {
+          const sizes = await getSizesForCategory(categoryId);
+          const empGender = form.elements['gender'].value || null;
+          let filteredSizes = sizes;
+          if (empGender) {
+            filteredSizes = sizes.filter(s => !s.gender || s.gender === empGender);
+          }
+
+          if (sizeSelect) {
+            if (filteredSizes.length > 0) {
+              sizeSelect.innerHTML = '<option value="">Выберите размер...</option>' + 
+                filteredSizes.map(s => {
+                  const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+                  return `<option value="${s.size_value}">${s.size_value}${genderLabel}</option>`;
+                }).join('');
+            } else {
+              // Если размеров нет, делаем поле снова текстовым (или оставляем пустым)
+              sizeSelect.innerHTML = '<option value="">Нет размеров</option>';
+            }
+          }
+        } catch (err) {
+          console.error('Ошибка загрузки размеров:', err);
+          if (sizeSelect) sizeSelect.innerHTML = '<option value="">Ошибка</option>';
+        }
+      });
+    }
   }
 
   if (issueForm) {
