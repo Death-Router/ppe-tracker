@@ -41,21 +41,66 @@
             </div>
         </div>
 
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i> 
-            Раздел импорта находится в разработке (доступен только интерфейс). В ближайшем обновлении будет добавлена логика загрузки.
-        </div>
+        
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Заглушка для импорта (логика будет добавлена позже)
-  document.getElementById('import-form')?.addEventListener('submit', (e) => {
+  document.getElementById('import-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    window.showToast('Импорт пока не реализован, но форма готова!', 'info');
-    document.getElementById('import-result').innerHTML = '<div class="alert alert-warning">Функция импорта скоро появится.</div>';
+    const form = e.target;
+    const fileInput = form.querySelector('input[type="file"]');
+    const resultDiv = document.getElementById('import-result');
+    const btn = document.getElementById('import-btn');
+
+    if (!fileInput.files.length) {
+        window.showToast('Выберите файл', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    btn.disabled = true;
+    btn.textContent = 'Загрузка...';
+    resultDiv.innerHTML = '';
+
+    try {
+        const resp = await fetch('/api/v1/import/employees', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            throw new Error(data.detail || 'Ошибка импорта');
+        }
+
+        let html = `<div class="alert alert-success">
+            <strong>Импорт завершен!</strong><br>
+            Создано: ${data.created}, Обновлено: ${data.updated}
+        </div>`;
+
+        if (data.errors && data.errors.length > 0) {
+            html += `<div class="alert alert-warning mt-2">
+                <strong>Ошибки:</strong><br>
+                ${data.errors.join('<br>')}
+            </div>`;
+        }
+
+        resultDiv.innerHTML = html;
+        window.showToast('Импорт выполнен', 'success');
+        form.reset();
+    } catch (err) {
+        resultDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        window.showToast(err.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Загрузить';
+    }
   });
 </script>
 {% endblock %}

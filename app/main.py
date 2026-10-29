@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.api.v1.endpoints import (
     employees, ppe_categories, ppe_items, ws, departments, positions,
-    position_ppe_norms, employee_ppe_issues, ppe_sizes, export
+    position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -38,6 +38,7 @@ app.include_router(position_ppe_norms.router, prefix="/api/v1")
 app.include_router(employee_ppe_issues.router, prefix="/api/v1")
 app.include_router(ppe_sizes.router, prefix="/api/v1")
 app.include_router(export.router, prefix="/api/v1")
+app.include_router(import_data.router, prefix="/api/v1")
 
 # --- WebSocket-роутер ---
 app.include_router(ws.router)
