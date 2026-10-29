@@ -86,7 +86,7 @@
       }
       
       if (filteredSizes.length > 0) {
-        sizeOptions = '<option value="">Выберите размер...</option>' + 
+        sizeOptions = '<option value="">Размер...</option>' + 
           filteredSizes.map(s => {
             const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
             return `<option value="${s.size_value}" ${s.size_value === sizeValue ? 'selected' : ''}>${s.size_value}${genderLabel}</option>`;
@@ -101,10 +101,10 @@
     const hasSizes = sizeOptions !== '';
     const sizeInputHtml = hasSizes 
       ? `<select class="form-select form-select-sm size-value-input" required>
-           <option value="">Выберите размер...</option>
+           <option value="">Размер...</option>
            ${sizeOptions}
          </select>`
-      : `<input type="text" class="form-control form-control-sm size-value-input" value="${sizeValue}" placeholder="Введите размер" required maxlength="50">`;
+      : `<input type="text" class="form-control form-control-sm size-value-input" value="${sizeValue}" placeholder="Размер" required maxlength="50">`;
 
     tr.innerHTML = `
       <td>
@@ -136,14 +136,14 @@
         
         const sizeCell = tr.children[1];
         if (filteredSizes.length > 0) {
-          const sizeOptions = '<option value="">Выберите размер...</option>' + 
+          const sizeOptions = '<option value="">Размер...</option>' + 
             filteredSizes.map(s => {
               const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
               return `<option value="${s.size_value}">${s.size_value}${genderLabel}</option>`;
             }).join('');
           sizeCell.innerHTML = `<select class="form-select form-select-sm size-value-input" required>${sizeOptions}</select>`;
         } else {
-          sizeCell.innerHTML = `<input type="text" class="form-control form-control-sm size-value-input" placeholder="Введите размер" required maxlength="50">`;
+          sizeCell.innerHTML = `<input type="text" class="form-control form-control-sm size-value-input" placeholder="Размер" required maxlength="50">`;
         }
       }
     });

@@ -6,46 +6,53 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Исправляем асинхронный createSizeRow в employee_edit.js..."
+echo "📐 Расширяем колонку 'Размер' и сокращаем текст..."
 
+# 1. В шаблоне edit.html увеличиваем ширину колонки
+python3 - << 'PYEOF'
+with open('app/templates/employees/edit.html', 'r') as f:
+    content = f.read()
+
+# Ищем <th style="width: 150px;">Размер</th> и меняем на 250px
+content = content.replace(
+    '<th style="width: 150px;">Размер</th>',
+    '<th style="width: 250px;">Размер</th>'
+)
+
+with open('app/templates/employees/edit.html', 'w') as f:
+    f.write(content)
+print("✅ Ширина колонки увеличена до 250px.")
+PYEOF
+
+# 2. В employee_edit.js заменяем длинный placeholder на короткий
 python3 - << 'PYEOF'
 with open('app/static/js/employee_edit.js', 'r') as f:
     content = f.read()
 
-# 1. В обработчике addSizeBtn добавляем await
-old_add = '''  addSizeBtn.addEventListener('click', () => {
-    sizesTableBody.appendChild(createSizeRow());
-    isDirty = true;
-  });'''
+# Заменяем текст "Выберите размер..." на "Размер..." в select
+content = content.replace(
+    '<option value="">Выберите размер...</option>',
+    '<option value="">Размер...</option>'
+)
 
-new_add = '''  addSizeBtn.addEventListener('click', async () => {
-    const tr = await createSizeRow();
-    sizesTableBody.appendChild(tr);
-    isDirty = true;
-  });'''
-
-content = content.replace(old_add, new_add)
-
-# 2. В функции loadEmployee уже есть await перед createSizeRow, но проверим, что он есть
-# (Если там нет await, добавим)
-old_loop = '''        for (const size of emp.ppe_sizes) {
-          const tr = await createSizeRow(size.ppe_item_id, size.size_value);
-          sizesTableBody.appendChild(tr);
-        }'''
-# Оставляем как есть, если уже с await
+# Также для input placeholder "Введите размер" -> "Размер"
+content = content.replace(
+    'placeholder="Введите размер"',
+    'placeholder="Размер"'
+)
 
 with open('app/static/js/employee_edit.js', 'w') as f:
     f.write(content)
-print("✅ Исправление добавлено: appendChild теперь ждет Promise.")
+print("✅ Текст сокращен (теперь 'Размер...' вместо 'Выберите размер...').")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Теперь добавление размера не должно вызывать ошибку."
+echo "✅ ГОТОВО! Колонка стала шире, текст короче."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: await async createSizeRow before appendChild"
+git commit -m "ui: widen size column and shorten placeholder"
