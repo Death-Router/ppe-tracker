@@ -57,7 +57,9 @@
       <tr data-norm-id="${n.id}">
         <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
         <td>${escapeHtml(n.wear_period_value)} ${escapeHtml(n.wear_period_unit)}</td>
-        <td>${escapeHtml(n.quantity)}</td>
+        <td>
+          ${n.quantity} ${n.ppe_item?.unit?.short_name ? escapeHtml(n.ppe_item.unit.short_name) : ''}
+        </td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
