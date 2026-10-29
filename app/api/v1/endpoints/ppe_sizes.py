@@ -11,7 +11,6 @@ router = APIRouter(prefix="/ppe_sizes", tags=["Справочник: Разме�
 
 @router.post("/", response_model=PpeSizeRead, status_code=status.HTTP_201_CREATED)
 async def create_size(size_in: PpeSizeCreate, db: AsyncSession = Depends(get_db)):
-    # Проверяем, существует ли СИЗ
     item_res = await db.execute(select(PpeItem).where(PpeItem.id == size_in.ppe_item_id))
     if not item_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
@@ -22,16 +21,18 @@ async def create_size(size_in: PpeSizeCreate, db: AsyncSession = Depends(get_db)
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Такой размер уже существует для этого СИЗ")
+        raise HTTPException(status_code=400, detail="Такой размер (с учетом пола) уже существует для этого СИЗ")
     
     await db.refresh(db_size)
     return db_size
 
 @router.get("/", response_model=list[PpeSizeRead])
-async def get_sizes(ppe_item_id: int | None = None, db: AsyncSession = Depends(get_db)):
+async def get_sizes(ppe_item_id: int | None = None, gender: str | None = None, db: AsyncSession = Depends(get_db)):
     query = select(PpeSize)
     if ppe_item_id is not None:
         query = query.where(PpeSize.ppe_item_id == ppe_item_id)
+    if gender:
+        query = query.where(PpeSize.gender == gender)
     result = await db.execute(query)
     return result.scalars().all()
 

@@ -106,12 +106,14 @@
       sizesList.innerHTML = '<li class="list-group-item text-muted">Нет добавленных размеров</li>';
       return;
     }
-    sizesList.innerHTML = sizes.map(s => `
+    sizesList.innerHTML = sizes.map(s => {
+      const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+      return `
       <li class="list-group-item d-flex justify-content-between align-items-center">
-        ${escapeHtml(s.size_value)}
+        ${escapeHtml(s.size_value)}${genderLabel}
         <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSize(${s.id})">✕</button>
       </li>
-    `).join('');
+    `}).join('');
   }
 
   // Добавление размера
@@ -122,7 +124,8 @@
     if (!sizeValue) return;
 
     try {
-      await API.post('/api/v1/ppe_sizes/', { ppe_item_id: itemId, size_value: sizeValue });
+      const gender = sizeForm.elements['gender'].value || null;
+      await API.post('/api/v1/ppe_sizes/', { ppe_item_id: itemId, size_value: sizeValue, gender: gender });
       window.showToast('Размер добавлен', 'success');
       sizeForm.reset();
       

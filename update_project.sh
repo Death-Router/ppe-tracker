@@ -6,199 +6,206 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Обновляем ppe_items_list.js (кнопка 'Размеры' и логика модалки)..."
+echo "🔧 Обновляем модель PpeSize (добавляем поле gender)..."
 
-cat > app/static/js/ppe_items_list.js << 'EOF'
-(() => {
-  const tbody = document.querySelector('#items-table tbody');
-  const createForm = document.getElementById('create-form');
-  const createCategorySelect = document.getElementById('create-category');
-  
-  // Элементы модалки размеров
-  const sizesModalElement = document.getElementById('sizesModal');
-  const sizeForm = document.getElementById('size-form');
-  const sizesList = document.getElementById('sizes-list');
-  const sizeItemName = document.getElementById('size-item-name');
-  const sizeItemIdInput = document.getElementById('size-item-id');
+cat > app/models/ppe_size.py << 'EOF'
+from typing import TYPE_CHECKING
+from sqlalchemy import String, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.db.base import Base
 
-  async function loadItems() {
-    try {
-      const items = await API.get('/api/v1/ppe_items');
-      renderTable(items);
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
-    }
-  }
+if TYPE_CHECKING:
+    from app.models.ppe_item import PpeItem
 
-  async function loadCategoriesForSelect() {
-    try {
-      const categories = await API.get('/api/v1/ppe_categories');
-      createCategorySelect.innerHTML = '<option value="">Выберите категорию...</option>' +
-        categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-    } catch (err) {
-      createCategorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
-    }
-  }
+class PpeSize(Base):
+    __tablename__ = "ppe_sizes"
+    __table_args__ = (
+        UniqueConstraint("ppe_item_id", "size_value", "gender", name="uq_ppe_item_size_gender"),
+    )
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    ppe_item_id: Mapped[int] = mapped_column(ForeignKey("ppe_items.id", ondelete="CASCADE"))
+    size_value: Mapped[str] = mapped_column(String(50), nullable=False)
+    gender: Mapped[str | None] = mapped_column(String(1), nullable=True, comment="М, Ж или NULL (унисекс)")
 
-  function renderTable(items) {
-    if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">Наименований пока нет</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = items.map(i => `
-      <tr data-item-id="${i.id}">
-        <td><strong>${escapeHtml(i.name)}</strong></td>
-        <td><span class="badge bg-secondary">${escapeHtml(i.category?.name ?? '—')}</span></td>
-        <td class="text-end">
-          <button class="btn btn-sm btn-outline-secondary" onclick="openSizesModal(${i.id}, '${escapeHtml(i.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
-          <a class="btn btn-sm btn-outline-primary" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteItem(${i.id}, '${escapeHtml(i.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
-        </td>
-      </tr>
-    `).join('');
-  }
+    ppe_item: Mapped["PpeItem"] = relationship(back_populates="sizes")
+EOF
 
-  // --- Создание СИЗ ---
-  createForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = FormHelper.serialize(createForm);
-    payload.category_id = Number(payload.category_id);
+echo "📝 Обновляем схемы..."
+
+cat > app/schemas/ppe_size.py << 'EOF'
+from pydantic import BaseModel, ConfigDict, Field
+
+class PpeSizeBase(BaseModel):
+    ppe_item_id: int
+    size_value: str = Field(..., max_length=50)
+    gender: str | None = Field(None, pattern="^[МЖ]$")
+
+class PpeSizeCreate(PpeSizeBase):
+    pass
+
+class PpeSizeRead(PpeSizeBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+EOF
+
+echo "📝 Обновляем API (учет пола)..."
+
+cat > app/api/v1/endpoints/ppe_sizes.py << 'EOF'
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
+from app.db.session import get_db
+from app.models.ppe_size import PpeSize
+from app.models.ppe_item import PpeItem
+from app.schemas.ppe_size import PpeSizeCreate, PpeSizeRead
+
+router = APIRouter(prefix="/ppe_sizes", tags=["Справочник: Размеры СИЗ"])
+
+@router.post("/", response_model=PpeSizeRead, status_code=status.HTTP_201_CREATED)
+async def create_size(size_in: PpeSizeCreate, db: AsyncSession = Depends(get_db)):
+    item_res = await db.execute(select(PpeItem).where(PpeItem.id == size_in.ppe_item_id))
+    if not item_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
+
+    db_size = PpeSize(**size_in.model_dump())
+    db.add(db_size)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Такой размер (с учетом пола) уже существует для этого СИЗ")
     
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
-      await API.post('/api/v1/ppe_items/', payload);
-      window.showToast('Наименование создано', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
-      createForm.reset();
-      loadItems();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      btn.disabled = false;
-    }
-  });
+    await db.refresh(db_size)
+    return db_size
 
-  // --- Удаление СИЗ ---
-  window.deleteItem = async (id, name) => {
-    if (!confirm(`Удалить наименование "${name}"?`)) return;
-    try {
-      await API.request(`/api/v1/ppe_items/${id}`, { method: 'DELETE' });
-      window.showToast('Наименование удалено', 'success');
-      loadItems();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  };
+@router.get("/", response_model=list[PpeSizeRead])
+async def get_sizes(ppe_item_id: int | None = None, gender: str | None = None, db: AsyncSession = Depends(get_db)):
+    query = select(PpeSize)
+    if ppe_item_id is not None:
+        query = query.where(PpeSize.ppe_item_id == ppe_item_id)
+    if gender:
+        query = query.where(PpeSize.gender == gender)
+    result = await db.execute(query)
+    return result.scalars().all()
 
-  // --- Управление размерами ---
-  window.openSizesModal = async (itemId, itemName) => {
-    sizeItemIdInput.value = itemId;
-    sizeItemName.textContent = itemName;
-    sizesList.innerHTML = '<li class="list-group-item text-muted">Загрузка...</li>';
-    
-    // Показываем модалку
-    const modal = new bootstrap.Modal(sizesModalElement);
-    modal.show();
+@router.delete("/{size_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_size(size_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(PpeSize).where(PpeSize.id == size_id))
+    db_size = result.scalar_one_or_none()
+    if not db_size:
+        raise HTTPException(status_code=404, detail="Размер не найден")
+    await db.delete(db_size)
+    await db.commit()
+EOF
 
-    // Загружаем размеры
-    try {
-      const sizes = await API.get(`/api/v1/ppe_sizes/?ppe_item_id=${itemId}`);
-      renderSizesList(sizes);
-    } catch (err) {
-      sizesList.innerHTML = `<li class="list-group-item text-danger">Ошибка: ${err.message}</li>`;
-    }
-  };
+echo "🚀 Перезапускаем контейнер..."
+docker compose restart api
+sleep 3
 
-  function renderSizesList(sizes) {
-    if (!sizes.length) {
-      sizesList.innerHTML = '<li class="list-group-item text-muted">Нет добавленных размеров</li>';
-      return;
-    }
-    sizesList.innerHTML = sizes.map(s => `
+echo "🔄 Генерируем миграцию для поля gender..."
+docker compose exec -T api alembic revision --autogenerate -m "add gender to ppe_sizes"
+docker compose exec -T api alembic upgrade head
+
+echo "📝 Обновляем JS для размеров (учет пола)..."
+
+# Обновляем ppe_items_list.js — добавляем поле пола в форму
+python3 - << 'PYEOF'
+with open('app/static/js/ppe_items_list.js', 'r') as f:
+    content = f.read()
+
+# В функции renderSizesList добавляем отображение пола
+old_render = '''    sizesList.innerHTML = sizes.map(s => `
       <li class="list-group-item d-flex justify-content-between align-items-center">
         ${escapeHtml(s.size_value)}
         <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSize(${s.id})">✕</button>
       </li>
-    `).join('');
-  }
+    `).join('');'''
 
-  // Добавление размера
-  sizeForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const itemId = Number(sizeItemIdInput.value);
-    const sizeValue = sizeForm.elements['size_value'].value.trim();
-    if (!sizeValue) return;
+new_render = '''    sizesList.innerHTML = sizes.map(s => {
+      const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+      return `
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        ${escapeHtml(s.size_value)}${genderLabel}
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSize(${s.id})">✕</button>
+      </li>
+    `}).join('');'''
 
-    try {
-      await API.post('/api/v1/ppe_sizes/', { ppe_item_id: itemId, size_value: sizeValue });
-      window.showToast('Размер добавлен', 'success');
-      sizeForm.reset();
-      
-      // Перезагружаем список
-      const sizes = await API.get(`/api/v1/ppe_sizes/?ppe_item_id=${itemId}`);
-      renderSizesList(sizes);
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  });
+if old_render in content:
+    content = content.replace(old_render, new_render)
+    print("✅ Отображение пола добавлено в список размеров.")
+else:
+    print("⚠️ Не удалось найти блок renderSizesList.")
 
-  // Удаление размера
-  window.deleteSize = async (sizeId) => {
-    if (!confirm('Удалить этот размер?')) return;
-    try {
-      await API.request(`/api/v1/ppe_sizes/${sizeId}`, { method: 'DELETE' });
-      window.showToast('Размер удален', 'success');
-      
-      // Перезагружаем список
-      const itemId = Number(sizeItemIdInput.value);
-      const sizes = await API.get('/api/v1/ppe_sizes/?ppe_item_id=' + itemId);
-      renderSizesList(sizes);
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  };
+with open('app/static/js/ppe_items_list.js', 'w') as f:
+    f.write(content)
+PYEOF
 
-  WS.subscribe((data) => {
-    if (data.event === 'item_updated') {
-      window.showToast(`Наименование #${data.item_id} изменено`, 'warning');
-      loadItems();
-    }
-  });
+echo "📝 Обновляем форму добавления размера (добавляем выбор пола)..."
 
-  loadCategoriesForSelect();
-  loadItems();
-})();
-EOF
-
-echo "📝 Обновляем employee_edit.js (замена текстового размера на select)..."
-
+# Обновляем модалку в ppe_items/list.html — добавляем select для пола
 python3 - << 'PYEOF'
-with open('app/static/js/employee_edit.js', 'r') as f:
+with open('app/templates/ppe_items/list.html', 'r') as f:
     content = f.read()
 
-# 1. Добавляем загрузку размеров для всех СИЗ
-# Нам нужно, чтобы при загрузке СИЗ мы также загружали их размеры.
-# Это сложно сделать одним запросом, поэтому мы будем запрашивать размеры при открытии модалки или при добавлении строки.
-# Пока просто оставим текстовое поле, так как это требует переработки всей логики.
+old_input_group = '''                <div class="input-group">
+                    <input type="text" class="form-control" name="size_value" placeholder="Например, 42 или M" required>
+                    <button class="btn btn-primary" type="submit">Добавить</button>
+                </div>'''
 
-# Но мы можем изменить createSizeRow, чтобы он делал запрос к API за размерами.
-# Это асинхронно, поэтому проще сделать так: при добавлении строки делаем запрос и заполняем select.
+new_input_group = '''                <div class="row g-2">
+                    <div class="col-4">
+                        <select class="form-select" name="gender">
+                            <option value="">Унисекс</option>
+                            <option value="М">Мужской</option>
+                            <option value="Ж">Женский</option>
+                        </select>
+                    </div>
+                    <div class="col-5">
+                        <input type="text" class="form-control" name="size_value" placeholder="Например, 42" required>
+                    </div>
+                    <div class="col-3">
+                        <button class="btn btn-primary w-100" type="submit">Добавить</button>
+                    </div>
+                </div>'''
 
-# Для простоты и надежности пока оставим input, но добавим подсказку.
+if old_input_group in content:
+    content = content.replace(old_input_group, new_input_group)
+    print("✅ Форма добавления размера обновлена (выбор пола).")
+else:
+    print("⚠️ Не удалось найти форму добавления размера.")
 
-print("ℹ️ Логика выбора размера из справочника в карточке сотрудника требует дополнительной синхронизации. Пока оставляем текстовый ввод.")
+with open('app/templates/ppe_items/list.html', 'w') as f:
+    f.write(content)
+PYEOF
+
+# Обновляем JS для отправки поля gender
+python3 - << 'PYEOF'
+with open('app/static/js/ppe_items_list.js', 'r') as f:
+    content = f.read()
+
+old_submit = '''      await API.post('/api/v1/ppe_sizes/', { ppe_item_id: itemId, size_value: sizeValue });'''
+new_submit = '''      const gender = sizeForm.elements['gender'].value || null;
+      await API.post('/api/v1/ppe_sizes/', { ppe_item_id: itemId, size_value: sizeValue, gender: gender });'''
+
+if old_submit in content:
+    content = content.replace(old_submit, new_submit)
+    print("✅ Отправка gender добавлена в JS.")
+else:
+    print("⚠️ Не удалось найти блок отправки размера.")
+
+with open('app/static/js/ppe_items_list.js', 'w') as f:
+    f.write(content)
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Кнопка 'Размеры' добавлена в список СИЗ."
+echo "✅ ГОТОВО! Поле пола добавлено в справочник размеров."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "feat: add sizes management UI for PPE items"
+git commit -m "feat: add gender field to ppe_sizes and update UI"
