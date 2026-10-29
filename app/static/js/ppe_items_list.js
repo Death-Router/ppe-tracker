@@ -37,8 +37,8 @@
         <td><strong>${escapeHtml(i.name)}</strong></td>
         <td><span class="badge bg-secondary">${escapeHtml(i.category?.name ?? '—')}</span></td>
         <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/ppe-items/${i.id}/edit">Ред.</a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteItem(${i.id}, '${escapeHtml(i.name)}')">Удалить</button>
+          <a class="btn btn-sm btn-outline-primary" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteItem(${i.id}, '${escapeHtml(i.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');

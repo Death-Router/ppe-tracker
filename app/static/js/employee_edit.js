@@ -13,9 +13,9 @@
   let isDirty = false; 
   form.addEventListener('input', () => { isDirty = true; });
 
-  let allPpeItems = []; // Список всех СИЗ для выпадающего списка
+  let allPpeItems = [];
 
-  // --- Загрузка справочников ---
+  // Загрузка справочников
   async function loadDepartments() {
     const depts = await API.get('/api/v1/departments');
     deptSelect.innerHTML = '<option value="">Выберите...</option>' + 
@@ -41,11 +41,9 @@
     loadPositions(e.target.value);
   });
 
-  // --- Управление таблицей размеров ---
+  // Управление таблицей размеров
   function createSizeRow(itemId = '', sizeValue = '') {
     const tr = document.createElement('tr');
-    
-    // Выпадающий список СИЗ
     const options = allPpeItems.map(item => 
       `<option value="${item.id}" ${item.id === itemId ? 'selected' : ''}>${item.name} (${item.category?.name ?? ''})</option>`
     ).join('');
@@ -65,7 +63,6 @@
       </td>
     `;
     
-    // Обработчик удаления строки
     tr.querySelector('.remove-size-btn').addEventListener('click', () => {
       tr.remove();
       isDirty = true;
@@ -79,7 +76,7 @@
     isDirty = true;
   });
 
-  // --- Загрузка самого сотрудника ---
+  // Загрузка сотрудника
   async function loadEmployee(isWsUpdate = false) {
     try {
       const emp = await API.get(`/api/v1/employees/${employeeId}`);
@@ -90,9 +87,21 @@
         return;
       }
 
-      const FIELDS = ['personnel_number', 'last_name', 'first_name', 'middle_name'];
+      // Обновленный список полей, включая новые
+      const FIELDS = [
+        'personnel_number', 'last_name', 'first_name', 'middle_name',
+        'hire_date', 'position_change_date', 'gender', 'height'
+      ];
+      
       for (const f of FIELDS) {
-        if (form.elements[f]) form.elements[f].value = emp[f] ?? '';
+        if (form.elements[f]) {
+          // Для дат нужно привести к формату YYYY-MM-DD
+          if (f.includes('_date') && emp[f]) {
+             form.elements[f].value = emp[f].split('T')[0];
+          } else {
+             form.elements[f].value = emp[f] ?? '';
+          }
+        }
       }
       
       deptSelect.value = emp.department_id ?? '';
@@ -115,12 +124,11 @@
     }
   }
 
-  // --- Сохранение ---
+  // Сохранение
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     btnSubmit.disabled = true;
     
-    // Собираем размеры из таблицы
     const ppeSizes = [];
     const rows = sizesTableBody.querySelectorAll('tr');
     let hasErrors = false;
@@ -148,8 +156,14 @@
     }
 
     const payload = FormHelper.serialize(form);
+    // Приводим ID к числам
     payload.department_id = Number(payload.department_id);
     payload.position_id = Number(payload.position_id);
+    
+    // Обработка пустых дат (чтобы Pydantic не ругался)
+    if (!payload.hire_date) payload.hire_date = null;
+    if (!payload.position_change_date) payload.position_change_date = null;
+
     payload.ppe_sizes = ppeSizes;
 
     try {
@@ -175,6 +189,6 @@
     }
   });
 
-  // Инициализация: загружаем справочники, затем сотрудника
+  // Инициализация
   Promise.all([loadDepartments(), loadPpeItems()]).then(() => loadEmployee());
 })();

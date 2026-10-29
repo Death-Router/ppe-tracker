@@ -24,8 +24,8 @@
         <td><strong>${escapeHtml(c.name)}</strong></td>
         <td>${escapeHtml(c.description ?? '—')}</td>
         <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/ppe-categories/${c.id}/edit">Ред.</a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory(${c.id}, '${escapeHtml(c.name)}')">Удалить</button>
+          <a class="btn btn-sm btn-outline-primary" href="/ppe-categories/${c.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory(${c.id}, '${escapeHtml(c.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');

@@ -3,13 +3,13 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Категории СИЗ</h1>
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal">Добавить</button>
+    <button class="btn btn-success" title="Добавить" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg"></i></button>
 </div>
 
 <div class="card shadow-sm">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="categories-table">
-            <thead class="table-light">
+            <thead class="bg-brand-orange">
             <tr>
                 <th style="width: 80px;">#</th>
                 <th>Название</th>
@@ -45,7 +45,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-          <button type="submit" class="btn btn-primary">Создать</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Создать</button>
         </div>
       </form>
     </div>

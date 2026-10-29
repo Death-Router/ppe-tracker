@@ -47,6 +47,52 @@
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
+  function formatPeriod(value, unit) {
+    if (!value) return '—';
+    const num = parseInt(value, 10);
+    if (isNaN(num)) return `${value} ${unit}`;
+
+    // Склонение для "год"
+    if (unit === 'год') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} лет`;
+      if (lastDigit === 1) return `${num} год`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} года`;
+      return `${num} лет`;
+    }
+    // Склонение для "месяц"
+    if (unit === 'месяц') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} месяцев`;
+      if (lastDigit === 1) return `${num} месяц`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} месяца`;
+      return `${num} месяцев`;
+    }
+    // Склонение для "день"
+    if (unit === 'день') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} дней`;
+      if (lastDigit === 1) return `${num} день`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} дня`;
+      return `${num} дней`;
+    }
+    // Склонение для "смена"
+    if (unit === 'смена') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} смен`;
+      if (lastDigit === 1) return `${num} смена`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} смены`;
+      return `${num} смен`;
+    }
+    // Для "до износа" и других — просто возвращаем как есть
+    return `${value} ${unit}`;
+  }
+
+
   function renderTable(norms) {
     if (!norms.length) {
       tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">Норм пока нет</td></tr>`;
@@ -55,10 +101,10 @@
     tbody.innerHTML = norms.map(n => `
       <tr data-norm-id="${n.id}">
         <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
-        <td>${escapeHtml(n.wear_period_value)} ${escapeHtml(n.wear_period_unit)}</td>
+        <td>${formatPeriod(n.wear_period_value, n.wear_period_unit)}</td>
         <td>${escapeHtml(n.quantity)}</td>
         <td class="text-end">
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteNorm(${n.id})">Удалить</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');

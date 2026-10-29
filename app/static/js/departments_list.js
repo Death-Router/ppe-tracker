@@ -23,8 +23,8 @@
         <td>${d.id}</td>
         <td><strong>${escapeHtml(d.name)}</strong></td>
         <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/departments/${d.id}/edit">Ред.</a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteDept(${d.id}, '${escapeHtml(d.name)}')">Удалить</button>
+          <a class="btn btn-sm btn-outline-primary" href="/departments/${d.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteDept(${d.id}, '${escapeHtml(d.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');

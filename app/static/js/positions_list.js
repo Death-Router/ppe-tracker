@@ -35,8 +35,8 @@
         <td><strong>${escapeHtml(p.name)}</strong></td>
         <td><span class="badge bg-secondary">${escapeHtml(p.department?.name ?? '—')}</span></td>
         <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/positions/${p.id}/edit">Ред.</a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deletePos(${p.id}, '${escapeHtml(p.name)}')">Удалить</button>
+          <a class="btn btn-sm btn-outline-primary" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger" onclick="deletePos(${p.id}, '${escapeHtml(p.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');

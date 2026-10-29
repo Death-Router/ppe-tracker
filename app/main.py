@@ -6,7 +6,15 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api.v1.endpoints import employees, ppe_categories, ppe_items, ws, departments, positions, position_ppe_norms
+from app.api.v1.endpoints import (
+    departments,
+    employees,
+    position_ppe_norms,
+    positions,
+    ppe_categories,
+    ppe_items,
+    ws,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -109,6 +117,7 @@ async def departments_page(request: Request):
         context={"title": "Подразделения"},
     )
 
+
 @app.get("/departments/{dept_id}/edit", response_class=HTMLResponse)
 async def department_edit_page(request: Request, dept_id: int):
     return templates.TemplateResponse(
@@ -116,6 +125,7 @@ async def department_edit_page(request: Request, dept_id: int):
         name="departments/edit.html",
         context={"title": "Редактирование подразделения", "dept_id": dept_id},
     )
+
 
 @app.get("/positions", response_class=HTMLResponse)
 async def positions_page(request: Request):
@@ -125,6 +135,7 @@ async def positions_page(request: Request):
         context={"title": "Должности"},
     )
 
+
 @app.get("/positions/{pos_id}/edit", response_class=HTMLResponse)
 async def position_edit_page(request: Request, pos_id: int):
     return templates.TemplateResponse(
@@ -132,6 +143,7 @@ async def position_edit_page(request: Request, pos_id: int):
         name="positions/edit.html",
         context={"title": "Редактирование должности", "pos_id": pos_id},
     )
+
 
 @app.get("/norms", response_class=HTMLResponse)
 async def norms_page(request: Request):

@@ -1,0 +1,176 @@
+/* Общие настройки */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+/* Фиолетовый цвет (как у Ростелекома) */
+.bg-purple {
+    background-color: #5b2c8a !important; /* Глубокий фиолетовый */
+}
+.text-purple {
+    color: #5b2c8a !important;
+}
+
+/* Карточки (как на скриншоте) */
+.card {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+}
+
+.card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Кнопки */
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: #5b2c8a;
+    border-color: #5b2c8a;
+}
+
+.btn-primary:hover {
+    background-color: #4a2470;
+    border-color: #4a2470;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-outline-primary {
+    color: #5b2c8a;
+    border-color: #5b2c8a;
+}
+
+.btn-outline-primary:hover {
+    background-color: #5b2c8a;
+    color: white;
+}
+
+/* Таблицы */
+.table {
+    --bs-table-bg: transparent;
+    margin-bottom: 0;
+}
+
+.table thead th {
+    background-color: #f1f3f5;
+    color: #495057;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    border-bottom: none;
+    padding: 1rem;
+}
+
+.table tbody td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Формы и поля ввода */
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    padding: 0.6rem 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #5b2c8a;
+    box-shadow: 0 0 0 0.2rem rgba(91, 44, 138, 0.25);
+}
+
+/* Модальные окна */
+.modal-content {
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    border-bottom: 1px solid #e9ecef;
+    background-color: #f8f9fa;
+    border-radius: 16px 16px 0 0;
+}
+
+.modal-footer {
+    border-top: 1px solid #e9ecef;
+    background-color: #f8f9fa;
+    border-radius: 0 0 16px 16px;
+}
+
+/* Заголовки */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Навбар */
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.25rem;
+    letter-spacing: -0.5px;
+}
+
+.nav-link {
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.nav-link:hover {
+    opacity: 0.8;
+}
+
+/* Иконки в кнопках */
+.btn i {
+    font-size: 1.1rem;
+    vertical-align: middle;
+}
+
+/* Уведомления (тосты) */
+.toast {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Аккуратные бейджи */
+.badge {
+    border-radius: 6px;
+    padding: 0.4em 0.6em;
+    font-weight: 500;
+}
+
+
+
+/* Фирменный оранжевый Ростелекома для шапок таблиц */
+.table thead.bg-brand-orange th,
+.bg-brand-orange {
+    background-color: #FF6600 !important;
+    color: #ffffff !important;
+    border-bottom: none !important;
+}
+
+/* Убираем серый фон из Bootstrap, если он перебивает */
+.table > :not(caption) > * > * {
+    background-color: inherit !important;
+}

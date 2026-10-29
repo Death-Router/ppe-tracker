@@ -9,7 +9,7 @@
       const employees = await API.get('/api/v1/employees');
       renderTable(employees);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -19,7 +19,7 @@
 
   function renderTable(employees) {
     if (!employees.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = employees.map(e => {
@@ -29,10 +29,11 @@
         <td>${e.id}</td>
         <td>${escapeHtml(fio)}</td>
         <td>${escapeHtml(e.personnel_number)}</td>
+        <td>${escapeHtml(e.department_rel?.name ?? '—')}</td>
         <td>${escapeHtml(e.position_rel?.name ?? '—')}</td>
         <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/employees/${e.id}/edit">Ред.</a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee(${e.id}, '${escapeHtml(fio)}')">Удалить</button>
+          <a class="btn btn-sm btn-outline-primary" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee(${e.id}, '${escapeHtml(fio)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
       `;
