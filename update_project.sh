@@ -6,71 +6,170 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Проверяем и обновляем отображение единиц в нормах..."
+echo "🛠 Приводим единицы измерения к нижнему регистру (в базе)..."
 
-# 1. Убедимся, что в position_ppe_norms.py загружается unit
-python3 - << 'PYEOF'
-with open('app/api/v1/endpoints/position_ppe_norms.py', 'r') as f:
-    content = f.read()
+# Создаем временный скрипт для исправления регистра в таблице units
+cat > fix_units.py << 'EOF'
+import asyncio
+from sqlalchemy import select
+from app.models.unit import Unit
+from app.db.session import async_session_maker
 
-if 'selectinload(PpeItem.unit)' not in content:
-    content = content.replace(
-        'selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.category)',
-        'selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.category),\n        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.unit)'
-    )
-    with open('app/api/v1/endpoints/position_ppe_norms.py', 'w') as f:
-        f.write(content)
-    print("✅ Подгрузка unit добавлена в position_ppe_norms.py.")
-else:
-    print("ℹ️ Подгрузка unit уже есть.")
-PYEOF
+async def fix():
+    async with async_session_maker() as db:
+        result = await db.execute(select(Unit))
+        units = result.scalars().all()
+        for unit in units:
+            # Делаем первую букву строчной (пар, штука)
+            new_short = unit.short_name.lower()
+            if unit.short_name != new_short:
+                unit.short_name = new_short
+                print(f"Обновление: '{unit.short_name}' -> '{new_short}'")
+        await db.commit()
+        print("✅ Единицы измерения приведены к нижнему регистру.")
 
-# 2. Обновляем norms_list.js (отображение единицы)
+if __name__ == "__main__":
+    asyncio.run(fix())
+EOF
+
+docker compose cp fix_units.py api:/app/fix_units.py
+docker compose exec -T api python fix_units.py
+rm fix_units.py
+
+echo "🔧 Добавляем функцию склонения в norms_list.js..."
+
 python3 - << 'PYEOF'
 with open('app/static/js/norms_list.js', 'r') as f:
     content = f.read()
 
-# В renderTable заменяем вывод количества на форматированный с единицей
-old_td = '<td>${escapeHtml(n.quantity)}</td>'
-new_td = '''<td>
+# Добавляем функцию склонения (если еще нет)
+if 'function formatUnit' not in content:
+    format_func = '''
+  function formatUnit(value, shortName) {
+    if (!shortName) return value;
+    const num = parseInt(value, 10);
+    if (isNaN(num)) return `${value} ${shortName}`;
+
+    // Склонение для "пара"
+    if (shortName.toLowerCase() === 'пара') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} пар`;
+      if (lastDigit === 1) return `${num} пара`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} пары`;
+      return `${num} пар`;
+    }
+    // Склонение для "штука"
+    if (shortName.toLowerCase() === 'штука' || shortName.toLowerCase() === 'шт') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} штук`;
+      if (lastDigit === 1) return `${num} штука`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} штуки`;
+      return `${num} штук`;
+    }
+    // Склонение для "комплект"
+    if (shortName.toLowerCase() === 'комплект') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} комплектов`;
+      if (lastDigit === 1) return `${num} комплект`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} комплекта`;
+      return `${num} комплектов`;
+    }
+    // По умолчанию
+    return `${num} ${shortName}`;
+  }
+'''
+    content = content.replace(
+        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }",
+        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }\n" + format_func
+    )
+    print("✅ Функция formatUnit добавлена в norms_list.js.")
+
+# Заменяем вывод количества в таблице норм на использование formatUnit
+old_td = '''<td>
           ${n.quantity} ${n.ppe_item?.unit?.short_name ? escapeHtml(n.ppe_item.unit.short_name) : ''}
         </td>'''
 
+new_td = '''<td>${formatUnit(n.quantity, n.ppe_item?.unit?.short_name)}</td>'''
+
 if old_td in content:
     content = content.replace(old_td, new_td)
-    print("✅ Отображение единицы добавлено в таблицу норм.")
+    print("✅ Таблица норм обновлена (использует formatUnit).")
 else:
-    print("⚠️ Не удалось найти ячейку количества в норм.")
-    # Попробуем альтернативный вариант (если структура отличается)
-    if 'n.quantity' in content:
-        content = content.replace('${escapeHtml(n.quantity)}', '${n.quantity} ${n.ppe_item?.unit?.short_name ? escapeHtml(n.ppe_item.unit.short_name) : \'\'}')
+    # Если структура отличается, ищем более общий вариант
+    content = content.replace(
+        '${n.quantity} ${n.ppe_item?.unit?.short_name ? escapeHtml(n.ppe_item.unit.short_name) : \'\'}',
+        '${formatUnit(n.quantity, n.ppe_item?.unit?.short_name)}'
+    )
+    print("✅ Таблица норм обновлена (альтернативный метод).")
 
 with open('app/static/js/norms_list.js', 'w') as f:
     f.write(content)
 PYEOF
 
-# 3. Обновляем employee_edit.js (отображение единицы в выдаче)
+echo "🔧 Добавляем функцию склонения в employee_edit.js..."
+
 python3 - << 'PYEOF'
 with open('app/static/js/employee_edit.js', 'r') as f:
     content = f.read()
 
-# В renderIssuesTable заменяем вывод количества
-old_td = '<td>${issue.quantity}</td>'
-new_td = '''<td>${issue.quantity} ${issue.ppe_item?.unit?.short_name ? escapeHtml(issue.ppe_item.unit.short_name) : ''}</td>'''
+# Добавляем функцию склонения (если еще нет)
+if 'function formatUnit' not in content:
+    format_func = '''
+  function formatUnit(value, shortName) {
+    if (!shortName) return value;
+    const num = parseInt(value, 10);
+    if (isNaN(num)) return `${value} ${shortName}`;
+
+    if (shortName.toLowerCase() === 'пара') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} пар`;
+      if (lastDigit === 1) return `${num} пара`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} пары`;
+      return `${num} пар`;
+    }
+    if (shortName.toLowerCase() === 'штука' || shortName.toLowerCase() === 'шт') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} штук`;
+      if (lastDigit === 1) return `${num} штука`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} штуки`;
+      return `${num} штук`;
+    }
+    if (shortName.toLowerCase() === 'комплект') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} комплектов`;
+      if (lastDigit === 1) return `${num} комплект`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} комплекта`;
+      return `${num} комплектов`;
+    }
+    return `${num} ${shortName}`;
+  }
+'''
+    content = content.replace(
+        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }",
+        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }\n" + format_func
+    )
+    print("✅ Функция formatUnit добавлена в employee_edit.js.")
+
+# Заменяем вывод количества в таблице выдач
+old_td = '<td>${issue.quantity} ${issue.ppe_item?.unit?.short_name ? escapeHtml(issue.ppe_item.unit.short_name) : \'\'}</td>'
+new_td = '<td>${formatUnit(issue.quantity, issue.ppe_item?.unit?.short_name)}</td>'
 
 if old_td in content:
     content = content.replace(old_td, new_td)
-    print("✅ Отображение единицы добавлено в таблицу выдач.")
+    print("✅ Таблица выдач обновлена (использует formatUnit).")
 else:
-    print("⚠️ Не удалось найти ячейку количества в выдачах.")
-
-# Также добавим подстановку единицы в модалку выдачи (если еще нет)
-if 'issue-unit-label' not in content:
-    # В модалке выдачи меняем поле "Количество"
+    # Альтернативный вариант
     content = content.replace(
-        '<label class="form-label">Количество <span class="text-danger">*</span></label>\n                    <input type="text" class="form-control" name="quantity" required value="1">',
-        '<label class="form-label">Количество <span class="text-danger">*</span></label>\n                    <div class="input-group">\n                        <input type="text" class="form-control" name="quantity" required value="1">\n                        <span class="input-group-text" id="issue-unit-label">ед.</span>\n                    </div>'
+        '${issue.quantity} ${issue.ppe_item?.unit?.short_name ? escapeHtml(issue.ppe_item.unit.short_name) : \'\'}',
+        '${formatUnit(issue.quantity, issue.ppe_item?.unit?.short_name)}'
     )
+    print("✅ Таблица выдач обновлена (альтернативный метод).")
 
 with open('app/static/js/employee_edit.js', 'w') as f:
     f.write(content)
@@ -80,9 +179,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Единицы измерения теперь отображаются в нормах и выдачах."
+echo "✅ ГОТОВО! Единицы измерения теперь склоняются правильно."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: display units in norms and issues tables"
+git commit -m "ui: humanize unit names with plural forms (пара, штука, комплект)"

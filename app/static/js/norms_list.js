@@ -48,6 +48,43 @@
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
+  function formatUnit(value, shortName) {
+    if (!shortName) return value;
+    const num = parseInt(value, 10);
+    if (isNaN(num)) return `${value} ${shortName}`;
+
+    // Склонение для "пара"
+    if (shortName.toLowerCase() === 'пара') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} пар`;
+      if (lastDigit === 1) return `${num} пара`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} пары`;
+      return `${num} пар`;
+    }
+    // Склонение для "штука"
+    if (shortName.toLowerCase() === 'штука' || shortName.toLowerCase() === 'шт') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} штук`;
+      if (lastDigit === 1) return `${num} штука`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} штуки`;
+      return `${num} штук`;
+    }
+    // Склонение для "комплект"
+    if (shortName.toLowerCase() === 'комплект') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} комплектов`;
+      if (lastDigit === 1) return `${num} комплект`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} комплекта`;
+      return `${num} комплектов`;
+    }
+    // По умолчанию
+    return `${num} ${shortName}`;
+  }
+
+
   function renderTable(norms) {
     if (!norms.length) {
       tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">Норм пока нет</td></tr>`;
@@ -57,9 +94,7 @@
       <tr data-norm-id="${n.id}">
         <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
         <td>${escapeHtml(n.wear_period_value)} ${escapeHtml(n.wear_period_unit)}</td>
-        <td>
-          ${n.quantity} ${n.ppe_item?.unit?.short_name ? escapeHtml(n.ppe_item.unit.short_name) : ''}
-        </td>
+        <td>${formatUnit(n.quantity, n.ppe_item?.unit?.short_name)}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>

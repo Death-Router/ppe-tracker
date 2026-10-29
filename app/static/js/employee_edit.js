@@ -273,7 +273,7 @@
           <td>${issue.ppe_item?.name ?? '—'}</td>
           <td>${new Date(issue.issue_date).toLocaleDateString('ru-RU')}</td>
           <td>${expiryStr}</td>
-          <td>${issue.quantity} ${issue.ppe_item?.unit?.short_name ? escapeHtml(issue.ppe_item.unit.short_name) : ''}</td>
+          <td>${formatUnit(issue.quantity, issue.ppe_item?.unit?.short_name)}</td>
           <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteIssue(${issue.id})">✕</button></td>
         </tr>
       `;
