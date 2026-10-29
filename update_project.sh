@@ -6,152 +6,134 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Обновляем логику норм (автоматическая подстановка единицы)..."
+echo "🔧 Обновляем схемы PpeItem (добавляем unit_id)..."
 
-python3 - << 'PYEOF'
-with open('app/static/js/norms_list.js', 'r') as f:
-    content = f.read()
+cat > app/schemas/ppe_item.py << 'EOF'
+from pydantic import BaseModel, ConfigDict, Field
+from app.schemas.ppe_category import PpeCategoryRead
 
-# 1. Меняем форму: добавляем бейдж для единицы измерения
-old_form = '''            <div class="mb-3 mt-3">
-                <label class="form-label">Количество <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="quantity" required placeholder="Например, 1 пара" value="1">
-            </div>'''
+class PpeItemBase(BaseModel):
+    name: str = Field(..., max_length=255, description="Наименование СИЗ")
+    category_id: int = Field(..., description="ID категории")
+    unit_id: int | None = Field(None, description="ID единицы измерения")
 
-new_form = '''            <div class="mb-3 mt-3">
-                <label class="form-label">Количество <span class="text-danger">*</span></label>
-                <div class="input-group">
-                    <input type="text" class="form-control" name="quantity" required placeholder="Число" value="1">
-                    <span class="input-group-text" id="norm-unit-label">ед.</span>
-                </div>
-            </div>'''
+class PpeItemCreate(PpeItemBase):
+    pass
 
-if old_form in content:
-    content = content.replace(old_form, new_form)
-    print("✅ Форма нормы обновлена (добавлен бейдж единицы).")
-else:
-    print("⚠️ Не удалось найти старую форму нормы.")
+class PpeItemRead(PpeItemBase):
+    id: int
+    version: int
+    category: PpeCategoryRead | None = None
+    unit: dict | None = None
+    model_config = ConfigDict(from_attributes=True)
 
-# 2. Добавляем обработчик изменения СИЗ в модалке нормы
-# Нам нужно найти блок, где мы заполняем itemSelect, и добавить обработчик
-old_item_change = '''  // В функции renderTable или при инициализации
-  // (Найдем место, где мы заполняем список СИЗ в модалке)
-'''
+class PpeItemUpdate(PpeItemBase):
+    name: str | None = Field(None, max_length=255)
+    category_id: int | None = None
+    unit_id: int | None = None
+    version: int
+EOF
 
-# Проще добавить обработчик в конец файла перед инициализацией
-new_logic = '''
-  // Обработчик изменения СИЗ в модалке создания нормы
-  const normItemSelect = document.getElementById('norm-item-select');
-  if (normItemSelect) {
-    normItemSelect.addEventListener('change', async (e) => {
-      const selectedId = Number(e.target.value);
-      const unitLabel = document.getElementById('norm-unit-label');
-      
-      if (!selectedId) {
-        unitLabel.textContent = 'ед.';
-        return;
-      }
+echo "🔧 Обновляем API ppe_items (сохранение unit_id)..."
 
-      // Находим выбранное СИЗ в allPpeItems
-      const selectedItem = allPpeItems.find(i => i.id === selectedId);
-      if (selectedItem && selectedItem.unit) {
-        unitLabel.textContent = selectedItem.unit.short_name;
-      } else {
-        unitLabel.textContent = 'ед.';
-      }
-    });
-  }
-'''
+cat > app/api/v1/endpoints/ppe_items.py << 'EOF'
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from app.api.v1.endpoints.ws import manager
+from app.db.session import get_db
+from app.models.ppe_item import PpeItem
+from app.models.ppe_category import PpeCategory
+from app.models.unit import Unit
+from app.schemas.ppe_item import PpeItemCreate, PpeItemRead, PpeItemUpdate
 
-# Вставляем перед последней инициализацией (init())
-if 'normItemSelect' not in content:
-    content = content.replace(
-        '  init();\n})();',
-        new_logic + '\n  init();\n})();'
+router = APIRouter(prefix="/ppe_items", tags=["Справочник: Наименования СИЗ"])
+
+@router.post("/", response_model=PpeItemRead, status_code=status.HTTP_201_CREATED)
+async def create_item(item_in: PpeItemCreate, db: AsyncSession = Depends(get_db)):
+    cat_res = await db.execute(select(PpeCategory).where(PpeCategory.id == item_in.category_id))
+    if not cat_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Категория не найдена")
+
+    db_item = PpeItem(**item_in.model_dump())
+    db.add(db_item)
+    await db.commit()
+    await db.refresh(db_item)
+    
+    result = await db.execute(
+        select(PpeItem).where(PpeItem.id == db_item.id)
+        .options(selectinload(PpeItem.category), selectinload(PpeItem.unit))
     )
-    print("✅ Обработчик изменения СИЗ добавлен в нормы.")
+    return result.scalar_one()
 
-with open('app/static/js/norms_list.js', 'w') as f:
-    f.write(content)
-PYEOF
+@router.get("/", response_model=list[PpeItemRead])
+async def get_items(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(PpeItem).options(selectinload(PpeItem.category), selectinload(PpeItem.unit)))
+    return result.scalars().all()
 
-echo "📝 Обновляем логику выдачи (автоматическая подстановка единицы)..."
+@router.get("/{item_id}", response_model=PpeItemRead)
+async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(PpeItem).where(PpeItem.id == item_id)
+        .options(selectinload(PpeItem.category), selectinload(PpeItem.unit))
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Наименование не найдено")
+    return item
 
-python3 - << 'PYEOF'
-with open('app/static/js/employee_edit.js', 'r') as f:
-    content = f.read()
+@router.put("/{item_id}", response_model=PpeItemRead)
+async def update_item(item_id: int, item_in: PpeItemUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(PpeItem).where(PpeItem.id == item_id))
+    db_item = result.scalar_one_or_none()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Наименование не найдено")
 
-# 1. Меняем форму выдачи: добавляем бейдж для единицы
-old_form = '''                <div class="col-6">
-                    <label class="form-label">Количество <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="quantity" required value="1">
-                </div>'''
+    if db_item.version != item_in.version:
+        raise HTTPException(status_code=409, detail="Данные устарели")
 
-new_form = '''                <div class="col-6">
-                    <label class="form-label">Количество <span class="text-danger">*</span></label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" name="quantity" required value="1">
-                        <span class="input-group-text" id="issue-unit-label">ед.</span>
-                    </div>
-                </div>'''
+    update_data = item_in.model_dump(exclude_unset=True, exclude={"version"})
+    for field, value in update_data.items():
+        setattr(db_item, field, value)
+    db_item.version += 1
+    await db.commit()
 
-if old_form in content:
-    content = content.replace(old_form, new_form)
-    print("✅ Форма выдачи обновлена (добавлен бейдж единицы).")
-else:
-    print("⚠️ Не удалось найти старую форму выдачи.")
+    try:
+        await manager.broadcast_to_employee(0, {"event": "item_updated", "item_id": item_id})
+    except Exception:
+        pass
 
-# 2. Добавляем обработчик изменения СИЗ в модалке выдачи
-old_handler = '''  if (issueItemSelect) {
-    issueItemSelect.addEventListener('change', (e) => {
-      const selectedOption = e.target.options[e.target.selectedIndex];
-      const categoryId = selectedOption.getAttribute('data-category-id');
-      fillIssueSizes(categoryId);
-    });
-  }'''
+    result = await db.execute(
+        select(PpeItem).where(PpeItem.id == item_id)
+        .options(selectinload(PpeItem.category), selectinload(PpeItem.unit))
+    )
+    return result.scalar_one()
 
-new_handler = '''  if (issueItemSelect) {
-    issueItemSelect.addEventListener('change', async (e) => {
-      const selectedOption = e.target.options[e.target.selectedIndex];
-      const categoryId = selectedOption.getAttribute('data-category-id');
-      const selectedId = Number(issueItemSelect.value);
-      const unitLabel = document.getElementById('issue-unit-label');
-      
-      // Обновляем размеры
-      fillIssueSizes(categoryId);
-
-      // Обновляем единицу измерения
-      if (!selectedId) {
-        unitLabel.textContent = 'ед.';
-        return;
-      }
-
-      const selectedItem = allPpeItems.find(i => i.id === selectedId);
-      if (selectedItem && selectedItem.unit) {
-        unitLabel.textContent = selectedItem.unit.short_name;
-      } else {
-        unitLabel.textContent = 'ед.';
-      }
-    });
-  }'''
-
-if old_handler in content:
-    content = content.replace(old_handler, new_handler)
-    print("✅ Обработчик изменения СИЗ обновлен (единица).")
-else:
-    print("⚠️ Не удалось найти обработчик изменения СИЗ в выдаче.")
-
-with open('app/static/js/employee_edit.js', 'w') as f:
-    f.write(content)
-PYEOF
+@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(PpeItem).where(PpeItem.id == item_id))
+    db_item = result.scalar_one_or_none()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Наименование не найдено")
+    try:
+        await db.delete(db_item)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка удаления")
+EOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
-sleep 2
+sleep 3
 
-echo "✅ ГОТОВО! Единицы измерения теперь подставляются автоматически."
+echo "🔄 Проверяем логи..."
+docker compose logs api --tail 10
+
+echo "✅ ГОТОВО! Теперь unit_id сохраняется."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "feat: auto-fill unit of measurement in norms and issues modals"
+git commit -m "fix: save unit_id in ppe_items update and schema"
