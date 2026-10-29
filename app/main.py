@@ -1,14 +1,12 @@
-# app/main.py
 from pathlib import Path
-
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api.v1.endpoints import export, 
+from app.api.v1.endpoints import (
     employees, ppe_categories, ppe_items, ws, departments, positions,
-    position_ppe_norms, employee_ppe_issues, ppe_sizes
+    position_ppe_norms, employee_ppe_issues, ppe_sizes, export
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -18,10 +16,8 @@ app = FastAPI(title="PPE Tracker API")
 # --- Шаблоны ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-
 def format_date(value):
     return value.strftime("%d.%m.%Y") if value else ""
-
 
 templates.env.filters["ru_date"] = format_date
 
@@ -34,14 +30,14 @@ app.mount(
 
 # --- HTTP-роутеры ---
 app.include_router(employees.router, prefix="/api/v1")
+app.include_router(ppe_categories.router, prefix="/api/v1")
+app.include_router(ppe_items.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
 app.include_router(positions.router, prefix="/api/v1")
 app.include_router(position_ppe_norms.router, prefix="/api/v1")
 app.include_router(employee_ppe_issues.router, prefix="/api/v1")
 app.include_router(ppe_sizes.router, prefix="/api/v1")
 app.include_router(export.router, prefix="/api/v1")
-app.include_router(ppe_categories.router, prefix="/api/v1")
-app.include_router(ppe_items.router, prefix="/api/v1")
 
 # --- WebSocket-роутер ---
 app.include_router(ws.router)
@@ -56,7 +52,6 @@ async def employees_page(request: Request):
         context={"title": "Сотрудники"},
     )
 
-
 @app.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
 async def employee_edit_page(request: Request, employee_id: int):
     return templates.TemplateResponse(
@@ -64,7 +59,6 @@ async def employee_edit_page(request: Request, employee_id: int):
         name="employees/edit.html",
         context={"title": "Редактирование", "employee_id": employee_id},
     )
-
 
 @app.get("/ppe-categories", response_class=HTMLResponse)
 async def ppe_categories_page(request: Request):
@@ -74,7 +68,6 @@ async def ppe_categories_page(request: Request):
         context={"title": "Категории СИЗ"},
     )
 
-
 @app.get("/ppe-categories/{category_id}/edit", response_class=HTMLResponse)
 async def ppe_category_edit_page(request: Request, category_id: int):
     return templates.TemplateResponse(
@@ -82,12 +75,6 @@ async def ppe_category_edit_page(request: Request, category_id: int):
         name="ppe_categories/edit.html",
         context={"title": "Редактирование категории", "category_id": category_id},
     )
-
-
-@app.get("/")
-async def root():
-    return {"message": "Привет! Сервер учета СИЗ работает."}
-
 
 @app.get("/ppe-items", response_class=HTMLResponse)
 async def ppe_items_page(request: Request):
@@ -97,7 +84,6 @@ async def ppe_items_page(request: Request):
         context={"title": "Наименования СИЗ"},
     )
 
-
 @app.get("/ppe-items/{item_id}/edit", response_class=HTMLResponse)
 async def ppe_item_edit_page(request: Request, item_id: int):
     return templates.TemplateResponse(
@@ -105,7 +91,6 @@ async def ppe_item_edit_page(request: Request, item_id: int):
         name="ppe_items/edit.html",
         context={"title": "Редактирование наименования", "item_id": item_id},
     )
-
 
 @app.get("/departments", response_class=HTMLResponse)
 async def departments_page(request: Request):
@@ -115,7 +100,6 @@ async def departments_page(request: Request):
         context={"title": "Подразделения"},
     )
 
-
 @app.get("/departments/{dept_id}/edit", response_class=HTMLResponse)
 async def department_edit_page(request: Request, dept_id: int):
     return templates.TemplateResponse(
@@ -123,7 +107,6 @@ async def department_edit_page(request: Request, dept_id: int):
         name="departments/edit.html",
         context={"title": "Редактирование подразделения", "dept_id": dept_id},
     )
-
 
 @app.get("/positions", response_class=HTMLResponse)
 async def positions_page(request: Request):
@@ -133,7 +116,6 @@ async def positions_page(request: Request):
         context={"title": "Должности"},
     )
 
-
 @app.get("/positions/{pos_id}/edit", response_class=HTMLResponse)
 async def position_edit_page(request: Request, pos_id: int):
     return templates.TemplateResponse(
@@ -142,11 +124,22 @@ async def position_edit_page(request: Request, pos_id: int):
         context={"title": "Редактирование должности", "pos_id": pos_id},
     )
 
-
 @app.get("/norms", response_class=HTMLResponse)
 async def norms_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="norms/list.html",
         context={"title": "Нормы выдачи СИЗ"},
+    )
+
+@app.get("/")
+async def root():
+    return {"message": "Привет! Сервер учета СИЗ работает."}
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={"title": "Настройки"},
     )
