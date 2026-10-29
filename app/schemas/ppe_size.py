@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 class PpeSizeBase(BaseModel):
-    ppe_item_id: int
+    category_id: int
     size_value: str = Field(..., max_length=50)
     gender: str | None = Field(None, pattern="^[МЖ]$")
 

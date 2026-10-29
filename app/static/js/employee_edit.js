@@ -43,11 +43,11 @@
     allPpeItems = await API.get('/api/v1/ppe_items');
   }
 
-  async function getSizesForItem(itemId) {
-    if (allSizesCache[itemId]) return allSizesCache[itemId];
+  async function getSizesForCategory(categoryId) {
+    if (allSizesCache[categoryId]) return allSizesCache[categoryId];
     try {
-      const sizes = await API.get(`/api/v1/ppe_sizes/?ppe_item_id=${itemId}`);
-      allSizesCache[itemId] = sizes;
+      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);
+      allSizesCache[categoryId] = sizes;
       return sizes;
     } catch (err) {
       return [];
@@ -67,16 +67,20 @@
     
     let sizeOptions = '';
     if (itemId) {
-      const sizes = await getSizesForItem(itemId);
-      let filteredSizes = sizes;
-      if (currentGender) {
-        filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
-      }
-      if (filteredSizes.length > 0) {
-        sizeOptions = filteredSizes.map(s => {
-          const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
-          return `<option value="${s.size_value}" ${s.size_value === sizeValue ? 'selected' : ''}>${s.size_value}${genderLabel}</option>`;
-        }).join('');
+      // Находим category_id для выбранного СИЗ
+      const selectedItem = allPpeItems.find(i => i.id === itemId);
+      if (selectedItem && selectedItem.category_id) {
+        const sizes = await getSizesForCategory(selectedItem.category_id);
+        let filteredSizes = sizes;
+        if (currentGender) {
+          filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
+        }
+        if (filteredSizes.length > 0) {
+          sizeOptions = filteredSizes.map(s => {
+            const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+            return `<option value="${s.size_value}" ${s.size_value === sizeValue ? 'selected' : ''}>${s.size_value}${genderLabel}</option>`;
+          }).join('');
+        }
       }
     }
 

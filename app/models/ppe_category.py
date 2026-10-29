@@ -7,6 +7,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.ppe_item import PpeItem
+    from app.models.ppe_size import PpeSize
 
 
 class PpeCategory(Base):
@@ -18,3 +19,4 @@ class PpeCategory(Base):
     version: Mapped[int] = mapped_column(default=1, server_default="1", nullable=False)
 
     items: Mapped[list["PpeItem"]] = relationship(back_populates="category")
+    sizes: Mapped[list["PpeSize"]] = relationship(back_populates="category", cascade="all, delete-orphan")
