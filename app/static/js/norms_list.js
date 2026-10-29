@@ -48,6 +48,47 @@
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
+  function formatPeriod(value, unit) {
+    if (!value) return '—';
+    const num = parseInt(value, 10);
+    if (isNaN(num)) return `${value} ${unit}`;
+
+    if (unit === 'год') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} лет`;
+      if (lastDigit === 1) return `${num} год`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} года`;
+      return `${num} лет`;
+    }
+    if (unit === 'месяц') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} месяцев`;
+      if (lastDigit === 1) return `${num} месяц`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} месяца`;
+      return `${num} месяцев`;
+    }
+    if (unit === 'день') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} дней`;
+      if (lastDigit === 1) return `${num} день`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} дня`;
+      return `${num} дней`;
+    }
+    if (unit === 'смена') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} смен`;
+      if (lastDigit === 1) return `${num} смена`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} смены`;
+      return `${num} смен`;
+    }
+    return `${value} ${unit}`;
+  }
+
+
   function formatUnit(value, shortName) {
     if (!shortName) return value;
     const num = parseInt(value, 10);
@@ -93,7 +134,7 @@
     tbody.innerHTML = norms.map(n => `
       <tr data-norm-id="${n.id}">
         <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
-        <td>${escapeHtml(n.wear_period_value)} ${escapeHtml(n.wear_period_unit)}</td>
+        <td>${formatPeriod(n.wear_period_value, n.wear_period_unit)}</td>
         <td>${formatUnit(n.quantity, n.ppe_item?.unit?.short_name)}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
