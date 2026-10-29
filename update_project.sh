@@ -6,40 +6,29 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Меняем корневой маршрут (/) на редирект к сотрудникам..."
+echo "🔧 Фиксируем версию bcrypt (откат до 4.0.1)..."
 
-python3 - << 'PYEOF'
-with open('app/main.py', 'r') as f:
-    content = f.read()
+# Удаляем старые записи о bcrypt и passlib, чтобы навести порядок
+sed -i '/^bcrypt/d' requirements.txt
+sed -i '/^passlib/d' requirements.txt
 
-# Находим старый маршрут "/"
-old_root = '''@app.get("/")
-async def root():
-    return {"message": "Привет! Сервер учета СИЗ работает."}'''
+# Добавляем совместимые версии
+echo "passlib[bcrypt]==1.7.4" >> requirements.txt
+echo "bcrypt==4.0.1" >> requirements.txt
 
-new_root = '''@app.get("/")
-async def root():
-    # Перенаправляем на список сотрудников
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/employees")'''
+echo "🚀 Пересобираем контейнер (устанавливаем bcrypt 4.0.1)..."
+docker compose up -d --build
+sleep 5
 
-if old_root in content:
-    content = content.replace(old_root, new_root)
-    print("✅ Корневой маршрут изменен на редирект.")
-else:
-    print("⚠️ Не удалось найти старый маршрут '/'. Возможно, он уже изменен или выглядит иначе.")
+echo "🔄 Создаем администратора..."
+docker compose exec -T api python create_admin.py
 
-with open('app/main.py', 'w') as f:
-    f.write(content)
-PYEOF
-
-echo "🚀 Перезапускаем контейнер..."
-docker compose restart api
-sleep 2
+echo "🔄 Проверяем логи..."
+docker compose logs api --tail 10
 
 echo "✅ ГОТОВО!"
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: redirect root path to employees list"
+git commit -m "fix: pin bcrypt to 4.0.1 for passlib compatibility"

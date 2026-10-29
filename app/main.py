@@ -1,5 +1,6 @@
 from pathlib import Path
 from fastapi import FastAPI, Request
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -12,6 +13,7 @@ from app.api.v1.endpoints import (
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="PPE Tracker API")
+app.add_middleware(SessionMiddleware, secret_key="super-secret-key-change-in-production")
 
 # --- Шаблоны ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -37,6 +39,7 @@ app.include_router(positions.router, prefix="/api/v1")
 app.include_router(position_ppe_norms.router, prefix="/api/v1")
 app.include_router(employee_ppe_issues.router, prefix="/api/v1")
 app.include_router(ppe_sizes.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(export.router, prefix="/api/v1")
 app.include_router(import_data.router, prefix="/api/v1")
 
@@ -145,4 +148,12 @@ async def settings_page(request: Request):
         request=request,
         name="settings.html",
         context={"title": "Настройки"},
+    )
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"title": "Вход"},
     )

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow-sm p-4">
+            <h3 class="text-center mb-4">Вход в систему</h3>
+            <form id="login-form">
+                <div class="mb-3">
+                    <label class="form-label">Имя пользователя</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Войти</button>
+            </form>
+            <div id="login-error" class="text-danger mt-2 text-center"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorDiv = document.getElementById('login-error');
+    
+    try {
+        const resp = await fetch('/api/v1/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Ошибка входа');
+        
+        window.location.href = '/employees';
+    } catch (err) {
+        errorDiv.textContent = err.message;
+    }
+});
+</script>
+{% endblock %}
