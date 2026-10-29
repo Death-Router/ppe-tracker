@@ -158,5 +158,28 @@
     }
   });
 
+
+  // Обработчик изменения СИЗ в модалке создания нормы
+  const normItemSelect = document.getElementById('norm-item-select');
+  if (normItemSelect) {
+    normItemSelect.addEventListener('change', async (e) => {
+      const selectedId = Number(e.target.value);
+      const unitLabel = document.getElementById('norm-unit-label');
+      
+      if (!selectedId) {
+        unitLabel.textContent = 'ед.';
+        return;
+      }
+
+      // Находим выбранное СИЗ в allPpeItems
+      const selectedItem = allPpeItems.find(i => i.id === selectedId);
+      if (selectedItem && selectedItem.unit) {
+        unitLabel.textContent = selectedItem.unit.short_name;
+      } else {
+        unitLabel.textContent = 'ед.';
+      }
+    });
+  }
+
   init();
 })();

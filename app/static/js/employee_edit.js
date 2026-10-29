@@ -361,10 +361,27 @@
   }
 
   if (issueItemSelect) {
-    issueItemSelect.addEventListener('change', (e) => {
+    issueItemSelect.addEventListener('change', async (e) => {
       const selectedOption = e.target.options[e.target.selectedIndex];
       const categoryId = selectedOption.getAttribute('data-category-id');
+      const selectedId = Number(issueItemSelect.value);
+      const unitLabel = document.getElementById('issue-unit-label');
+      
+      // Обновляем размеры
       fillIssueSizes(categoryId);
+
+      // Обновляем единицу измерения
+      if (!selectedId) {
+        unitLabel.textContent = 'ед.';
+        return;
+      }
+
+      const selectedItem = allPpeItems.find(i => i.id === selectedId);
+      if (selectedItem && selectedItem.unit) {
+        unitLabel.textContent = selectedItem.unit.short_name;
+      } else {
+        unitLabel.textContent = 'ед.';
+      }
     });
   }
 
