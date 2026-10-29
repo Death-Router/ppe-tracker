@@ -1,10 +1,41 @@
 (() => {
+  console.log('🚀 employee_edit.js загружен (финальная версия)');
+  
+  const employeeId = window.EMPLOYEE_ID;
+  const form = document.getElementById('employee-form');
+  const btnSubmit = document.getElementById('btn-submit');
+  const conflictAlert = document.getElementById('conflict-alert');
+  const versionInput = document.getElementById('version');
+  const deptSelect = document.getElementById('department_id');
+  const posSelect = document.getElementById('position_id');
+  const genderSelect = form.elements['gender']; 
+  
+  const sizesTableBody = document.querySelector('#sizes-table tbody');
+  const addSizeBtn = document.getElementById('add-size-btn');
 
+  const issueForm = document.getElementById('issue-form');
+  const issuesTableBody = document.querySelector('#issues-table tbody');
+  const normsTableBody = document.querySelector('#norms-table tbody');
+  
+  // Новые элементы для выдачи (datalist)
+  const issueItemInput = document.getElementById('issue-item-input');
+  const issueItemIdInput = document.getElementById('issue-item-id');
+  const issuePpeList = document.getElementById('issue-ppe-list');
+  const issueSizeSelect = document.getElementById('issue-size-select');
+  
+  let allCategories = [];
+  let allPpeItems = [];
+  let allSizesCache = {};
+  let currentNorms = [];
+  let currentIssues = [];
+  let isDirty = false; 
+  form.addEventListener('input', () => { isDirty = true; });
+
+  // --- Утилиты склонения ---
   function formatPeriod(value, unit) {
     if (!value) return '—';
     const num = parseInt(value, 10);
     if (isNaN(num)) return `${value} ${unit}`;
-
     if (unit === 'год') {
       const lastDigit = num % 10;
       const lastTwo = num % 100;
@@ -44,7 +75,6 @@
     if (!shortName) return value;
     const num = parseInt(value, 10);
     if (isNaN(num)) return `${value} ${shortName}`;
-
     if (shortName.toLowerCase() === 'пара') {
       const lastDigit = num % 10;
       const lastTwo = num % 100;
@@ -72,31 +102,7 @@
     return `${num} ${shortName}`;
   }
 
-  console.log('🚀 employee_edit.js загружен (финальная версия с категориями)');
-  
-  const employeeId = window.EMPLOYEE_ID;
-  const form = document.getElementById('employee-form');
-  const btnSubmit = document.getElementById('btn-submit');
-  const conflictAlert = document.getElementById('conflict-alert');
-  const versionInput = document.getElementById('version');
-  const deptSelect = document.getElementById('department_id');
-  const posSelect = document.getElementById('position_id');
-  const genderSelect = form.elements['gender']; 
-  
-  const sizesTableBody = document.querySelector('#sizes-table tbody');
-  const addSizeBtn = document.getElementById('add-size-btn');
-
-  const issueForm = document.getElementById('issue-form');
-  const issuesTableBody = document.querySelector('#issues-table tbody');
-  const normsTableBody = document.querySelector('#norms-table tbody');
-  
-  let allCategories = [];
-  let allPpeItems = [];
-  let allSizesCache = {};
-  let currentNorms = [];
-  let currentIssues = [];
-  let isDirty = false; 
-  form.addEventListener('input', () => { isDirty = true; });
+  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   // --- Загрузка справочников ---
   async function loadDepartments() {
@@ -137,17 +143,15 @@
 
   deptSelect.addEventListener('change', (e) => loadPositions(e.target.value));
 
-  // --- Создание строки размера (ПО КАТЕГОРИЯМ) ---
+  // --- Управление размерами (по категориям) ---
   async function createSizeRow(categoryId = '', sizeValue = '') {
     const tr = document.createElement('tr');
     const currentGender = genderSelect.value || null;
     
-    // Опции для категорий
     const categoryOptions = allCategories.map(c => 
       `<option value="${c.id}" ${c.id === Number(categoryId) ? 'selected' : ''}>${c.name}</option>`
     ).join('');
 
-    // Получаем размеры для выбранной категории
     let sizeOptionsHtml = '';
     if (categoryId) {
       const sizes = await getSizesForCategory(categoryId);
@@ -155,7 +159,6 @@
       if (currentGender) {
         filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
       }
-
       if (filteredSizes.length > 0) {
         sizeOptionsHtml = '<option value="">Размер...</option>' + 
           filteredSizes.map(s => {
@@ -181,25 +184,20 @@
       <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button></td>
     `;
     
-    // Обработчик изменения категории — перерисовываем размеры
     const catSelect = tr.querySelector('.category-select');
     catSelect.addEventListener('change', async () => {
       const newCatId = Number(catSelect.value);
       const sizeCell = tr.children[1];
-      
       if (newCatId) {
         const sizes = await getSizesForCategory(newCatId);
         const currentGender = genderSelect.value || null;
         let filteredSizes = sizes;
-        if (currentGender) {
-          filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
-        }
-
+        if (currentGender) filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
         if (filteredSizes.length > 0) {
           const opts = '<option value="">Размер...</option>' + 
             filteredSizes.map(s => {
-              const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
-              return `<option value="${s.size_value}">${s.size_value}${genderLabel}</option>`;
+              const g = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+              return `<option value="${s.size_value}">${s.size_value}${g}</option>`;
             }).join('');
           sizeCell.innerHTML = `<select class="form-select form-select-sm size-value-input" required>${opts}</select>`;
         } else {
@@ -214,7 +212,6 @@
       tr.remove();
       isDirty = true;
     });
-    
     return tr;
   }
 
@@ -231,13 +228,6 @@
       if (isWsUpdate && isDirty) {
         window.showToast('Сотрудник изменён другим пользователем.', 'warning');
         versionInput.value = emp.version ?? '';
-      
-      // Меняем заголовок на ФИО сотрудника
-      const titleEl = document.getElementById('employee-title');
-      if (titleEl) {
-        const fio = [emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ');
-        titleEl.textContent = `Редактирование: ${fio}`;
-      }
         return;
       }
 
@@ -252,7 +242,7 @@
       deptSelect.value = emp.department_id ?? '';
       await loadPositions(emp.department_id, emp.position_id);
 
-      // Отрисовка размеров по категориям
+      // Отрисовка размеров
       sizesTableBody.innerHTML = '';
       if (emp.ppe_sizes && emp.ppe_sizes.length > 0) {
         for (const size of emp.ppe_sizes) {
@@ -262,14 +252,14 @@
       }
 
       versionInput.value = emp.version ?? '';
-      
-      // Меняем заголовок на ФИО сотрудника
+      isDirty = false;
+
+      // Меняем заголовок на ФИО
       const titleEl = document.getElementById('employee-title');
       if (titleEl) {
         const fio = [emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ');
         titleEl.textContent = `Редактирование: ${fio}`;
       }
-      isDirty = false;
       
       await loadIssues();
       await loadNorms(emp.position_id);
@@ -280,7 +270,7 @@
     }
   }
 
-  // --- Нормы и выдачи ---
+  // --- Нормы ---
   async function loadNorms(positionId) {
     if (!positionId) {
       normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">У сотрудника не указана должность</td></tr>`;
@@ -300,26 +290,16 @@
       normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Для этой должности нормы не заданы</td></tr>`;
       return;
     }
-
     normsTableBody.innerHTML = currentNorms.map(norm => {
       const issued = currentIssues
         .filter(i => i.ppe_item_id === norm.ppe_item_id)
         .reduce((sum, i) => sum + (parseInt(i.quantity) || 1), 0);
-
       const requiredQty = parseInt(norm.quantity) || 1;
       const remaining = requiredQty - issued;
       
-      let statusClass = '';
-      let statusText = '';
-      if (remaining <= 0) {
-        statusClass = 'text-success fw-bold';
-        statusText = 'Выдано';
-      } else {
-        statusClass = 'text-danger fw-bold';
-        statusText = `Не хватает ${remaining}`;
-      }
+      let statusClass = remaining <= 0 ? 'text-success fw-bold' : 'text-danger fw-bold';
+      let statusText = remaining <= 0 ? 'Выдано' : `Не хватает ${remaining}`;
 
-      // Форматируем срок и количество
       const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
       const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
 
@@ -330,20 +310,20 @@
           <td>${issued}</td>
           <td class="${statusClass}">${statusText}</td>
           <td class="text-center">
-            ${remaining > 0 ? `<button class="btn btn-sm btn-outline-success" onclick="openIssueModalForNorm(${norm.ppe_item_id})" title="Выдать"><i class="bi bi-box-arrow-up"></i></button>` : ''}
+            ${remaining > 0 ? `<button class="btn btn-sm btn-outline-success py-0 px-1" onclick="openIssueModalForNorm(${norm.ppe_item_id})" title="Выдать"><i class="bi bi-box-arrow-up"></i></button>` : ''}
           </td>
         </tr>
       `;
     }).join('');
   }
 
+  // --- Выдачи ---
   async function loadIssues() {
     try {
       currentIssues = await API.get(`/api/v1/employee_ppe_issues/?employee_id=${employeeId}`);
       renderIssuesTable();
       renderNormsTable(); 
     } catch (err) {
-      console.error('Ошибка загрузки выдач:', err);
       issuesTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-2">Ошибка: ${err.message}</td></tr>`;
     }
   }
@@ -357,50 +337,42 @@
       const isExpired = issue.expiry_date && new Date(issue.expiry_date) < new Date();
       const rowClass = isExpired ? 'table-danger' : '';
       const expiryStr = issue.expiry_date ? new Date(issue.expiry_date).toLocaleDateString('ru-RU') : '—';
+      
+      const formattedQuantity = formatUnit(issue.quantity, issue.ppe_item?.unit?.short_name || 'шт');
+
       return `
         <tr class="${rowClass}">
           <td>${issue.ppe_item?.name ?? '—'}</td>
           <td>${new Date(issue.issue_date).toLocaleDateString('ru-RU')}</td>
           <td>${expiryStr}</td>
-          <td>${formatUnit(issue.quantity, issue.ppe_item?.unit?.short_name)}</td>
-          <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteIssue(${issue.id})">✕</button></td>
+          <td>${formattedQuantity}</td>
+          <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteIssue(${issue.id})">✕</button></td>
         </tr>
       `;
     }).join('');
   }
 
-  // --- Модалка выдачи ---
-  const issueModalElement = document.getElementById('issueModal');
-  const issueItemInput = document.getElementById('issue-item-input');
-  const issueItemIdInput = document.getElementById('issue-item-id');
-  const issuePpeList = document.getElementById('issue-ppe-list');
-  const issueSizeSelect = document.getElementById('issue-size-select');
-
+  // --- Модалка выдачи (datalist) ---
   window.openIssueModalForNorm = (ppeItemId) => {
-    const modal = new bootstrap.Modal(issueModalElement);
+    const modal = new bootstrap.Modal(document.getElementById('issueModal'));
     
     fetch('/api/v1/ppe_items')
       .then(r => r.json())
       .then(data => {
-        // Заполняем datalist
         if (issuePpeList) {
           issuePpeList.innerHTML = data.map(i => 
             `<option value="${i.name} (${i.category?.name ?? ''})" data-id="${i.id}" data-category-id="${i.category_id}"></option>`
           ).join('');
         }
 
-        // Устанавливаем выбранное СИЗ, если передан ID
         if (ppeItemId) {
           const item = data.find(i => i.id === ppeItemId);
           if (item && issueItemInput) {
             issueItemInput.value = `${item.name} (${item.category?.name ?? ''})`;
             issueItemIdInput.value = item.id;
             fillIssueSizes(item.category_id);
-            
             const unitLabel = document.getElementById('issue-unit-label');
-            if (item.unit) {
-              unitLabel.textContent = item.unit.short_name;
-            }
+            if (item.unit) unitLabel.textContent = item.unit.short_name;
           }
         }
         
@@ -417,9 +389,7 @@
       const sizes = await getSizesForCategory(categoryId);
       const empGender = genderSelect.value || null;
       let filteredSizes = sizes;
-      if (empGender) {
-        filteredSizes = sizes.filter(s => !s.gender || s.gender === empGender);
-      }
+      if (empGender) filteredSizes = sizes.filter(s => !s.gender || s.gender === empGender);
       
       if (filteredSizes.length > 0) {
         let opts = '<option value="">Выберите размер...</option>';
@@ -432,13 +402,11 @@
              defaultSize = sizeInp.value;
           }
         });
-
         opts += filteredSizes.map(s => {
           const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
           const selected = s.size_value === defaultSize ? 'selected' : '';
           return `<option value="${s.size_value}" ${selected}>${s.size_value}${genderLabel}</option>`;
         }).join('');
-        
         issueSizeSelect.innerHTML = opts;
       } else {
         issueSizeSelect.innerHTML = '<option value="">Нет размеров</option>';
@@ -448,6 +416,7 @@
     }
   }
 
+  const issueModalElement = document.getElementById('issueModal');
   if (issueModalElement) {
     issueModalElement.addEventListener('show.bs.modal', () => {
       fetch('/api/v1/ppe_items')
@@ -458,14 +427,12 @@
               `<option value="${i.name} (${i.category?.name ?? ''})" data-id="${i.id}" data-category-id="${i.category_id}"></option>`
             ).join('');
           }
-          // Очищаем поля при открытии
           if (issueItemInput) issueItemInput.value = '';
           if (issueItemIdInput) issueItemIdInput.value = '';
           if (issueSizeSelect) issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ...</option>';
         });
     });
 
-    // Обработчик ввода в поле СИЗ (для модалки выдачи)
     if (issueItemInput) {
       issueItemInput.addEventListener('input', (e) => {
         const val = e.target.value;
@@ -474,17 +441,12 @@
           const itemId = option.getAttribute('data-id');
           const categoryId = option.getAttribute('data-category-id');
           issueItemIdInput.value = itemId;
-          
-          // Обновляем размеры и единицу измерения
           fillIssueSizes(categoryId);
           
           const selectedItem = allPpeItems.find(i => i.id === Number(itemId));
           const unitLabel = document.getElementById('issue-unit-label');
-          if (selectedItem && selectedItem.unit) {
-            unitLabel.textContent = selectedItem.unit.short_name;
-          } else {
-            unitLabel.textContent = 'ед.';
-          }
+          if (selectedItem && selectedItem.unit) unitLabel.textContent = selectedItem.unit.short_name;
+          else unitLabel.textContent = 'ед.';
         } else {
           issueItemIdInput.value = '';
         }
@@ -492,55 +454,40 @@
     }
   }
 
-  if (issueItemSelect) {
-    issueItemSelect.addEventListener('change', async (e) => {
-      const selectedOption = e.target.options[e.target.selectedIndex];
-      const categoryId = selectedOption.getAttribute('data-category-id');
-      const selectedId = Number(issueItemSelect.value);
-      const unitLabel = document.getElementById('issue-unit-label');
-      
-      // Обновляем размеры
-      fillIssueSizes(categoryId);
+  // Функция для отправки формы выдачи
+  window.submitIssueForm = async (event) => {
+    if (event) event.preventDefault();
+    const formEl = document.getElementById('issue-form');
+    if (!formEl) return;
 
-      // Обновляем единицу измерения
-      if (!selectedId) {
-        unitLabel.textContent = 'ед.';
-        return;
-      }
+    const payload = FormHelper.serialize(formEl);
+    payload.employee_id = employeeId;
+    payload.ppe_item_id = Number(issueItemIdInput.value);
+    
+    if (!payload.ppe_item_id) {
+      window.showToast('Выберите СИЗ из списка', 'danger');
+      return;
+    }
+    if (!payload.issue_date) payload.issue_date = new Date().toISOString().split('T')[0];
+    if (payload.size_value === '') payload.size_value = null;
 
-      const selectedItem = allPpeItems.find(i => i.id === selectedId);
-      if (selectedItem && selectedItem.unit) {
-        unitLabel.textContent = selectedItem.unit.short_name;
-      } else {
-        unitLabel.textContent = 'ед.';
-      }
-    });
-  }
+    const btn = document.querySelector('button[onclick="submitIssueForm(event)"]');
+    if (btn) btn.disabled = true;
 
-  if (issueForm) {
-    issueForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = FormHelper.serialize(issueForm);
-      payload.employee_id = employeeId;
-      payload.ppe_item_id = Number(issueItemIdInput.value);
-      if (!payload.issue_date) payload.issue_date = new Date().toISOString().split('T')[0];
-      if (payload.size_value === '') payload.size_value = null;
-
-      const btn = issueForm.querySelector('button[type="submit"]');
-      btn.disabled = true;
-      try {
-        await API.post('/api/v1/employee_ppe_issues/', payload);
-        window.showToast('СИЗ выдано', 'success');
-        bootstrap.Modal.getInstance(issueModalElement).hide();
-        issueForm.reset();
-        await loadIssues();
-      } catch (err) {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
+    try {
+      await API.post('/api/v1/employee_ppe_issues/', payload);
+      window.showToast('СИЗ выдано', 'success');
+      bootstrap.Modal.getInstance(document.getElementById('issueModal')).hide();
+      formEl.reset();
+      issueItemIdInput.value = '';
+      issueItemInput.value = '';
+      await loadIssues();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
 
   window.deleteIssue = async (issueId) => {
     if (!confirm('Удалить запись о выдаче?')) return;
@@ -616,44 +563,4 @@
     .then(loadCategories)
     .then(loadAllPpeItems)
     .then(() => loadEmployee());
-
-  // Функция для отправки формы выдачи (вызывается по кнопке)
-  window.submitIssueForm = async (event) => {
-    if (event) event.preventDefault();
-    
-    const form = document.getElementById('issue-form');
-    if (!form) return;
-
-    const payload = FormHelper.serialize(form);
-    payload.employee_id = employeeId;
-    // Берем ID СИЗ из скрытого поля (мы его синхронизировали)
-    payload.ppe_item_id = Number(issueItemIdInput.value);
-    
-    if (!payload.ppe_item_id) {
-      window.showToast('Выберите СИЗ из списка', 'danger');
-      return;
-    }
-
-    if (!payload.issue_date) payload.issue_date = new Date().toISOString().split('T')[0];
-    if (payload.size_value === '') payload.size_value = null;
-
-    const btn = document.querySelector('button[onclick="submitIssueForm(event)"]');
-    if (btn) btn.disabled = true;
-
-    try {
-      await API.post('/api/v1/employee_ppe_issues/', payload);
-      window.showToast('СИЗ выдано', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('issueModal')).hide();
-      form.reset();
-      // Сбрасываем скрытые поля
-      issueItemIdInput.value = '';
-      issueItemInput.value = '';
-      await loadIssues();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  };
-
 })();
