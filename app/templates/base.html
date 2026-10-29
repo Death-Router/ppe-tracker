@@ -25,40 +25,67 @@
 <body class="bg-light">
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
-    <div class="container">
-        <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 1.5rem;"><i class="bi bi-gear-fill"></i></a>
+    <div class="container-fluid">
+        <!-- Иконка настроек слева -->
+        <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 1.5rem;">
+            <i class="bi bi-gear-fill"></i>
+        </a>
+        
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
                 data-bs-target="#mainNav">
             <span class="navbar-toggler-icon"></span>
         </button>
+        
         <div class="collapse navbar-collapse" id="mainNav">
             <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link {% if '/employees' in request.url.path %}active{% endif %}" href="/employees">Сотрудники</a>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/employees' in request.url.path %}active{% endif %}" href="/employees">
+                        <i class="bi bi-people d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Сотрудники</span>
+                    </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if '/ppe-categories' in request.url.path %}active{% endif %}" href="/ppe-categories">Категории СИЗ</a>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/ppe-categories' in request.url.path %}active{% endif %}" href="/ppe-categories">
+                        <i class="bi bi-tags d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Категории</span>
+                    </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if '/ppe-items' in request.url.path %}active{% endif %}" href="/ppe-items">Наименования СИЗ</a>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/ppe-items' in request.url.path %}active{% endif %}" href="/ppe-items">
+                        <i class="bi bi-box-seam d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Наименования</span>
+                    </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if '/units' in request.url.path %}active{% endif %}" href="/units">Единицы</a>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/units' in request.url.path %}active{% endif %}" href="/units">
+                        <i class="bi bi-rulers d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Единицы</span>
+                    </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if '/departments' in request.url.path %}active{% endif %}" href="/departments">Подразделения</a>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/departments' in request.url.path %}active{% endif %}" href="/departments">
+                        <i class="bi bi-diagram-3 d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Подразделения</span>
+                    </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if '/positions' in request.url.path %}active{% endif %}" href="/positions">Должности</a>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/positions' in request.url.path %}active{% endif %}" href="/positions">
+                        <i class="bi bi-briefcase d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Должности</span>
+                    </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if '/norms' in request.url.path %}active{% endif %}" href="/norms">Нормы СИЗ</a>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/norms' in request.url.path %}active{% endif %}" href="/norms">
+                        <i class="bi bi-clipboard-check d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Нормы</span>
+                    </a>
                 </li>
             </ul>
             <ul class="navbar-nav">
-                <li class="nav-item">
+                <li class="nav-item text-center">
                     <a class="nav-link" href="#" onclick="event.preventDefault(); fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => window.location.href='/login');">
-                        <i class="bi bi-box-arrow-right"></i> Выйти
+                        <i class="bi bi-box-arrow-right d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Выйти</span>
                     </a>
                 </li>
             </ul>

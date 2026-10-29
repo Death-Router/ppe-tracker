@@ -184,3 +184,17 @@ h1, h2, h3, h4, h5, h6 {
 .navbar-bottom-line {
     border-bottom: 3px solid #FF6600;
 }
+
+/* Вертикальное выравнивание иконок и текста в навбаре */
+.navbar-nav .nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.75rem;
+    line-height: 1.2;
+}
+
+.navbar-nav .nav-link i {
+    margin-bottom: 2px;
+}

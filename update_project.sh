@@ -6,240 +6,186 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Добавляем схему UnitUpdate..."
+echo "📝 Обновляем навбар (иконки + подписи)..."
 
-cat > app/schemas/unit.py << 'EOF'
-from pydantic import BaseModel, ConfigDict, Field
+cat > app/templates/base.html << 'EOF'
+{# app/templates/base.html #}
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ title or "Учёт СИЗ" }}{% endblock %}</title>
 
-class UnitBase(BaseModel):
-    name: str = Field(..., max_length=50, description="Полное название (например, Пара)")
-    short_name: str = Field(..., max_length=10, description="Сокращение (например, пар)")
+    <!-- Google Fonts (Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-class UnitCreate(UnitBase):
-    pass
+    <!-- Bootstrap 5 CSS -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-light">
 
-class UnitRead(UnitBase):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
+<nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
+    <div class="container-fluid">
+        <!-- Иконка настроек слева -->
+        <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 1.5rem;">
+            <i class="bi bi-gear-fill"></i>
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#mainNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="mainNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/employees' in request.url.path %}active{% endif %}" href="/employees">
+                        <i class="bi bi-people d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Сотрудники</span>
+                    </a>
+                </li>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/ppe-categories' in request.url.path %}active{% endif %}" href="/ppe-categories">
+                        <i class="bi bi-tags d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Категории</span>
+                    </a>
+                </li>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/ppe-items' in request.url.path %}active{% endif %}" href="/ppe-items">
+                        <i class="bi bi-box-seam d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Наименования</span>
+                    </a>
+                </li>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/units' in request.url.path %}active{% endif %}" href="/units">
+                        <i class="bi bi-rulers d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Единицы</span>
+                    </a>
+                </li>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/departments' in request.url.path %}active{% endif %}" href="/departments">
+                        <i class="bi bi-diagram-3 d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Подразделения</span>
+                    </a>
+                </li>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/positions' in request.url.path %}active{% endif %}" href="/positions">
+                        <i class="bi bi-briefcase d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Должности</span>
+                    </a>
+                </li>
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/norms' in request.url.path %}active{% endif %}" href="/norms">
+                        <i class="bi bi-clipboard-check d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Нормы</span>
+                    </a>
+                </li>
+            </ul>
+            <ul class="navbar-nav">
+                <li class="nav-item text-center">
+                    <a class="nav-link" href="#" onclick="event.preventDefault(); fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => window.location.href='/login');">
+                        <i class="bi bi-box-arrow-right d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Выйти</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
 
-class UnitUpdate(BaseModel):
-    name: str | None = Field(None, max_length=50)
-    short_name: str | None = Field(None, max_length=10)
+<main class="container pb-5">
+    {% block content %}{% endblock %}
+</main>
+
+<!-- Контейнер для toast-уведомлений -->
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"
+     style="z-index: 1100;"></div>
+
+<!-- Bootstrap 5 Bundle (включает Popper) -->
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+    crossorigin="anonymous"></script>
+
+<!-- Хелпер для toast'ов (доступен всем скриптам) -->
+<script>
+    window.showToast = function (message, variant = 'info') {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = `toast align-items-center text-bg-${variant} border-0`;
+        el.setAttribute('role', 'alert');
+        el.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                        data-bs-dismiss="toast"></button>
+            </div>`;
+        container.appendChild(el);
+        const t = new bootstrap.Toast(el, { delay: 4000 });
+        t.show();
+        el.addEventListener('hidden.bs.toast', () => el.remove());
+    };
+</script>
+
+<!-- Общие хелперы (API, WebSocket, Forms) -->
+<script src="{{ url_for('static', path='js/common/api.js') }}"></script>
+<script src="{{ url_for('static', path='js/common/ws.js') }}"></script>
+<script src="{{ url_for('static', path='js/common/form.js') }}"></script>
+
+<!-- Блок для скриптов конкретной страницы -->
+{% block scripts %}{% endblock %}
+
+</body>
+</html>
 EOF
 
-echo "📝 Добавляем PUT-эндпоинт в units.py..."
-
-cat > app/api/v1/endpoints/units.py << 'EOF'
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
-from app.db.session import get_db
-from app.models.unit import Unit
-from app.schemas.unit import UnitCreate, UnitRead, UnitUpdate
-
-router = APIRouter(prefix="/units", tags=["Справочник: Единицы измерения"])
-
-@router.post("/", response_model=UnitRead, status_code=status.HTTP_201_CREATED)
-async def create_unit(unit_in: UnitCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Unit).where(Unit.name == unit_in.name))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Такая единица измерения уже существует")
-    
-    db_unit = Unit(**unit_in.model_dump())
-    db.add(db_unit)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка при создании единицы")
-    
-    await db.refresh(db_unit)
-    return db_unit
-
-@router.get("/", response_model=list[UnitRead])
-async def get_units(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Unit).order_by(Unit.name))
-    return result.scalars().all()
-
-@router.put("/{unit_id}", response_model=UnitRead)
-async def update_unit(unit_id: int, unit_in: UnitUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Unit).where(Unit.id == unit_id))
-    db_unit = result.scalar_one_or_none()
-    if not db_unit:
-        raise HTTPException(status_code=404, detail="Единица не найдена")
-    
-    update_data = unit_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_unit, field, value)
-    
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая единица уже существует")
-    
-    await db.refresh(db_unit)
-    return db_unit
-
-@router.delete("/{unit_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Unit).where(Unit.id == unit_id))
-    db_unit = result.scalar_one_or_none()
-    if not db_unit:
-        raise HTTPException(status_code=404, detail="Единица не найдена")
-    try:
-        await db.delete(db_unit)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить единицу, есть привязанные СИЗ")
-EOF
-
-echo "📝 Обновляем шаблон units/list.html (добавляем ID для модалки)..."
+echo "🎨 Добавляем стили для вертикального меню в app.css..."
 
 python3 - << 'PYEOF'
-with open('app/templates/units/list.html', 'r') as f:
+with open('app/static/css/app.css', 'r') as f:
     content = f.read()
 
-# Добавляем id к заголовку модалки и кнопке отправки, чтобы менять их текст
-old_modal = '''        <div class="modal-header">
-          <h5 class="modal-title">Новая единица измерения</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>'''
+if '.nav-link .d-block' not in content:
+    content += '''
+/* Вертикальное выравнивание иконок и текста в навбаре */
+.navbar-nav .nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.75rem;
+    line-height: 1.2;
+}
 
-new_modal = '''        <div class="modal-header">
-          <h5 class="modal-title" id="unit-modal-title">Новая единица измерения</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>'''
-
-content = content.replace(old_modal, new_modal)
-
-# Добавляем скрытое поле для ID (чтобы понимать, редактируем или создаем)
-old_form_start = '<form id="create-form">'
-new_form_start = '<form id="create-form"><input type="hidden" id="unit-id" value="">'
-content = content.replace(old_form_start, new_form_start)
-
-with open('app/templates/units/list.html', 'w') as f:
-    f.write(content)
-print("✅ Шаблон units обновлен (id для модалки).")
+.navbar-nav .nav-link i {
+    margin-bottom: 2px;
+}
+'''
+    with open('app/static/css/app.css', 'w') as f:
+        f.write(content)
+    print("✅ CSS для вертикального меню добавлен.")
+else:
+    print("ℹ️ CSS уже есть.")
 PYEOF
-
-echo "📝 Обновляем JS для единиц (редактирование)..."
-
-cat > app/static/js/units_list.js << 'EOF'
-(() => {
-  const tbody = document.querySelector('#units-table tbody');
-  const createForm = document.getElementById('create-form');
-  const modalTitle = document.getElementById('unit-modal-title');
-  const unitIdInput = document.getElementById('unit-id');
-
-  async function loadUnits() {
-    try {
-      const units = await API.get('/api/v1/units');
-      renderTable(units);
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
-    }
-  }
-
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
-
-  function renderTable(units) {
-    if (!units.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Единиц измерения пока нет</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = units.map(u => `
-      <tr data-unit-id="${u.id}" style="height: 40px;">
-        <td class="py-1"><strong>${escapeHtml(u.name)}</strong></td>
-        <td class="py-1">${escapeHtml(u.short_name)}</td>
-        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editUnit(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteUnit(${u.id}, '${escapeHtml(u.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
-        </td>
-      </tr>
-    `).join('');
-  }
-
-  // Открытие модалки для создания
-  window.openCreateModal = () => {
-    unitIdInput.value = '';
-    modalTitle.textContent = 'Новая единица измерения';
-    createForm.reset();
-  };
-
-  // Редактирование
-  window.editUnit = async (id) => {
-    try {
-      const unit = await API.get(`/api/v1/units`); // Получаем все, чтобы найти нужную
-      const found = unit.find(u => u.id === id);
-      if (!found) throw new Error('Единица не найдена');
-      
-      unitIdInput.value = id;
-      modalTitle.textContent = 'Редактирование единицы';
-      createForm.elements['name'].value = found.name;
-      createForm.elements['short_name'].value = found.short_name;
-      
-      new bootstrap.Modal(document.getElementById('createModal')).show();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  };
-
-  // Сохранение (создание или обновление)
-  createForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = unitIdInput.value;
-    const payload = FormHelper.serialize(createForm);
-
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
-      if (id) {
-        await API.put(`/api/v1/units/${id}`, payload);
-        window.showToast('Единица обновлена', 'success');
-      } else {
-        await API.post('/api/v1/units/', payload);
-        window.showToast('Единица создана', 'success');
-      }
-      
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
-      createForm.reset();
-      unitIdInput.value = '';
-      loadUnits();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  window.deleteUnit = async (id, name) => {
-    if (!confirm(`Удалить единицу "${name}"?`)) return;
-    try {
-      await API.request(`/api/v1/units/${id}`, { method: 'DELETE' });
-      window.showToast('Единица удалена', 'success');
-      loadUnits();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  };
-
-  // Привязка кнопки "Добавить" к режиму создания
-  document.querySelector('button[data-bs-target="#createModal"]')?.addEventListener('click', openCreateModal);
-
-  loadUnits();
-})();
-EOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Кнопка редактирования добавлена в единицы измерения."
+echo "✅ ГОТОВО! Шапка обновлена (иконки + подписи)."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "feat: add edit functionality for units"
+git commit -m "ui: vertical icon menu with labels in navbar"
