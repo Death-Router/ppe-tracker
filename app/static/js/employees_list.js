@@ -9,7 +9,7 @@
       const employees = await API.get('/api/v1/employees');
       renderTable(employees);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -19,14 +19,13 @@
 
   function renderTable(employees) {
     if (!employees.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = employees.map(e => {
       const fio = `${e.last_name} ${e.first_name} ${e.middle_name ?? ''}`.trim();
       return `
       <tr data-employee-id="${e.id}">
-        <td>${e.id}</td>
         <td>${escapeHtml(fio)}</td>
         <td>${escapeHtml(e.personnel_number)}</td>
         <td>${escapeHtml(e.department_rel?.name ?? '—')}</td>

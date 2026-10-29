@@ -8,7 +8,7 @@
       const positions = await API.get('/api/v1/positions');
       renderTable(positions);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -26,12 +26,11 @@
 
   function renderTable(positions) {
     if (!positions.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">Должностей пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Должностей пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = positions.map(p => `
       <tr data-pos-id="${p.id}">
-        <td>${p.id}</td>
         <td><strong>${escapeHtml(p.name)}</strong></td>
         <td><span class="badge bg-secondary">${escapeHtml(p.department?.name ?? '—')}</span></td>
         <td class="text-end">

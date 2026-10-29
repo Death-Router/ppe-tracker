@@ -7,7 +7,7 @@
       const categories = await API.get('/api/v1/ppe_categories');
       renderTable(categories);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -15,12 +15,11 @@
 
   function renderTable(categories) {
     if (!categories.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">Категорий пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Категорий пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = categories.map(c => `
       <tr data-category-id="${c.id}">
-        <td>${c.id}</td>
         <td><strong>${escapeHtml(c.name)}</strong></td>
         <td>${escapeHtml(c.description ?? '—')}</td>
         <td class="text-end">

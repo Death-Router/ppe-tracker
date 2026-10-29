@@ -7,7 +7,7 @@
       const depts = await API.get('/api/v1/departments');
       renderTable(depts);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -15,12 +15,11 @@
 
   function renderTable(depts) {
     if (!depts.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Подразделений пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Подразделений пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = depts.map(d => `
       <tr data-dept-id="${d.id}">
-        <td>${d.id}</td>
         <td><strong>${escapeHtml(d.name)}</strong></td>
         <td class="text-end">
           <a class="btn btn-sm btn-outline-primary" href="/departments/${d.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
