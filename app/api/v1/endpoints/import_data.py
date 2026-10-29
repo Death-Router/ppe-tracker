@@ -20,6 +20,11 @@ async def import_employees(
     try:
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
+        
+        # Удаляем колонку ID, если она есть (она нам не нужна, ориентируемся на табельный номер)
+        if 'ID' in df.columns:
+            df = df.drop(columns=['ID'])
+            
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {str(e)}")
 

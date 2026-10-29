@@ -29,7 +29,6 @@ async def export_employees(db: AsyncSession = Depends(get_db)):
         sizes_str = ", ".join([f"{s.category.name}: {s.size_value}" for s in emp.ppe_sizes]) if emp.ppe_sizes else ""
         
         data.append({
-            "ID": emp.id,
             "Табельный номер": emp.personnel_number,
             "Фамилия": emp.last_name,
             "Имя": emp.first_name,
@@ -57,7 +56,6 @@ async def export_ppe_items(db: AsyncSession = Depends(get_db)):
     data = []
     for item in items:
         data.append({
-            "ID": item.id,
             "Наименование": item.name,
             "Категория": item.category.name if item.category else ""
         })
@@ -80,7 +78,6 @@ async def export_norms(db: AsyncSession = Depends(get_db)):
     data = []
     for norm in norms:
         data.append({
-            "ID": norm.id,
             "Подразделение": norm.position.department.name if norm.position and norm.position.department else "",
             "Должность": norm.position.name if norm.position else "",
             "СИЗ": norm.ppe_item.name if norm.ppe_item else "",
