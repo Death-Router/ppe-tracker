@@ -4,9 +4,35 @@
   const btnSubmit = document.getElementById('btn-submit');
   const conflictAlert = document.getElementById('conflict-alert');
   const versionInput = document.getElementById('version');
+  const parentSelect = document.getElementById('parent_id');
 
   let isDirty = false; 
   form.addEventListener('input', () => { isDirty = true; });
+
+  async function loadParents(currentId) {
+    const depts = await API.get('/api/v1/departments');
+    // Строим иерархию, исключая текущее подразделение и его потомков (чтобы не было циклов)
+    // Для простоты исключим только само текущее.
+    const filtered = depts.filter(d => d.id !== currentId);
+    
+    // Функция для построения иерархического списка
+    function buildHierarchy(items, parentId = null, level = 0) {
+      let result = [];
+      const children = items.filter(d => d.parent_id === parentId);
+      children.sort((a, b) => a.name.localeCompare(b.name));
+      for (const child of children) {
+        result.push({ ...child, level });
+        result = result.concat(buildHierarchy(items, child.id, level + 1));
+      }
+      return result;
+    }
+
+    const hierarchy = buildHierarchy(filtered);
+    parentSelect.innerHTML = '<option value="">Нет (корневое)</option>' + 
+      hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');
+  }
+
+  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'); }
 
   async function loadDept(isWsUpdate = false) {
     try {
@@ -17,6 +43,10 @@
         return;
       }
       form.elements['name'].value = dept.name ?? '';
+      
+      await loadParents(deptId);
+      parentSelect.value = dept.parent_id ?? '';
+      
       versionInput.value = dept.version ?? '';
       isDirty = false;
       if (isWsUpdate) window.showToast('Карточка обновлена', 'info');
@@ -28,17 +58,22 @@
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     btnSubmit.disabled = true;
+    
+    const payload = FormHelper.serialize(form);
+    payload.parent_id = payload.parent_id ? Number(payload.parent_id) : null;
+
     try {
-      await FormHelper.submit({
-        form: form,
-        apiUrl: `/api/v1/departments/${deptId}`,
-        conflictAlert: conflictAlert,
-        onSuccess: (updated) => {
-          if (updated?.version != null) versionInput.value = updated.version;
-          isDirty = false;
-          window.showToast('Изменения сохранены', 'success');
-        }
-      });
+      const updated = await API.put(`/api/v1/departments/${deptId}`, payload);
+      if (updated?.version != null) versionInput.value = updated.version;
+      isDirty = false;
+      window.showToast('Изменения сохранены', 'success');
+    } catch (err) {
+      if (err.isConflict) {
+        conflictAlert.classList.remove('d-none');
+        conflictAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        window.showToast(`Ошибка: ${err.message}`, 'danger');
+      }
     } finally {
       btnSubmit.disabled = false;
     }
