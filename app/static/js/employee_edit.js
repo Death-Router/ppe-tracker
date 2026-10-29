@@ -1,5 +1,5 @@
 (() => {
-  console.log('🚀 employee_edit.js загружен (финальная версия)');
+  console.log('🚀 employee_edit.js загружен (с выбором размеров)');
   
   const employeeId = window.EMPLOYEE_ID;
   const form = document.getElementById('employee-form');
@@ -8,6 +8,7 @@
   const versionInput = document.getElementById('version');
   const deptSelect = document.getElementById('department_id');
   const posSelect = document.getElementById('position_id');
+  const genderSelect = document.getElementById('gender');
   
   const sizesTableBody = document.querySelector('#sizes-table tbody');
   const addSizeBtn = document.getElementById('add-size-btn');
@@ -16,6 +17,7 @@
   const issuesTableBody = document.querySelector('#issues-table tbody');
   
   let allPpeItems = [];
+  let allSizesCache = {}; // Кэш размеров: {ppe_item_id: [sizes]}
   let isDirty = false; 
   form.addEventListener('input', () => { isDirty = true; });
 
@@ -38,19 +40,72 @@
   }
 
   async function loadAllPpeItems() {
-    console.log('📦 Загружаем список СИЗ для формы...');
     allPpeItems = await API.get('/api/v1/ppe_items');
-    console.log('✅ Получено СИЗ:', allPpeItems.length);
+  }
+
+  // --- Загрузка размеров для конкретного СИЗ ---
+  async function getSizesForItem(itemId) {
+    if (allSizesCache[itemId]) {
+      return allSizesCache[itemId];
+    }
+    try {
+      const sizes = await API.get(`/api/v1/ppe_sizes/?ppe_item_id=${itemId}`);
+      allSizesCache[itemId] = sizes;
+      return sizes;
+    } catch (err) {
+      console.error('Ошибка загрузки размеров:', err);
+      return [];
+    }
   }
 
   deptSelect.addEventListener('change', (e) => loadPositions(e.target.value));
 
-  // --- Управление размерами ---
-  function createSizeRow(itemId = '', sizeValue = '') {
+  // --- Управление размерами (с выбором из справочника) ---
+  async function createSizeRow(itemId = '', sizeValue = '') {
     const tr = document.createElement('tr');
+    
+    // Получаем текущий пол сотрудника (если выбран)
+    const currentGender = genderSelect.value || null;
+    
+    // Формируем опции для СИЗ
     const options = allPpeItems.map(item => 
       `<option value="${item.id}" ${item.id === itemId ? 'selected' : ''}>${item.name} (${item.category?.name ?? ''})</option>`
     ).join('');
+    
+    // Получаем размеры для выбранного СИЗ (если itemId передан)
+    let sizeOptions = '';
+    if (itemId) {
+      const sizes = await getSizesForItem(itemId);
+      // Фильтруем по полу, если он указан у сотрудника
+      let filteredSizes = sizes;
+      if (currentGender) {
+        filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
+      } else {
+        // Если пол не указан, показываем все
+        filteredSizes = sizes;
+      }
+      
+      if (filteredSizes.length > 0) {
+        sizeOptions = '<option value="">Выберите размер...</option>' + 
+          filteredSizes.map(s => {
+            const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+            return `<option value="${s.size_value}" ${s.size_value === sizeValue ? 'selected' : ''}>${s.size_value}${genderLabel}</option>`;
+          }).join('');
+      } else {
+        // Если размеров нет, показываем текстовое поле
+        sizeOptions = '<option value="">Нет размеров (введите вручную)</option>';
+      }
+    }
+
+    // Если есть размеры, показываем select, иначе input
+    const hasSizes = sizeOptions !== '';
+    const sizeInputHtml = hasSizes 
+      ? `<select class="form-select form-select-sm size-value-input" required>
+           <option value="">Выберите размер...</option>
+           ${sizeOptions}
+         </select>`
+      : `<input type="text" class="form-control form-control-sm size-value-input" value="${sizeValue}" placeholder="Введите размер" required maxlength="50">`;
+
     tr.innerHTML = `
       <td>
         <select class="form-select form-select-sm ppe-item-select" required>
@@ -58,13 +113,46 @@
           ${options}
         </select>
       </td>
-      <td><input type="text" class="form-control form-control-sm size-value-input" value="${sizeValue}" placeholder="Например, 42" required maxlength="50"></td>
-      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button></td>
+      <td>
+        ${sizeInputHtml}
+      </td>
+      <td class="text-center">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button>
+      </td>
     `;
+    
+    // Обработчик изменения СИЗ — перерисовываем строку с новыми размерами
+    const itemSelect = tr.querySelector('.ppe-item-select');
+    itemSelect.addEventListener('change', async () => {
+      const newItemId = Number(itemSelect.value);
+      if (newItemId) {
+        // Получаем размеры для нового СИЗ
+        const sizes = await getSizesForItem(newItemId);
+        const currentGender = genderSelect.value || null;
+        let filteredSizes = sizes;
+        if (currentGender) {
+          filteredSizes = sizes.filter(s => !s.gender || s.gender === currentGender);
+        }
+        
+        const sizeCell = tr.children[1];
+        if (filteredSizes.length > 0) {
+          const sizeOptions = '<option value="">Выберите размер...</option>' + 
+            filteredSizes.map(s => {
+              const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+              return `<option value="${s.size_value}">${s.size_value}${genderLabel}</option>`;
+            }).join('');
+          sizeCell.innerHTML = `<select class="form-select form-select-sm size-value-input" required>${sizeOptions}</select>`;
+        } else {
+          sizeCell.innerHTML = `<input type="text" class="form-control form-control-sm size-value-input" placeholder="Введите размер" required maxlength="50">`;
+        }
+      }
+    });
+    
     tr.querySelector('.remove-size-btn').addEventListener('click', () => {
       tr.remove();
       isDirty = true;
     });
+    
     return tr;
   }
 
@@ -101,11 +189,13 @@
       deptSelect.value = emp.department_id ?? '';
       await loadPositions(emp.department_id, emp.position_id);
 
+      // Отрисовка размеров (асинхронно)
       sizesTableBody.innerHTML = '';
       if (emp.ppe_sizes && emp.ppe_sizes.length > 0) {
-        emp.ppe_sizes.forEach(size => {
-          sizesTableBody.appendChild(createSizeRow(size.ppe_item_id, size.size_value));
-        });
+        for (const size of emp.ppe_sizes) {
+          const tr = await createSizeRow(size.ppe_item_id, size.size_value);
+          sizesTableBody.appendChild(tr);
+        }
       }
 
       versionInput.value = emp.version ?? '';
@@ -149,11 +239,10 @@
     }).join('');
   }
 
-  // --- Обработчик модалки (ПРЯМОЙ FETCH) ---
+  // --- Модалка выдачи (прямой fetch) ---
   const issueModalElement = document.getElementById('issueModal');
   if (issueModalElement) {
     issueModalElement.addEventListener('show.bs.modal', () => {
-      console.log('Модалка открыта, принудительно загружаем СИЗ...');
       fetch('/api/v1/ppe_items')
         .then(r => r.json())
         .then(data => {
@@ -161,10 +250,9 @@
           if (select) {
             select.innerHTML = '<option value="">Выберите СИЗ...</option>' + 
               data.map(i => `<option value="${i.id}">${i.name} (${i.category?.name ?? ''})</option>`).join('');
-            console.log('✅ Список СИЗ в модалке обновлен');
           }
         })
-        .catch(err => console.error('❌ Ошибка загрузки СИЗ:', err));
+        .catch(err => console.error('Ошибка загрузки СИЗ:', err));
     });
   }
 
