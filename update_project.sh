@@ -6,15 +6,17 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Обновляем отображение норм в карточке сотрудника..."
+echo "🔧 Принудительно добавляем formatPeriod в employee_edit.js..."
 
 python3 - << 'PYEOF'
 with open('app/static/js/employee_edit.js', 'r') as f:
     content = f.read()
 
-# 1. Проверяем, есть ли функция formatPeriod. Если нет — добавляем.
+# Если функции нет, добавляем её в самое начало файла (после IIFE)
 if 'function formatPeriod' not in content:
-    format_period_func = '''
+    # Находим начало файла (первые строки)
+    # Вставляем функцию сразу после (() => {
+    insertion = '''
   function formatPeriod(value, unit) {
     if (!value) return '—';
     const num = parseInt(value, 10);
@@ -54,16 +56,7 @@ if 'function formatPeriod' not in content:
     }
     return `${value} ${unit}`;
   }
-'''
-    content = content.replace(
-        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }",
-        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }\n" + format_period_func
-    )
-    print("✅ Функция formatPeriod добавлена в employee_edit.js.")
 
-# 2. Проверяем, есть ли функция formatUnit (для единиц измерения). Если нет — добавляем.
-if 'function formatUnit' not in content:
-    format_unit_func = '''
   function formatUnit(value, shortName) {
     if (!shortName) return value;
     const num = parseInt(value, 10);
@@ -96,45 +89,12 @@ if 'function formatUnit' not in content:
     return `${num} ${shortName}`;
   }
 '''
-    content = content.replace(
-        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }",
-        "function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }\n" + format_unit_func
-    )
-    print("✅ Функция formatUnit добавлена в employee_edit.js.")
 
-# 3. Находим место, где формируется строка для колонки "Норма"
-old_norm_str = '''      const periodStr = `${norm.wear_period_value} ${norm.wear_period_unit}`;
-
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${periodStr} (${requiredQty} ${norm.quantity.includes('пар') ? 'пар' : 'шт'})</td>'''
-
-new_norm_str = '''      // Форматируем срок (5 лет) и количество (5 шт)
-      const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);
-      const formattedQuantity = formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт');
-
-      return `
-        <tr>
-          <td>${norm.ppe_item?.name ?? '—'}</td>
-          <td>${formattedPeriod} (${formattedQuantity})</td>'''
-
-if old_norm_str in content:
-    content = content.replace(old_norm_str, new_norm_str)
-    print("✅ Формирование строки 'Норма' обновлено (использует formatPeriod и formatUnit).")
+    # Вставляем после (() => {
+    content = content.replace('(() => {', '(() => {\n' + insertion, 1)
+    print("✅ Функции formatPeriod и formatUnit добавлены в начало employee_edit.js.")
 else:
-    print("⚠️ Не удалось найти старый блок формирования строки нормы. Возможно, структура изменилась.")
-    # Попробуем найти по ключевым словам
-    if 'periodStr' in content:
-        content = content.replace(
-            "const periodStr = `${norm.wear_period_value} ${norm.wear_period_unit}`;",
-            "const formattedPeriod = formatPeriod(norm.wear_period_value, norm.wear_period_unit);"
-        )
-        content = content.replace(
-            "<td>${periodStr} (${requiredQty} ${norm.quantity.includes('пар') ? 'пар' : 'шт'})</td>",
-            "<td>${formattedPeriod} (${formatUnit(norm.quantity, norm.ppe_item?.unit?.short_name || 'шт')})</td>"
-        )
-        print("✅ Строка нормы обновлена (альтернативный метод).")
+    print("ℹ️ Функция formatPeriod уже есть.")
 
 with open('app/static/js/employee_edit.js', 'w') as f:
     f.write(content)
@@ -144,9 +104,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Сроки и количества в нормах сотрудника теперь склоняются правильно."
+echo "✅ ГОТОВО! Ошибка formatPeriod исправлена."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: humanize norms in employee card (period and unit)"
+git commit -m "fix: add formatPeriod and formatUnit to employee_edit.js"
