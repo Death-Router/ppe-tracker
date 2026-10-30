@@ -24,7 +24,7 @@
 </head>
 <body class="bg-light">
 
-{% if not request.query_params.get("embedded") %}
+{% if not request.query_params.get("embedded") and "/ppe" not in (request.headers.get("referer") or "") and "/structure" not in (request.headers.get("referer") or "") %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
     <div class="container-fluid">
         <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 3rem;">
@@ -71,7 +71,7 @@
 {% endif %}
 
 
-<main class="container {% if not request.query_params.get("embedded") %}pb-5{% else %}pt-3{% endif %}">
+<main class="container {% if not request.query_params.get("embedded") and "/ppe" not in (request.headers.get("referer") or "") and "/structure" not in (request.headers.get("referer") or "") %}pb-5{% else %}pt-3{% endif %}">
     {% block content %}{% endblock %}
 </main>
 
