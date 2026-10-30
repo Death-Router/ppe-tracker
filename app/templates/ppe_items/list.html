@@ -5,6 +5,25 @@
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
 </div>
 
+<!-- Панель массовых действий (скрыта, пока ничего не выбрано) -->
+<div id="bulk-actions" class="card shadow-sm mb-3 d-none">
+    <div class="card-body py-2 d-flex align-items-center gap-2 flex-wrap">
+        <span class="fw-bold me-2">Выбрано: <span id="selected-count">0</span></span>
+        
+        <select class="form-select form-select-sm" id="bulk-function" style="width: auto;">
+            <option value="">-- Функция СИЗ --</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="applyBulkFunction()">Применить</button>
+
+        <select class="form-select form-select-sm" id="bulk-size-group" style="width: auto;">
+            <option value="">-- Размерная группа --</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="applyBulkSizeGroup()">Применить</button>
+
+        <button class="btn btn-sm btn-outline-danger ms-auto" onclick="bulkDelete()">Удалить выбранные</button>
+    </div>
+</div>
+
 <!-- Панель поиска и фильтрации -->
 <div class="row g-2 mb-3">
     <div class="col-md-5">
@@ -13,11 +32,6 @@
             <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
         </div>
     </div>
-    <div class="col-md-4">
-        <select class="form-select" id="category-filter">
-            <option value="">Все категории</option>
-        </select>
-    </div>
 </div>
 
 <div class="card shadow-sm">
@@ -25,13 +39,14 @@
         <table class="table table-sm table-hover align-middle mb-0" id="items-table">
             <thead class="bg-brand-orange">
             <tr>
+                <th style="width: 40px;"><input type="checkbox" id="select-all"></th>
                 <th>Наименование</th>
-                <th>Категория</th>
+                <th>Функция / Группа</th>
                 <th class="text-end">Действия</th>
             </tr>
             </thead>
             <tbody>
-            <tr><td colspan="3" class="text-center text-muted py-4">Загрузка…</td></tr>
+            <tr><td colspan="4" class="text-center text-muted py-4">Загрузка…</td></tr>
             </tbody>
         </table>
     </div>
@@ -52,7 +67,7 @@
             <input type="text" class="form-control" name="name" required maxlength="255">
           </div>
           <div class="mb-3">
-            <label class="form-label">Функция СИЗ (Защита)</label>
+            <label class="form-label">Функция СИЗ</label>
             <select class="form-select" name="function_id" id="create-function">
                 <option value="">Не указана</option>
             </select>

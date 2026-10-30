@@ -101,3 +101,77 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     except Exception:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления")
+
+
+# --- Массовые операции ---
+from pydantic import BaseModel
+from typing import List
+
+class BulkUpdateRequest(BaseModel):
+    ids: List[int]
+    function_id: int | None = None
+    size_group_id: int | None = None
+    unit_id: int | None = None
+
+@router.patch("/bulk")
+async def bulk_update_items(
+    data: BulkUpdateRequest, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Массовое обновление функций, размерных групп или единиц измерения для СИЗ."""
+    if not data.ids:
+        raise HTTPException(status_code=400, detail="Не выбрано ни одного СИЗ")
+
+    result = await db.execute(select(PpeItem).where(PpeItem.id.in_(data.ids)))
+    items = result.scalars().all()
+    
+    if not items:
+        raise HTTPException(status_code=404, detail="СИЗ не найдены")
+
+    for item in items:
+        if data.function_id is not None:
+            item.function_id = data.function_id if data.function_id != 0 else None
+        if data.size_group_id is not None:
+            item.size_group_id = data.size_group_id if data.size_group_id != 0 else None
+        if data.unit_id is not None:
+            item.unit_id = data.unit_id if data.unit_id != 0 else None
+        item.version += 1
+
+    await db.commit()
+    return {"message": f"Обновлено {len(items)} записей"}
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[int]
+
+@router.post("/bulk-delete")
+async def bulk_delete_items(
+    data: BulkDeleteRequest, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Массовое удаление СИЗ с проверкой использования в нормах и выдачах."""
+    if not data.ids:
+        raise HTTPException(status_code=400, detail="Не выбрано ни одного СИЗ")
+
+    # Проверяем, есть ли нормы или выдачи для этих СИЗ
+    norm_exists = await db.execute(
+        select(exists().where(PositionPpeNorm.ppe_item_id.in_(data.ids)))
+    )
+    if norm_exists.scalar():
+        raise HTTPException(
+            status_code=400, 
+            detail="Некоторые СИЗ используются в нормах выдачи. Удаление запрещено."
+        )
+
+    issue_exists = await db.execute(
+        select(exists().where(EmployeePpeIssue.ppe_item_id.in_(data.ids)))
+    )
+    if issue_exists.scalar():
+        raise HTTPException(
+            status_code=400, 
+            detail="Некоторые СИЗ были выданы сотрудникам. Удаление запрещено."
+        )
+
+    await db.execute(delete(PpeItem).where(PpeItem.id.in_(data.ids)))
+    await db.commit()
+    return {"message": f"Удалено {len(data.ids)} записей"}
