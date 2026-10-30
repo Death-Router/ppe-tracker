@@ -5,10 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.v1.endpoints import users, 
-    employees, ppe_items, ws, departments, positions,
+from app.api.v1.endpoints import (
+    employees, ppe_categories, ppe_items, ws, departments, positions,
     position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
-    ppe_functions, ppe_size_groups
+    ppe_functions, ppe_size_groups, users
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,6 +33,7 @@ app.mount(
 
 # --- HTTP-роутеры ---
 app.include_router(employees.router, prefix="/api/v1")
+app.include_router(ppe_categories.router, prefix="/api/v1")
 app.include_router(ppe_items.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
 app.include_router(positions.router, prefix="/api/v1")
@@ -43,9 +44,9 @@ app.include_router(export.router, prefix="/api/v1")
 app.include_router(import_data.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(units.router, prefix="/api/v1")
-app.include_router(users.router, prefix="/api/v1")
 app.include_router(ppe_functions.router, prefix="/api/v1")
 app.include_router(ppe_size_groups.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 
 # --- WebSocket-роутер ---
 app.include_router(ws.router)
@@ -107,7 +108,25 @@ async def structure_tabs_page(request: Request):
         context={"title": "Структура"},
     )
 
+@app.get("/ppe-categories", response_class=HTMLResponse)
+async def ppe_categories_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_categories/list.html",
+        context={"title": "Категории СИЗ"},
+    )
 
+@app.get("/ppe-categories/{category_id}/edit", response_class=HTMLResponse)
+async def ppe_category_edit_page(request: Request, category_id: int):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_categories/edit.html",
+        context={"title": "Редактирование категории", "category_id": category_id},
+    )
 
 @app.get("/ppe-items", response_class=HTMLResponse)
 async def ppe_items_page(request: Request):
@@ -199,37 +218,16 @@ async def units_page(request: Request):
         context={"title": "Единицы измерения"},
     )
 
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/employees")
-
-@app.get("/ppe-functions", response_class=HTMLResponse)
-async def ppe_functions_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_functions/list.html",
-        context={"title": "Функции СИЗ"},
-    )
-
-@app.get("/ppe-size-groups", response_class=HTMLResponse)
-async def ppe_size_groups_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_size_groups/list.html",
-        context={"title": "Размерные группы"},
-    )
-
 @app.get("/users", response_class=HTMLResponse)
 async def users_page(request: Request):
     redirect = check_auth(request)
     if redirect: return redirect
-    # Проверяем роль (упрощенно: на фронте скроем, но лучше и на бэке)
     return templates.TemplateResponse(
         request=request,
         name="users/list.html",
         context={"title": "Пользователи"},
     )
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/employees")
