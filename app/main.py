@@ -84,6 +84,26 @@ async def employee_edit_page(request: Request, employee_id: int):
         context={"title": "Редактирование", "employee_id": employee_id},
     )
 
+@app.get("/ppe", response_class=HTMLResponse)
+async def ppe_tabs_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe/tabs.html",
+        context={"title": "Управление СИЗ"},
+    )
+
+@app.get("/structure", response_class=HTMLResponse)
+async def structure_tabs_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="structure/tabs.html",
+        context={"title": "Структура"},
+    )
+
 @app.get("/ppe-categories", response_class=HTMLResponse)
 async def ppe_categories_page(request: Request):
     redirect = check_auth(request)
@@ -197,13 +217,3 @@ async def units_page(request: Request):
 @app.get("/")
 async def root():
     return RedirectResponse(url="/employees")
-
-@app.get("/structure", response_class=HTMLResponse)
-async def structure_tabs_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="structure/tabs.html",
-        context={"title": "Структура"},
-    )

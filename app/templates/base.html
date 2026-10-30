@@ -26,7 +26,6 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
     <div class="container-fluid">
-        <!-- Иконка настроек слева (увеличенная) -->
         <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 3rem;">
             <i class="bi bi-gear-fill"></i>
         </a>
@@ -38,39 +37,23 @@
         
         <div class="collapse navbar-collapse" id="mainNav">
             <ul class="navbar-nav mx-auto">
-                <!-- Сотрудники -->
                 <li class="nav-item text-center">
                     <a class="nav-link {% if '/employees' in request.url.path %}active{% endif %}" href="/employees">
                         <i class="bi bi-people d-block" style="font-size: 1.2rem;"></i>
                         <span style="font-size: 0.7rem;">Сотрудники</span>
                     </a>
                 </li>
-
-                <!-- СИЗ (выпадающее меню) -->
-                <li class="nav-item dropdown text-center">
-                    <a class="nav-link dropdown-toggle {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="#" id="ppeDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="/ppe">
                         <i class="bi bi-box-seam d-block" style="font-size: 1.2rem;"></i>
                         <span style="font-size: 0.7rem;">СИЗ</span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="ppeDropdown">
-                        <li><a class="dropdown-item" href="/ppe">Наименования СИЗ</a></li>
-                        <li><a class="dropdown-item" href="/norms">Нормы выдачи</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/ppe-categories">Категории СИЗ</a></li>
-                        <li><a class="dropdown-item" href="/units">Единицы измерения</a></li>
-                    </ul>
                 </li>
-
-                <!-- Структура (выпадающее меню) -->
-                <li class="nav-item dropdown text-center">
-                    <a class="nav-link dropdown-toggle {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}active{% endif %}" href="#" id="structureDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}active{% endif %}" href="/structure">
                         <i class="bi bi-diagram-3 d-block" style="font-size: 1.2rem;"></i>
                         <span style="font-size: 0.7rem;">Структура</span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="structureDropdown">
-                        <li><a class="dropdown-item" href="/structure">Подразделения</a></li>
-                        <li><a class="dropdown-item" href="/positions">Должности</a></li>
-                    </ul>
                 </li>
             </ul>
             <ul class="navbar-nav">
