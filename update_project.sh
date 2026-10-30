@@ -6,54 +6,44 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🧹 Убираем все настройки проверки орфографии..."
+echo "🔧 Возвращаем скрипт скрытия навбара в iframe..."
 
-# 1. Удаляем скрипт из base.html
 python3 - << 'PYEOF'
 with open('app/templates/base.html', 'r') as f:
     content = f.read()
 
-import re
-# Удаляем скрипт, который мы добавляли для spellcheck
-content = re.sub(r'<script>\s*document\.addEventListener\(\'DOMContentLoaded\',\s*\(\)\s*=>\s*\{.*?noSpellcheckNames.*?\}\);\s*</script>', '', content, flags=re.DOTALL)
-content = re.sub(r'<script>\s*// Поля, для которых проверка орфографии НЕ нужна.*?</script>', '', content, flags=re.DOTALL)
+# Скрипт, который скрывает навбар, если страница в iframe
+iframe_script = '''
+<script>
+  // Если страница загружена в iframe, скрываем навбар
+  if (window.self !== window.top) {
+    const nav = document.querySelector('nav.navbar');
+    if (nav) nav.style.display = 'none';
+    const main = document.querySelector('main');
+    if (main) {
+      main.classList.remove('pb-5');
+      main.classList.add('pt-3');
+    }
+  }
+</script>
+'''
 
-with open('app/templates/base.html', 'w') as f:
-    f.write(content)
-print("✅ Скрипт из base.html удален (если был).")
-PYEOF
-
-# 2. Удаляем все атрибуты spellcheck из шаблонов
-python3 - << 'PYEOF'
-import os
-import re
-
-templates_dir = 'app/templates'
-for root, dirs, files in os.walk(templates_dir):
-    for file in files:
-        if not file.endswith('.html'):
-            continue
-        
-        path = os.path.join(root, file)
-        with open(path, 'r') as f:
-            content = f.read()
-        
-        # Удаляем атрибут spellcheck="..." (любое значение)
-        new_content = re.sub(r'\s+spellcheck="[^"]*"', '', content)
-        
-        if new_content != content:
-            with open(path, 'w') as f:
-                f.write(new_content)
-            print(f"✅ Очищен {path}")
+if 'window.self !== window.top' not in content:
+    content = content.replace('</body>', iframe_script + '\n</body>')
+    with open('app/templates/base.html', 'w') as f:
+        f.write(content)
+    print("✅ Скрипт скрытия навбара в iframe добавлен.")
+else:
+    print("ℹ️ Скрипт уже есть.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Все настройки проверки орфографии удалены."
+echo "✅ ГОТОВО! Второй навбар должен исчезнуть."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "chore: remove spellcheck attributes and scripts (revert)"
+git commit -m "fix: restore iframe navbar hiding script"

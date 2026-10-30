@@ -113,5 +113,19 @@
 
 
 
+
+<script>
+  // Если страница загружена в iframe, скрываем навбар
+  if (window.self !== window.top) {
+    const nav = document.querySelector('nav.navbar');
+    if (nav) nav.style.display = 'none';
+    const main = document.querySelector('main');
+    if (main) {
+      main.classList.remove('pb-5');
+      main.classList.add('pt-3');
+    }
+  }
+</script>
+
 </body>
 </html>
