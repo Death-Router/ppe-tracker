@@ -63,7 +63,8 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
     # 5. Загружаем связи для ответа
     result = await db.execute(
         select(EmployeePpeIssue).where(EmployeePpeIssue.id == db_issue.id)
-        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.category))
+        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
+                 selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group))
     )
     return result.scalar_one()
 
@@ -72,7 +73,8 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
 async def get_issues(employee_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(EmployeePpeIssue).where(EmployeePpeIssue.employee_id == employee_id)
-        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.category))
+        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
+                 selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group))
     )
     return result.scalars().all()
 
