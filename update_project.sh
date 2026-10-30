@@ -6,62 +6,14 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Объединяем кнопку '+' с панелью фильтров..."
+echo "🔧 Делаем панель фильтров с фиксированной сеткой (CSS Grid)..."
 
 python3 - << 'PYEOF'
 with open('app/templates/ppe_items/list.html', 'r') as f:
     content = f.read()
 
-# 1. Убираем кнопку "+" из заголовка
-old_header = '''<!-- Заголовок, счетчик выбранных и кнопки массовых операций -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="d-flex align-items-center gap-3 flex-wrap">
-        <h1 class="h3 mb-0">Наименования СИЗ</h1>
-        
-        <!-- Блок массовых операций (появляется при выборе) -->
-        <div id="bulk-actions" class="d-flex align-items-center gap-2 d-none">
-            <span class="badge bg-secondary">Выбрано: <span id="selected-count">0</span></span>
-            <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
-            <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
-        </div>
-    </div>
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
-</div>'''
-
-new_header = '''<!-- Заголовок и счетчик выбранных -->
-<div class="d-flex align-items-center gap-3 flex-wrap mb-3">
-    <h1 class="h3 mb-0">Наименования СИЗ</h1>
-    
-    <!-- Блок массовых операций (появляется при выборе) -->
-    <div id="bulk-actions" class="d-flex align-items-center gap-2 d-none">
-        <span class="badge bg-secondary">Выбрано: <span id="selected-count">0</span></span>
-        <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
-        <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
-    </div>
-</div>'''
-
-if old_header in content:
-    content = content.replace(old_header, new_header)
-    print("✅ Кнопка '+' убрана из заголовка.")
-else:
-    print("⚠️ Не удалось найти блок заголовка.")
-
-# 2. Добавляем кнопку "+" в панель фильтров
-old_filters = '''<!-- Панель фильтров -->
-<div class="d-flex align-items-center gap-2 mb-3">
-    <div class="input-group" style="width: 300px;">
-        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
-    </div>
-    <select class="form-select" id="filter-function" style="width: auto;">
-        <option value="">Все функции</option>
-    </select>
-    <select class="form-select" id="filter-size-group" style="width: auto;">
-        <option value="">Все размерные группы</option>
-    </select>
-</div>'''
-
-new_filters = '''<!-- Панель фильтров и кнопка "Добавить" -->
+# Находим панель фильтров
+old_filters = '''<!-- Панель фильтров и кнопка "Добавить" -->
 <div class="d-flex align-items-center justify-content-between mb-3">
     <div class="d-flex align-items-center gap-2">
         <div class="input-group" style="width: 300px;">
@@ -79,23 +31,37 @@ new_filters = '''<!-- Панель фильтров и кнопка "Добав�
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
 </div>'''
 
+new_filters = '''<!-- Панель фильтров и кнопка "Добавить" (CSS Grid) -->
+<div class="mb-3" style="display: grid; grid-template-columns: 300px 1fr 1fr auto; gap: 8px; align-items: center;">
+    <div class="input-group">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+    </div>
+    <select class="form-select" id="filter-function">
+        <option value="">Все функции</option>
+    </select>
+    <select class="form-select" id="filter-size-group">
+        <option value="">Все размерные группы</option>
+    </select>
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
+</div>'''
+
 if old_filters in content:
     content = content.replace(old_filters, new_filters)
-    print("✅ Кнопка '+' добавлена в панель фильтров.")
+    with open('app/templates/ppe_items/list.html', 'w') as f:
+        f.write(content)
+    print("✅ Панель фильтров переведена на CSS Grid (300px / 1fr / 1fr / auto).")
 else:
-    print("⚠️ Не удалось найти панель фильтров.")
-
-with open('app/templates/ppe_items/list.html', 'w') as f:
-    f.write(content)
+    print("⚠️ Не удалось найти панель фильтров для замены.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Кнопка '+' теперь в одной строке с фильтрами."
+echo "✅ ГОТОВО! Панель фильтров теперь использует CSS Grid."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: move add button to filters row in ppe_items list"
+git commit -m "ui: use CSS Grid for filters panel in ppe_items list"

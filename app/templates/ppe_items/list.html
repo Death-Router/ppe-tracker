@@ -12,21 +12,18 @@
     </div>
 </div>
 
-<!-- Панель фильтров и кнопка "Добавить" -->
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <div class="d-flex align-items-center gap-2">
-        <div class="input-group" style="width: 300px;">
-            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
-        </div>
-        <select class="form-select" id="filter-function" style="width: auto;">
-            <option value="">Все функции</option>
-        </select>
-        <select class="form-select" id="filter-size-group" style="width: auto;">
-            <option value="">Все размерные группы</option>
-        </select>
+<!-- Панель фильтров и кнопка "Добавить" (CSS Grid) -->
+<div class="mb-3" style="display: grid; grid-template-columns: 300px 1fr 1fr auto; gap: 8px; align-items: center;">
+    <div class="input-group">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
     </div>
-    
+    <select class="form-select" id="filter-function">
+        <option value="">Все функции</option>
+    </select>
+    <select class="form-select" id="filter-size-group">
+        <option value="">Все размерные группы</option>
+    </select>
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
 </div>
 
