@@ -6,89 +6,63 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🎨 Приводим кнопки '+' к единому стилю (фиолетовые, слева от заголовка)..."
+echo "🎨 Принудительно обновляем шапки во всех списках (фиолетовая '+' слева)..."
 
-# 1. Добавляем CSS для фиолетовой кнопки "+"
-python3 - << 'PYEOF'
-with open('app/static/css/app.css', 'r') as f:
-    content = f.read()
-
-new_css = '''
-/* Кнопка "+" (Добавить) — фиолетовая, компактная */
-.btn-add-purple {
-    background-color: #5b2c8a;
-    border-color: #5b2c8a;
-    color: #fff;
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.btn-add-purple:hover {
-    background-color: #4a2470;
-    border-color: #4a2470;
-    color: #fff;
-}
-'''
-
-if '.btn-add-purple' not in content:
-    content += new_css
-    with open('app/static/css/app.css', 'w') as f:
-        f.write(content)
-    print("✅ CSS для .btn-add-purple добавлен.")
-else:
-    print("ℹ️ CSS уже есть.")
-PYEOF
-
-# 2. Обновляем шаблоны
 python3 - << 'PYEOF'
 import os
 import re
 
-templates = [
-    'app/templates/employees/list.html',
-    'app/templates/ppe_items/list.html',
-    'app/templates/ppe_functions/list.html',
-    'app/templates/ppe_size_groups/list.html',
-    'app/templates/units/list.html',
-    'app/templates/norms/list.html',
-    'app/templates/departments/list.html',
-    'app/templates/positions/list.html',
-]
+# Список шаблонов и их заголовков (для замены)
+templates = {
+    'app/templates/employees/list.html': 'Сотрудники',
+    'app/templates/ppe_items/list.html': 'Наименования СИЗ',
+    'app/templates/ppe_functions/list.html': 'Функции СИЗ (Защита)',
+    'app/templates/ppe_size_groups/list.html': 'Размерные группы',
+    'app/templates/units/list.html': 'Единицы измерения',
+    'app/templates/norms/list.html': 'Нормы выдачи СИЗ',
+    'app/templates/departments/list.html': 'Подразделения',
+    'app/templates/positions/list.html': 'Должности',
+}
 
-for path in templates:
+for path, title in templates.items():
     if not os.path.exists(path):
+        print(f"⚠️ Файл не найден: {path}")
         continue
     
     with open(path, 'r') as f:
         content = f.read()
     
-    # 1. Находим заголовок (h1) и кнопку "Добавить" (btn-success)
-    # Паттерн: <div class="d-flex justify-content-between ..."> <h1>...</h1> <button class="btn btn-success...">
-    # Нужно переделать в: <div class="d-flex align-items-center gap-2"> <button class="btn-add-purple"><i class="bi bi-plus-lg"></i></button> <h1>...</h1> </div>
+    # 1. Заменяем CSS-класс кнопки "Добавить" на btn-add-purple
+    # (ищем все кнопки с btn-success и заменяем на btn-add-purple)
+    content = re.sub(
+        r'<button([^>]*?)class="btn btn-success([^"]*?)"([^>]*?)>',
+        r'<button\1class="btn btn-add-purple\2"\3>',
+        content
+    )
     
-    # Ищем блок с заголовком и кнопкой
-    pattern = r'<div class="d-flex justify-content-between align-items-center mb-3">\s*<h1[^>]*>(.*?)</h1>\s*<button[^>]*class="btn btn-success[^"]*"[^>]*>.*?</button>\s*</div>'
+    # 2. Убираем текст "Добавить" и оставляем только иконку "+"
+    content = re.sub(
+        r'(<button[^>]*class="[^"]*btn-add-purple[^"]*"[^>]*>)\s*\+?\s*Добавить\s*(</button>)',
+        r'\1<i class="bi bi-plus-lg"></i>\2',
+        content
+    )
     
-    def replacer(match):
-        title = match.group(1)
-        return f'<div class="d-flex align-items-center gap-2 mb-3">\n    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>\n    <h1 class="h3 mb-0">{title}</h1>\n</div>'
+    # 3. Перестраиваем заголовок и кнопку (если они в одном блоке)
+    # Ищем блок с заголовком и кнопкой (разные варианты)
     
-    content, count = re.subn(pattern, replacer, content, flags=re.DOTALL)
+    # Вариант A: <div class="d-flex justify-content-between ..."> <h1>...</h1> <button ...> ... </div>
+    pattern_a = r'<div class="d-flex justify-content-between align-items-center mb-3">\s*<h1[^>]*>(.*?)</h1>\s*<button[^>]*class="[^"]*btn-add-purple[^"]*"[^>]*>.*?</button>\s*</div>'
+    
+    def replacer_a(match):
+        title_text = match.group(1)
+        return f'<div class="d-flex align-items-center gap-2 mb-3">\n    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>\n    <h1 class="h3 mb-0">{title_text}</h1>\n</div>'
+    
+    content, count = re.subn(pattern_a, replacer_a, content, flags=re.DOTALL)
     
     if count > 0:
-        print(f"✅ Обновлен {path} (кнопка '+' перенесена влево).")
+        print(f"✅ {path}: кнопка '+' перенесена влево.")
     else:
-        # Если паттерн не сработал, пробуем другой вариант (когда заголовок в другом месте)
-        # Ищем кнопку btn-success и просто меняем её на btn-add-purple
-        content = re.sub(
-            r'<button([^>]*?)class="btn btn-success([^"]*?)"([^>]*?)>',
-            r'<button\1class="btn btn-add-purple\2"\3>',
-            content
-        )
-        print(f"ℹ️ {path} (кнопка '+' изменена на фиолетовую, но позиция не изменена).")
+        print(f"ℹ️ {path}: кнопка '+' изменена на фиолетовую (позиция не изменена).")
     
     with open(path, 'w') as f:
         f.write(content)
@@ -98,9 +72,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Кнопки '+' приведены к единому стилю."
+echo "✅ ГОТОВО! Проверь страницы (Ctrl+F5)."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: unify add buttons (purple, left of title)"
+git commit -m "ui: force update add buttons to purple and left-aligned"
