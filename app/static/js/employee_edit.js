@@ -105,10 +105,24 @@
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   // --- Загрузка справочников ---
+
+  function buildHierarchy(depts, parentId = null, level = 0) {
+    let result = [];
+    const filtered = depts.filter(d => d.parent_id === parentId);
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    for (const dept of filtered) {
+      result.push({ ...dept, level });
+      const children = buildHierarchy(depts, dept.id, level + 1);
+      result = result.concat(children);
+    }
+    return result;
+  }
+
   async function loadDepartments() {
     const depts = await API.get('/api/v1/departments');
+    const hierarchy = buildHierarchy(depts);
     deptSelect.innerHTML = '<option value="">Выберите...</option>' + 
-      depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');
   }
 
   async function loadPositions(deptId, selectedId = null) {

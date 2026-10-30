@@ -6,31 +6,63 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Обманываем Alembic: говорим, что миграция fix_employee_sizes уже применена..."
+echo "🔧 Добавляем иерархию подразделений в выпадающий список..."
 
-# Принудительно ставим версию fix_employee_sizes
-docker compose exec -T api alembic stamp fix_employee_sizes
+python3 - << 'PYEOF'
+with open('app/static/js/employee_edit.js', 'r') as f:
+    content = f.read()
 
-echo "✅ Alembic теперь считает, что мы на версии fix_employee_sizes."
+# 1. Добавляем функцию для построения иерархии (если её нет)
+if 'function buildHierarchy' not in content:
+    build_func = '''
+  function buildHierarchy(depts, parentId = null, level = 0) {
+    let result = [];
+    const filtered = depts.filter(d => d.parent_id === parentId);
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    for (const dept of filtered) {
+      result.push({ ...dept, level });
+      const children = buildHierarchy(depts, dept.id, level + 1);
+      result = result.concat(children);
+    }
+    return result;
+  }
+'''
+    content = content.replace(
+        '  async function loadDepartments() {',
+        build_func + '\n  async function loadDepartments() {'
+    )
 
-echo "🔧 Теперь создаем миграцию для удаления ppe_categories..."
+# 2. Обновляем loadDepartments, чтобы использовать иерархию
+old_load = '''  async function loadDepartments() {
+    const depts = await API.get('/api/v1/departments');
+    deptSelect.innerHTML = '<option value="">Выберите...</option>' + 
+      depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  }'''
 
-# Генерируем миграцию (теперь база должна быть в актуальном состоянии)
-docker compose exec -T api alembic revision --autogenerate -m "drop ppe_categories table"
+new_load = '''  async function loadDepartments() {
+    const depts = await API.get('/api/v1/departments');
+    const hierarchy = buildHierarchy(depts);
+    deptSelect.innerHTML = '<option value="">Выберите...</option>' + 
+      hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');
+  }'''
 
-echo "🔄 Применяем миграцию..."
-docker compose exec -T api alembic upgrade head
+if old_load in content:
+    content = content.replace(old_load, new_load)
+    print("✅ loadDepartments обновлен (с иерархией).")
+else:
+    print("⚠️ Не удалось найти loadDepartments.")
+
+with open('app/static/js/employee_edit.js', 'w') as f:
+    f.write(content)
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
-sleep 3
+sleep 2
 
-echo "🔄 Проверяем логи..."
-docker compose logs api --tail 10
-
-echo "✅ ГОТОВО! Таблица ppe_categories удалена."
+echo "✅ ГОТОВО! Иерархия подразделений добавлена в выпадающий список."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: stamp fix_employee_sizes and drop ppe_categories"
+git commit -m "ui: add hierarchy indentation to department dropdown in employee card"
