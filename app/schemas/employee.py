@@ -1,21 +1,24 @@
 from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field
-from app.schemas.ppe_item import PpeItemRead
-from app.schemas.ppe_function import PpeFunctionRead
-from app.schemas.ppe_size_group import PpeSizeGroupRead
+
 from app.schemas.department import DepartmentRead
 from app.schemas.position import PositionRead
+from app.schemas.ppe_size_group import PpeSizeGroupRead
+
 
 # --- Схемы для размеров сотрудника (привязаны к размерным группам) ---
 class EmployeePpeSizeCreate(BaseModel):
     size_group_id: int = Field(..., description="ID размерной группы")
     size_value: str = Field(..., max_length=50, description="Размер")
 
+
 class EmployeePpeSizeRead(BaseModel):
     size_group_id: int
     size_value: str
     size_group: PpeSizeGroupRead | None = None
     model_config = ConfigDict(from_attributes=True)
+
 
 # --- Схемы для Сотрудника ---
 class EmployeeBase(BaseModel):
@@ -30,6 +33,7 @@ class EmployeeBase(BaseModel):
     gender: str | None = Field(None, pattern="^[МЖ]$")
     height: str | None = Field(None, max_length=10)
 
+
 class EmployeeCreate(EmployeeBase):
     middle_name: str = Field(..., max_length=100)
     department_id: int
@@ -39,6 +43,7 @@ class EmployeeCreate(EmployeeBase):
     height: str = Field(..., max_length=10)
     ppe_sizes: list[EmployeePpeSizeCreate] = []
 
+
 class EmployeeRead(EmployeeBase):
     id: int
     version: int
@@ -46,6 +51,7 @@ class EmployeeRead(EmployeeBase):
     department_rel: DepartmentRead | None = None
     position_rel: PositionRead | None = None
     model_config = ConfigDict(from_attributes=True)
+
 
 class EmployeeUpdate(EmployeeBase):
     personnel_number: str | None = None
