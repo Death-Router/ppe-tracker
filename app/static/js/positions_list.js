@@ -3,42 +3,54 @@
   const createForm = document.getElementById('create-form');
   const createDeptSelect = document.getElementById('create-dept');
 
-  async function loadPositions() {
+  let allPositions = [];
+  let allDepartments = [];
+
+  async function loadData() {
     try {
-      const positions = await API.get('/api/v1/positions');
-      renderTable(positions);
+      allPositions = await API.get('/api/v1/positions');
+      allDepartments = await API.get('/api/v1/departments');
+      
+      // Заполняем выпадающий список подразделений в модалке
+      if (createDeptSelect) {
+        const sortedDepts = [...allDepartments].sort((a, b) => a.name.localeCompare(b.name));
+        createDeptSelect.innerHTML = '<option value="">Выберите подразделение...</option>' +
+          sortedDepts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+      }
+      
+      renderTable(allPositions);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
-  async function loadDepartmentsForSelect() {
-    try {
-      const depts = await API.get('/api/v1/departments');
-      createDeptSelect.innerHTML = '<option value="">Выберите подразделение...</option>' +
-        depts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
-    } catch (err) {
-      createDeptSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
-    }
-  }
+  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'); }
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
+  function truncate(str, maxLength) {
+    if (!str) return '';
+    if (str.length <= maxLength) return str;
+    return str.substring(0, maxLength) + '...';
+  }
 
   function renderTable(positions) {
     if (!positions.length) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Должностей пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Должностей пока нет</td></tr>`;
       return;
     }
-    tbody.innerHTML = positions.map(p => `
-      <tr data-pos-id="${p.id}">
-        <td><strong>${escapeHtml(p.name)}</strong></td>
-        <td><span class="badge bg-secondary">${escapeHtml(p.department?.name ?? '—')}</span></td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deletePos(${p.id}, '${escapeHtml(p.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+    tbody.innerHTML = positions.map(p => {
+      const deptName = allDepartments.find(d => d.id === p.department_id)?.name || '—';
+      const fullName = escapeHtml(p.name);
+      const shortName = escapeHtml(truncate(p.name, 60));
+      return `
+      <tr data-pos-id="${p.id}" style="height: 40px;">
+        <td class="py-1" title="${fullName}">${shortName}</td>
+        <td class="py-1"><span class="badge bg-secondary">${escapeHtml(deptName)}</span></td>
+        <td class="py-1 text-end">
+          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deletePos(${p.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
-    `).join('');
+    `}).join('');
   }
 
   createForm.addEventListener('submit', async (e) => {
@@ -53,7 +65,7 @@
       window.showToast('Должность создана', 'success');
       bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
       createForm.reset();
-      loadPositions();
+      loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
@@ -66,16 +78,15 @@
     try {
       await API.request(`/api/v1/positions/${id}`, { method: 'DELETE' });
       window.showToast('Должность удалена', 'success');
-      loadPositions();
+      loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
   };
 
   WS.subscribe((data) => {
-    if (data.event === 'position_updated') loadPositions();
+    if (data.event === 'position_updated') loadData();
   });
 
-  loadDepartmentsForSelect();
-  loadPositions();
+  loadData();
 })();

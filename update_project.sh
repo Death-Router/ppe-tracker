@@ -6,42 +6,31 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Уплотняем список подразделений и добавляем стрелки иерархии..."
+echo "🔧 Уплотняем список должностей..."
 
-# 1. Обновляем JS (добавляем стрелки и уплотняем)
-cat > app/static/js/departments_list.js << 'EOF'
+# 1. Обновляем JS (уплотняем строки и обрезаем длинные названия)
+cat > app/static/js/positions_list.js << 'EOF'
 (() => {
-  const tbody = document.querySelector('#departments-table tbody');
+  const tbody = document.querySelector('#positions-table tbody');
   const createForm = document.getElementById('create-form');
-  const createParentSelect = document.getElementById('create-parent');
+  const createDeptSelect = document.getElementById('create-dept');
 
+  let allPositions = [];
   let allDepartments = [];
 
-  // Функция для построения иерархического списка
-  function buildHierarchy(depts, parentId = null, level = 0) {
-    let result = [];
-    const filtered = depts.filter(d => d.parent_id === parentId);
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
-
-    for (const dept of filtered) {
-      result.push({ ...dept, level });
-      const children = buildHierarchy(depts, dept.id, level + 1);
-      result = result.concat(children);
-    }
-    return result;
-  }
-
-  async function loadDepartments() {
+  async function loadData() {
     try {
+      allPositions = await API.get('/api/v1/positions');
       allDepartments = await API.get('/api/v1/departments');
-      const hierarchy = buildHierarchy(allDepartments);
-      renderTable(hierarchy);
       
-      // Заполняем выпадающий список для создания (тоже иерархически)
-      if (createParentSelect) {
-        createParentSelect.innerHTML = '<option value="">Нет (корневое)</option>' + 
-          hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');
+      // Заполняем выпадающий список подразделений в модалке
+      if (createDeptSelect) {
+        const sortedDepts = [...allDepartments].sort((a, b) => a.name.localeCompare(b.name));
+        createDeptSelect.innerHTML = '<option value="">Выберите подразделение...</option>' +
+          sortedDepts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
       }
+      
+      renderTable(allPositions);
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
@@ -55,29 +44,22 @@ cat > app/static/js/departments_list.js << 'EOF'
     return str.substring(0, maxLength) + '...';
   }
 
-  function renderTable(hierarchy) {
-    if (!hierarchy.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Подразделений пока нет</td></tr>`;
+  function renderTable(positions) {
+    if (!positions.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Должностей пока нет</td></tr>`;
       return;
     }
-
-    // Находим родителя для каждого элемента (для отображения в колонке "Вышестоящее")
-    const deptMap = {};
-    hierarchy.forEach(d => { deptMap[d.id] = d; });
-
-    tbody.innerHTML = hierarchy.map(d => {
-      const parentName = d.parent_id && deptMap[d.parent_id] ? deptMap[d.parent_id].name : '—';
-      const fullName = escapeHtml(d.name);
-      const shortName = escapeHtml(truncate(d.name, 50));
-      const indent = '↳ '.repeat(d.level);
-      
+    tbody.innerHTML = positions.map(p => {
+      const deptName = allDepartments.find(d => d.id === p.department_id)?.name || '—';
+      const fullName = escapeHtml(p.name);
+      const shortName = escapeHtml(truncate(p.name, 60));
       return `
-      <tr data-dept-id="${d.id}" style="height: 40px;">
-        <td class="py-1" title="${fullName}">${indent}${shortName}</td>
-        <td class="py-1">${escapeHtml(parentName)}</td>
+      <tr data-pos-id="${p.id}" style="height: 40px;">
+        <td class="py-1" title="${fullName}">${shortName}</td>
+        <td class="py-1"><span class="badge bg-secondary">${escapeHtml(deptName)}</span></td>
         <td class="py-1 text-end">
-          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/departments/${d.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteDept(${d.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deletePos(${p.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
@@ -86,16 +68,16 @@ cat > app/static/js/departments_list.js << 'EOF'
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
-    payload.parent_id = payload.parent_id ? Number(payload.parent_id) : null;
+    payload.department_id = Number(payload.department_id);
     
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {
-      await API.post('/api/v1/departments/', payload);
-      window.showToast('Подразделение создано', 'success');
+      await API.post('/api/v1/positions/', payload);
+      window.showToast('Должность создана', 'success');
       bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
       createForm.reset();
-      loadDepartments();
+      loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
@@ -103,51 +85,51 @@ cat > app/static/js/departments_list.js << 'EOF'
     }
   });
 
-  window.deleteDept = async (id, name) => {
-    if (!confirm(`Удалить подразделение "${name}"?`)) return;
+  window.deletePos = async (id, name) => {
+    if (!confirm(`Удалить должность "${name}"?`)) return;
     try {
-      await API.request(`/api/v1/departments/${id}`, { method: 'DELETE' });
-      window.showToast('Подразделение удалено', 'success');
-      loadDepartments();
+      await API.request(`/api/v1/positions/${id}`, { method: 'DELETE' });
+      window.showToast('Должность удалена', 'success');
+      loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
   };
 
   WS.subscribe((data) => {
-    if (data.event === 'department_updated') loadDepartments();
+    if (data.event === 'position_updated') loadData();
   });
 
-  loadDepartments();
+  loadData();
 })();
 EOF
 
-echo "✅ JS для подразделений обновлен (стрелки, уплотнение)."
+echo "✅ JS для должностей обновлен (уплотнение, обрезка названий)."
 
-# 2. Обновляем шаблон (добавляем style для строк, если нужно)
+# 2. Обновляем шаблон (делаем таблицу компактнее)
 python3 - << 'PYEOF'
-with open('app/templates/departments/list.html', 'r') as f:
+with open('app/templates/positions/list.html', 'r') as f:
     content = f.read()
 
-# Убедимся, что таблица имеет класс table-sm (для компактности)
+# Убедимся, что таблица имеет класс table-sm
 if 'table-sm' not in content:
     content = content.replace(
         'class="table table-hover align-middle mb-0"',
         'class="table table-sm table-hover align-middle mb-0"'
     )
 
-with open('app/templates/departments/list.html', 'w') as f:
+with open('app/templates/positions/list.html', 'w') as f:
     f.write(content)
-print("✅ Шаблон подразделений обновлен (table-sm).")
+print("✅ Шаблон должностей обновлен (table-sm).")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Список подразделений уплотнен и со стрелками."
+echo "✅ ГОТОВО! Список должностей уплотнен."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: compact departments list with hierarchy arrows"
+git commit -m "ui: compact positions list with truncated names"
