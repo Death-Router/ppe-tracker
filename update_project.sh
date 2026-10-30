@@ -6,36 +6,40 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Переделываем шапку списка СИЗ (заголовок, кнопки, фильтры)..."
+echo "🔧 Возвращаем фильтры и кнопки над таблицей (аккуратно)..."
 
 cat > app/templates/ppe_items/list.html << 'EOF'
 {% extends "base.html" %}
 {% block content %}
-<!-- Заголовок и кнопки -->
+<!-- Заголовок и кнопка "Добавить" -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div class="d-flex align-items-center gap-3">
         <h1 class="h3 mb-0">Наименования СИЗ</h1>
         <span id="selected-count" class="badge bg-secondary d-none">Выбрано: <span>0</span></span>
     </div>
-    <div class="d-flex align-items-center gap-2" style="width: 120px; justify-content: flex-end;">
-        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
+</div>
+
+<!-- Панель фильтров и кнопки массовых операций -->
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center gap-2">
+        <div class="input-group" style="width: 300px;">
+            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+        </div>
+        <select class="form-select" id="filter-function" style="width: auto;">
+            <option value="">Все функции</option>
+        </select>
+        <select class="form-select" id="filter-size-group" style="width: auto;">
+            <option value="">Все размерные группы</option>
+        </select>
+    </div>
+    
+    <!-- Кнопки массовых операций (выровнены по правому краю с отступом) -->
+    <div class="d-flex align-items-center gap-2" style="margin-right: 12px;">
         <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" disabled onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
         <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" disabled onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
     </div>
-</div>
-
-<!-- Панель фильтров -->
-<div class="d-flex align-items-center gap-2 mb-3">
-    <div class="input-group" style="width: 300px;">
-        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
-    </div>
-    <select class="form-select" id="filter-function" style="width: auto;">
-        <option value="">Все функции</option>
-    </select>
-    <select class="form-select" id="filter-size-group" style="width: auto;">
-        <option value="">Все размерные группы</option>
-    </select>
 </div>
 
 <!-- Таблица -->
@@ -146,9 +150,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Шапка списка СИЗ переделана."
+echo "✅ ГОТОВО! Фильтры и кнопки вернулись над таблицей."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: restructure ppe_items list header (selected count, bulk buttons, filters)"
+git commit -m "ui: restore filters and bulk buttons above table (aligned right)"
