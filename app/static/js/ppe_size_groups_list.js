@@ -5,6 +5,13 @@
   const modalTitle = modalElement.querySelector('.modal-title');
   const submitBtn = modalElement.querySelector('button[type="submit"]');
 
+  // Элементы модалки размеров
+  const sizesModalElement = document.getElementById('sizesModal');
+  const sizeForm = document.getElementById('size-form');
+  const sizesList = document.getElementById('sizes-list');
+  const sizeGroupName = document.getElementById('size-group-name');
+  const sizeGroupIdInput = document.getElementById('size-group-id');
+
   let editingId = null;
 
   async function loadGroups() {
@@ -27,6 +34,7 @@
       <tr data-id="${g.id}" style="height: 40px;">
         <td class="py-1"><strong>${escapeHtml(g.name)}</strong></td>
         <td class="py-1 text-end">
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
           <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
@@ -34,6 +42,7 @@
     `).join('');
   }
 
+  // Открытие модалки для создания/редактирования группы
   window.openCreateModal = () => {
     editingId = null;
     modalTitle.textContent = 'Новая размерная группа';
@@ -90,6 +99,70 @@
       await API.request(`/api/v1/ppe_size_groups/${id}`, { method: 'DELETE' });
       window.showToast('Группа удалена', 'success');
       loadGroups();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
+
+  // --- Управление размерами ---
+  window.openSizesModal = async (groupId, groupName) => {
+    sizeGroupIdInput.value = groupId;
+    sizeGroupName.textContent = groupName;
+    sizesList.innerHTML = '<li class="list-group-item text-muted">Загрузка...</li>';
+    
+    const modal = new bootstrap.Modal(sizesModalElement);
+    modal.show();
+
+    try {
+      const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${groupId}`);
+      renderSizesList(sizes);
+    } catch (err) {
+      sizesList.innerHTML = `<li class="list-group-item text-danger">Ошибка: ${err.message}</li>`;
+    }
+  };
+
+  function renderSizesList(sizes) {
+    if (!sizes.length) {
+      sizesList.innerHTML = '<li class="list-group-item text-muted">Нет добавленных размеров</li>';
+      return;
+    }
+    sizesList.innerHTML = sizes.map(s => {
+      const genderLabel = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+      return `
+      <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+        ${escapeHtml(s.size_value)}${genderLabel}
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteSize(${s.id})">✕</button>
+      </li>
+    `}).join('');
+  }
+
+  sizeForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const groupId = Number(sizeGroupIdInput.value);
+    const sizeValue = sizeForm.elements['size_value'].value.trim();
+    const gender = sizeForm.elements['gender'].value || null;
+    if (!sizeValue) return;
+
+    try {
+      await API.post('/api/v1/ppe_sizes/', { size_group_id: groupId, size_value: sizeValue, gender: gender });
+      window.showToast('Размер добавлен', 'success');
+      sizeForm.reset();
+      
+      const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${groupId}`);
+      renderSizesList(sizes);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  });
+
+  window.deleteSize = async (sizeId) => {
+    if (!confirm('Удалить этот размер?')) return;
+    try {
+      await API.request(`/api/v1/ppe_sizes/${sizeId}`, { method: 'DELETE' });
+      window.showToast('Размер удален', 'success');
+      const groupId = Number(sizeGroupIdInput.value);
+      const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${groupId}`);
+      renderSizesList(sizes);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }

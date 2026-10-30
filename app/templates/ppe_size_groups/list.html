@@ -46,8 +46,86 @@
     </div>
   </div>
 </div>
+
+<!-- Модалка управления размерами -->
+<div class="modal fade" id="sizesModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="size-form">
+        <input type="hidden" name="size_group_id" id="size-group-id">
+        <div class="modal-header">
+          <h5 class="modal-title">Размеры для: <span id="size-group-name"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label">Новый размер</label>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <select class="form-select" name="gender">
+                            <option value="">Унисекс</option>
+                            <option value="М">Мужской</option>
+                            <option value="Ж">Женский</option>
+                        </select>
+                    </div>
+                    <div class="col-5">
+                        <input type="text" class="form-control" name="size_value" placeholder="Например, 42" required>
+                    </div>
+                    <div class="col-3">
+                        <button class="btn btn-brand-purple w-100" type="submit">Добавить</button>
+                    </div>
+                </div>
+            </div>
+            <ul class="list-group" id="sizes-list">
+                <!-- Список размеров -->
+            </ul>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', path='js/ppe_size_groups_list.js') }}"></script>
+
+<!-- Модалка управления размерами -->
+<div class="modal fade" id="sizesModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="size-form">
+        <input type="hidden" name="size_group_id" id="size-group-id">
+        <div class="modal-header">
+          <h5 class="modal-title">Размеры для: <span id="size-group-name"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label">Новый размер</label>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <select class="form-select" name="gender">
+                            <option value="">Унисекс</option>
+                            <option value="М">Мужской</option>
+                            <option value="Ж">Женский</option>
+                        </select>
+                    </div>
+                    <div class="col-5">
+                        <input type="text" class="form-control" name="size_value" placeholder="Например, 42" required>
+                    </div>
+                    <div class="col-3">
+                        <button class="btn btn-brand-purple w-100" type="submit">Добавить</button>
+                    </div>
+                </div>
+            </div>
+            <ul class="list-group" id="sizes-list">
+                <!-- Список размеров -->
+            </ul>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
