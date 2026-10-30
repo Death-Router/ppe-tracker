@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<!-- Заголовок и счетчик выбранных -->
+<!-- Заголовок, кнопка "Добавить" и счетчик выбранных -->
 <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
-    <h1 class="h3 mb-0">Наименования СИЗ</h1>
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
+        <h1 class="h3 mb-0">Наименования СИЗ</h1>
+    </div>
     
     <!-- Блок массовых операций (появляется при выборе) -->
     <div id="bulk-actions" class="d-flex align-items-center gap-2 d-none">
@@ -12,8 +15,8 @@
     </div>
 </div>
 
-<!-- Панель фильтров и кнопка "Добавить" (CSS Grid) -->
-<div class="mb-3" style="display: grid; grid-template-columns: 300px 1fr 1fr auto; gap: 8px; align-items: center;">
+<!-- Панель фильтров (без кнопки "Добавить") -->
+<div class="mb-3" style="display: grid; grid-template-columns: 300px 1fr 1fr; gap: 8px; align-items: center;">
     <div class="input-group">
         <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
         <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
@@ -24,7 +27,6 @@
     <select class="form-select" id="filter-size-group">
         <option value="">Все размерные группы</option>
     </select>
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
 </div>
 
 <!-- Таблица -->
