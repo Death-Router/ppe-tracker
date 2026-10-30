@@ -107,8 +107,9 @@
       const fullName = escapeHtml(i.name);
       const shortName = escapeHtml(truncate(i.name, 60));
       const isChecked = selectedIds.has(i.id) ? 'checked' : '';
+      const rowClass = selectedIds.has(i.id) ? 'selected-row' : '';
       return `
-      <tr data-item-id="${i.id}" style="height: 40px;">
+      <tr data-item-id="${i.id}" class="${rowClass}" style="height: 40px;">
         <td class="py-1">
           <input type="checkbox" class="item-checkbox" value="${i.id}" ${isChecked} onchange="toggleSelection(${i.id}, this.checked)">
         </td>
@@ -130,6 +131,13 @@
     if (checked) selectedIds.add(id);
     else selectedIds.delete(id);
     updateBulkPanel();
+    
+    // Обновляем класс строки
+    const row = document.querySelector(`tr[data-item-id="${id}"]`);
+    if (row) {
+      if (checked) row.classList.add('selected-row');
+      else row.classList.remove('selected-row');
+    }
   };
 
   function updateBulkPanel() {

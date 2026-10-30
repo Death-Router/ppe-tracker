@@ -360,3 +360,16 @@ h1, h2, h3, h4, h5, h6 {
     color: #fff !important;
     border-color: #FF6600 !important;
 }
+
+/* Выбранные строки (выделенные чекбоксом) — фиолетовый фон */
+.table tr.selected-row {
+    background-color: rgba(91, 44, 138, 0.08) !important;
+}
+.table tr.selected-row td {
+    background-color: rgba(91, 44, 138, 0.08) !important;
+}
+
+/* Фон при наведении на выбранную строку */
+.table tr.selected-row:hover {
+    background-color: rgba(91, 44, 138, 0.12) !important;
+}
