@@ -365,10 +365,22 @@ h1, h2, h3, h4, h5, h6 {
 
 
 
-/* Выбранные строки (выделенные чекбоксом) — фиолетовый фон ячеек */
-.table tbody tr.selected-row > td {
-    background-color: rgba(91, 44, 138, 0.08) !important;
+
+
+/* Выбранные строки — фиолетовый фон (перебиваем все) */
+.table tbody tr.selected-row td,
+.table tbody tr.selected-row:hover td,
+.table tbody tr.selected-row:focus td,
+.table tbody tr.selected-row:active td,
+.table-hover tbody tr.selected-row:hover td,
+.table-hover tbody tr.selected-row:hover > * {
+    background-color: #e8d5f5 !important;
+    color: #5b2c8a !important;
+    box-shadow: inset 0 0 0 9999px rgba(91, 44, 138, 0.08) !important;
 }
-.table tbody tr.selected-row:hover > td {
-    background-color: rgba(91, 44, 138, 0.12) !important;
+
+/* Убираем синее выделение браузера */
+::selection {
+    background: rgba(91, 44, 138, 0.2);
+    color: #000;
 }
