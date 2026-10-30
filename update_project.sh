@@ -6,150 +6,47 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Уплотняем таблицу сотрудников..."
+echo "🔧 Применяем моноширинный шрифт к табельному номеру (все символы одинаковой ширины)..."
 
-# 1. Добавляем table-sm в шаблон
+# 1. Обновляем шаблон (добавляем класс для колонки)
 python3 - << 'PYEOF'
 with open('app/templates/employees/list.html', 'r') as f:
     content = f.read()
 
-# Добавляем table-sm, если его нет
-if 'table-sm' not in content:
-    content = content.replace(
-        'class="table table-hover align-middle mb-0"',
-        'class="table table-sm table-hover align-middle mb-0"'
-    )
+# Добавляем style для колонки "Табельный номер" (моноширинный шрифт)
+content = content.replace(
+    '<th style="width: 150px; font-family: monospace;">Табельный номер</th>',
+    '<th style="width: 150px; font-family: monospace;" class="text-end">Табельный номер</th>'
+)
 
 with open('app/templates/employees/list.html', 'w') as f:
     f.write(content)
-print("✅ Шаблон сотрудников обновлен (table-sm).")
+print("✅ Шаблон сотрудников обновлен (заголовок с моноширинным шрифтом).")
 PYEOF
 
-# 2. Уплотняем ячейки в JS
-cat > app/static/js/employees_list.js << 'EOF'
-(() => {
-  const tbody = document.querySelector('#employees-table tbody');
-  const createForm = document.getElementById('create-form');
-  const createDeptSelect = document.getElementById('create-dept');
-  const createPosSelect = document.getElementById('create-pos');
+# 2. Обновляем JS (добавляем класс font-monospace и выравнивание вправо)
+python3 - << 'PYEOF'
+with open('app/static/js/employees_list.js', 'r') as f:
+    content = f.read()
 
-  async function loadEmployees() {
-    try {
-      const employees = await API.get('/api/v1/employees');
-      renderTable(employees);
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
-    }
-  }
+# Заменяем ячейку с табельным номером
+content = content.replace(
+    '<td class="py-1 font-monospace">${escapeHtml(e.personnel_number)}</td>',
+    '<td class="py-1 font-monospace text-end">${escapeHtml(e.personnel_number)}</td>'
+)
 
-  function escapeHtml(s) {
-    return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-  }
-
-  function renderTable(employees) {
-    if (!employees.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = employees.map(e => {
-      const fio = `${e.last_name} ${e.first_name} ${e.middle_name ?? ''}`.trim();
-      return `
-      <tr data-employee-id="${e.id}" style="height: 40px;">
-        <td class="py-1">${escapeHtml(fio)}</td>
-        <td class="py-1">${escapeHtml(e.personnel_number)}</td>
-        <td class="py-1">${escapeHtml(e.department_rel?.name ?? '—')}</td>
-        <td class="py-1">${escapeHtml(e.position_rel?.name ?? '—')}</td>
-        <td class="py-1 text-end">
-          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteEmployee(${e.id}, '${escapeHtml(fio)}')" title="Удалить"><i class="bi bi-trash"></i></button>
-        </td>
-      </tr>
-    `}).join('');
-  }
-
-  async function loadDepartmentsForSelect() {
-    try {
-      const depts = await API.get('/api/v1/departments');
-      createDeptSelect.innerHTML = '<option value="">Подразделение</option>' +
-        depts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
-    } catch (err) {
-      createDeptSelect.innerHTML = '<option value="">Ошибка</option>';
-    }
-  }
-
-  async function loadPositionsForSelect(deptId) {
-    if (!deptId) {
-      createPosSelect.innerHTML = '<option value="">Сначала выберите цех</option>';
-      return;
-    }
-    try {
-      const positions = await API.get('/api/v1/positions');
-      const filtered = positions.filter(p => p.department_id === Number(deptId));
-      createPosSelect.innerHTML = '<option value="">Должность</option>' +
-        filtered.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-    } catch (err) {
-      createPosSelect.innerHTML = '<option value="">Ошибка</option>';
-    }
-  }
-
-  createDeptSelect.addEventListener('change', (e) => {
-    loadPositionsForSelect(e.target.value);
-  });
-
-  createForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = FormHelper.serialize(createForm);
-    payload.department_id = Number(payload.department_id);
-    payload.position_id = Number(payload.position_id);
-    payload.ppe_sizes = [];
-
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
-      await API.post('/api/v1/employees/', payload);
-      window.showToast('Сотрудник создан', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
-      createForm.reset();
-      createPosSelect.innerHTML = '<option value="">Сначала выберите цех</option>';
-      loadEmployees();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  window.deleteEmployee = async (id, fio) => {
-    if (!confirm(`Удалить сотрудника "${fio}"?`)) return;
-    try {
-      await API.request(`/api/v1/employees/${id}`, { method: 'DELETE' });
-      window.showToast('Сотрудник удален', 'success');
-      loadEmployees();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  };
-
-  WS.subscribe((data) => {
-    if (data.event === 'employee_updated' || data.event === 'employee_created') {
-      setTimeout(loadEmployees, 300);
-    }
-  });
-
-  loadDepartmentsForSelect();
-  loadEmployees();
-})();
-EOF
-
-echo "✅ JS для сотрудников уплотнен."
+with open('app/static/js/employees_list.js', 'w') as f:
+    f.write(content)
+print("✅ JS сотрудников обновлен (моноширинный шрифт + выравнивание вправо).")
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Таблица сотрудников уплотнена."
+echo "✅ ГОТОВО! Табельный номер теперь моноширинный и выровнен вправо."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: compact employees table (table-sm, py-1)"
+git commit -m "ui: apply monospace font and right alignment to personnel number"
