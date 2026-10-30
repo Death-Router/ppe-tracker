@@ -166,7 +166,15 @@
     }
   }
 
-  deptSelect.addEventListener('change', (e) => loadPositions(e.target.value));
+  deptSelect.addEventListener('change', async (e) => {
+    await loadPositions(e.target.value);
+    // Принудительно обновляем валидацию после загрузки должностей
+    const form = document.getElementById('employee-form');
+    if (form) {
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = !form.checkValidity();
+    }
+  });
 
   // --- Управление размерами (по категориям) ---
   async function createSizeRow(categoryId = '', sizeValue = '') {
