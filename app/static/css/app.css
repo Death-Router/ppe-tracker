@@ -240,3 +240,35 @@ h1, h2, h3, h4, h5, h6 {
 .table-bordered td {
     border: 1px solid #dee2e6;
 }
+
+/* Кнопка "Отмена" — оранжевая */
+.btn-brand-orange {
+    background-color: #FF6600;
+    border-color: #FF6600;
+    color: #fff;
+}
+.btn-brand-orange:hover {
+    background-color: #e65c00;
+    border-color: #e65c00;
+    color: #fff;
+}
+
+/* Кнопка "Сохранить/Создать/Применить" — фиолетовая */
+.btn-brand-purple {
+    background-color: #5b2c8a;
+    border-color: #5b2c8a;
+    color: #fff;
+}
+.btn-brand-purple:hover {
+    background-color: #4a2470;
+    border-color: #4a2470;
+    color: #fff;
+}
+
+/* Заблокированные кнопки — серые */
+.btn:disabled, .btn.disabled {
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+    color: #fff !important;
+    opacity: 0.65;
+}

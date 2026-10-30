@@ -6,132 +6,104 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Полностью очищаем base.html от подозрительных скриптов..."
+echo "🎨 Обновляем стили кнопок (серая, оранжевая, фиолетовая)..."
 
-cat > app/templates/base.html << 'EOF'
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{{ title or "Учёт СИЗ" }}{% endblock %}</title>
+# 1. Добавляем CSS
+python3 - << 'PYEOF'
+with open('app/static/css/app.css', 'r') as f:
+    content = f.read()
 
-    <!-- Google Fonts (Inter) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+new_css = '''
+/* Кнопка "Отмена" — оранжевая */
+.btn-brand-orange {
+    background-color: #FF6600;
+    border-color: #FF6600;
+    color: #fff;
+}
+.btn-brand-orange:hover {
+    background-color: #e65c00;
+    border-color: #e65c00;
+    color: #fff;
+}
 
-    <!-- Bootstrap 5 CSS -->
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-        crossorigin="anonymous">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
-    {% block head %}{% endblock %}
-</head>
-<body class="bg-light">
+/* Кнопка "Сохранить/Создать/Применить" — фиолетовая */
+.btn-brand-purple {
+    background-color: #5b2c8a;
+    border-color: #5b2c8a;
+    color: #fff;
+}
+.btn-brand-purple:hover {
+    background-color: #4a2470;
+    border-color: #4a2470;
+    color: #fff;
+}
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
-    <div class="container-fluid">
-        <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 3rem;">
-            <i class="bi bi-gear-fill"></i>
-        </a>
-        
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#mainNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        
-        <div class="collapse navbar-collapse" id="mainNav">
-            <ul class="navbar-nav mx-auto">
-                <li class="nav-item text-center">
-                    <a class="nav-link {% if '/employees' in request.url.path %}active{% endif %}" href="/employees">
-                        <i class="bi bi-people d-block" style="font-size: 1.2rem;"></i>
-                        <span style="font-size: 0.7rem;">Сотрудники</span>
-                    </a>
-                </li>
-                <li class="nav-item text-center">
-                    <a class="nav-link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="/ppe">
-                        <i class="bi bi-box-seam d-block" style="font-size: 1.2rem;"></i>
-                        <span style="font-size: 0.7rem;">СИЗ</span>
-                    </a>
-                </li>
-                <li class="nav-item text-center">
-                    <a class="nav-link {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}active{% endif %}" href="/structure">
-                        <i class="bi bi-diagram-3 d-block" style="font-size: 1.2rem;"></i>
-                        <span style="font-size: 0.7rem;">Структура</span>
-                    </a>
-                </li>
-            </ul>
-            <ul class="navbar-nav">
-                <li class="nav-item text-center">
-                    <a class="nav-link" href="#" onclick="event.preventDefault(); fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => window.location.href='/login');">
-                        <i class="bi bi-box-arrow-right d-block" style="font-size: 1.2rem;"></i>
-                        <span style="font-size: 0.7rem;">Выйти</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
+/* Заблокированные кнопки — серые */
+.btn:disabled, .btn.disabled {
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+    color: #fff !important;
+    opacity: 0.65;
+}
+'''
 
-<main class="container pb-5">
-    {% block content %}{% endblock %}
-</main>
+if '.btn-brand-orange' not in content:
+    content += new_css
+    with open('app/static/css/app.css', 'w') as f:
+        f.write(content)
+    print("✅ CSS для кнопок добавлен.")
+else:
+    print("ℹ️ CSS уже есть.")
+PYEOF
 
-<!-- Контейнер для toast-уведомлений -->
-<div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"
-     style="z-index: 1100;"></div>
+# 2. Обновляем шаблоны (заменяем классы)
+echo "🔧 Обновляем классы кнопок в шаблонах..."
 
-<!-- Bootstrap 5 Bundle (включает Popper) -->
-<script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-    crossorigin="anonymous"></script>
+python3 - << 'PYEOF'
+import os
+import re
 
-<!-- Хелпер для toast'ов (доступен всем скриптам) -->
-<script>
-    window.showToast = function (message, variant = 'info') {
-        const container = document.getElementById('toast-container');
-        const el = document.createElement('div');
-        el.className = `toast align-items-center text-bg-${variant} border-0`;
-        el.setAttribute('role', 'alert');
-        el.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">${message}</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto"
-                        data-bs-dismiss="toast"></button>
-            </div>`;
-        container.appendChild(el);
-        const t = new bootstrap.Toast(el, { delay: 4000 });
-        t.show();
-        el.addEventListener('hidden.bs.toast', () => el.remove());
-    };
-</script>
+templates_dir = 'app/templates'
+for root, dirs, files in os.walk(templates_dir):
+    for file in files:
+        if file.endswith('.html'):
+            path = os.path.join(root, file)
+            with open(path, 'r') as f:
+                content = f.read()
 
-<!-- Общие хелперы (API, WebSocket, Forms) -->
-<script src="{{ url_for('static', path='js/common/api.js') }}"></script>
-<script src="{{ url_for('static', path='js/common/ws.js') }}"></script>
-<script src="{{ url_for('static', path='js/common/form.js') }}"></script>
+            # 1. Заменяем btn-primary на btn-brand-purple (для кнопок создания/сохранения)
+            content = re.sub(
+                r'<button([^>]*?)class="([^"]*?)btn-primary([^"]*?)"([^>]*?)>',
+                r'<button\1class="\2btn-brand-purple\3"\4>',
+                content
+            )
 
-<!-- Блок для скриптов конкретной страницы -->
-{% block scripts %}{% endblock %}
+            # 2. Заменяем btn-secondary на btn-brand-orange (для отмены)
+            content = re.sub(
+                r'<button([^>]*?)class="([^"]*?)btn-secondary([^"]*?)"([^>]*?)>',
+                r'<button\1class="\2btn-brand-orange\3"\4>',
+                content
+            )
 
-</body>
-</html>
-EOF
+            # 3. Заменяем btn-outline-secondary на btn-brand-orange (для ссылок "Отмена")
+            content = re.sub(
+                r'<a([^>]*?)class="([^"]*?)btn-outline-secondary([^"]*?)"([^>]*?)>',
+                r'<a\1class="\2btn-brand-orange\3"\4>',
+                content
+            )
+
+            with open(path, 'w') as f:
+                f.write(content)
+            print(f"✅ Обновлен {path}")
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! base.html очищен."
+echo "✅ ГОТОВО! Кнопки обновлены."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: clean base.html from potential infinite loops"
+git commit -m "ui: update button colors (disabled - gray, cancel - orange, submit - purple)"

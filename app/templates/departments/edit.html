@@ -4,7 +4,7 @@
     <div class="col-lg-6">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1 class="h3 mb-0">Редактирование подразделения</h1>
-            <a href="/departments" class="btn btn-outline-secondary">← К списку</a>
+            <a href="/departments" class="btn btn-brand-orange">← К списку</a>
         </div>
 
         <div id="conflict-alert" class="alert alert-warning d-none" role="alert">
@@ -12,7 +12,7 @@
             <button type="button" class="btn btn-sm btn-warning ms-2" onclick="location.reload()">Обновить</button>
         </div>
 
-        <form id="dept-form" class="card shadow-sm p-4" novalidate>
+        <form data-validate="true" id="dept-form" class="card shadow-sm p-4" novalidate>
             <input type="hidden" name="version" id="version" value="">
             <div class="row g-3">
                 <div class="col-12">
@@ -27,8 +27,8 @@
                 </div>
             </div>
             <div class="d-flex justify-content-end gap-2 mt-4">
-                <a href="/departments" class="btn btn-outline-secondary">Отмена</a>
-                <button type="submit" class="btn btn-primary" id="btn-submit">Сохранить</button>
+                <a href="/departments" class="btn btn-brand-orange">Отмена</a>
+                <button type="submit" class="btn btn-brand-purple" id="btn-submit">Сохранить</button>
             </div>
         </form>
     </div>

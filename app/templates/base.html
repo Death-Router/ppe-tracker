@@ -110,5 +110,24 @@
 <!-- Блок для скриптов конкретной страницы -->
 {% block scripts %}{% endblock %}
 
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Ищем только те формы, где явно указан атрибут data-validate="true"
+    document.querySelectorAll('form[data-validate="true"]').forEach(form => {
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (!submitBtn) return;
+      
+      const checkValidity = () => {
+        submitBtn.disabled = !form.checkValidity();
+      };
+      
+      checkValidity();
+      form.addEventListener('input', checkValidity);
+      form.addEventListener('change', checkValidity);
+    });
+  });
+</script>
+
 </body>
 </html>
