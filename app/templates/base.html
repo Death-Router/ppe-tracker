@@ -131,31 +131,19 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    // Находим все формы на странице
     const forms = document.querySelectorAll('form');
     
     forms.forEach(form => {
-      // Ищем кнопку submit внутри формы (или связанную)
       const submitBtn = form.querySelector('button[type="submit"]');
       if (!submitBtn) return;
       
-      // Функция проверки валидности
       const checkValidity = () => {
-        if (form.checkValidity()) {
-          submitBtn.disabled = false;
-        } else {
-          submitBtn.disabled = true;
-        }
+        submitBtn.disabled = !form.checkValidity();
       };
       
-      // Проверяем при загрузке и при любом изменении
       checkValidity();
       form.addEventListener('input', checkValidity);
       form.addEventListener('change', checkValidity);
-      
-      // Также проверяем, если поля обновляются программно (например, из модалки)
-      const observer = new MutationObserver(checkValidity);
-      observer.observe(form, { attributes: true, childList: true, subtree: true });
     });
   });
 </script>

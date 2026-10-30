@@ -6,131 +6,79 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Перезаписываем employees_list.js (под новый JSON)..."
+echo "🔧 Убираем MutationObserver из скрипта валидации (чтобы не было зависания)..."
 
-cat > app/static/js/employees_list.js << 'EOF'
-(() => {
-  const tbody = document.querySelector('#employees-table tbody');
-  const createForm = document.getElementById('create-form');
-  const createDeptSelect = document.getElementById('create-dept');
-  const createPosSelect = document.getElementById('create-pos');
+python3 - << 'PYEOF'
+with open('app/templates/base.html', 'r') as f:
+    content = f.read()
 
-  async function loadEmployees() {
-    try {
-      const employees = await API.get('/api/v1/employees');
-      renderTable(employees);
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
-    }
-  }
-
-  function escapeHtml(s) {
-    return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-  }
-
-  function renderTable(employees) {
-    if (!employees.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = employees.map(e => {
-      const fio = `${e.last_name} ${e.first_name} ${e.middle_name ?? ''}`.trim();
-      return `
-      <tr data-employee-id="${e.id}">
-        <td>${escapeHtml(fio)}</td>
-        <td>${escapeHtml(e.personnel_number)}</td>
-        <td>${escapeHtml(e.department_rel?.name ?? '—')}</td>
-        <td>${escapeHtml(e.position_rel?.name ?? '—')}</td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee(${e.id}, '${escapeHtml(fio)}')" title="Удалить"><i class="bi bi-trash"></i></button>
-        </td>
-      </tr>
-      `;
-    }).join('');
-  }
-
-  async function loadDepartmentsForSelect() {
-    try {
-      const depts = await API.get('/api/v1/departments');
-      createDeptSelect.innerHTML = '<option value="">Подразделение</option>' +
-        depts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
-    } catch (err) {
-      createDeptSelect.innerHTML = '<option value="">Ошибка</option>';
-    }
-  }
-
-  async function loadPositionsForSelect(deptId) {
-    if (!deptId) {
-      createPosSelect.innerHTML = '<option value="">Сначала выберите цех</option>';
-      return;
-    }
-    try {
-      const positions = await API.get('/api/v1/positions');
-      const filtered = positions.filter(p => p.department_id === Number(deptId));
-      createPosSelect.innerHTML = '<option value="">Должность</option>' +
-        filtered.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-    } catch (err) {
-      createPosSelect.innerHTML = '<option value="">Ошибка</option>';
-    }
-  }
-
-  createDeptSelect.addEventListener('change', (e) => {
-    loadPositionsForSelect(e.target.value);
+# Находим старый скрипт валидации и заменяем его на безопасный
+old_script = '''<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Находим все формы на странице
+    const forms = document.querySelectorAll('form');
+    
+    forms.forEach(form => {
+      // Ищем кнопку submit внутри формы (или связанную)
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (!submitBtn) return;
+      
+      // Функция проверки валидности
+      const checkValidity = () => {
+        if (form.checkValidity()) {
+          submitBtn.disabled = false;
+        } else {
+          submitBtn.disabled = true;
+        }
+      };
+      
+      // Проверяем при загрузке и при любом изменении
+      checkValidity();
+      form.addEventListener('input', checkValidity);
+      form.addEventListener('change', checkValidity);
+      
+      // Также проверяем, если поля обновляются программно (например, из модалки)
+      const observer = new MutationObserver(checkValidity);
+      observer.observe(form, { attributes: true, childList: true, subtree: true });
+    });
   });
+</script>'''
 
-  createForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = FormHelper.serialize(createForm);
-    payload.department_id = Number(payload.department_id);
-    payload.position_id = Number(payload.position_id);
-    payload.ppe_sizes = []; // Обязательно для EmployeeCreate
-
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
-      await API.post('/api/v1/employees/', payload);
-      window.showToast('Сотрудник создан', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
-      createForm.reset();
-      createPosSelect.innerHTML = '<option value="">Сначала выберите цех</option>';
-      loadEmployees();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      btn.disabled = false;
-    }
+new_script = '''<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const forms = document.querySelectorAll('form');
+    
+    forms.forEach(form => {
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (!submitBtn) return;
+      
+      const checkValidity = () => {
+        submitBtn.disabled = !form.checkValidity();
+      };
+      
+      checkValidity();
+      form.addEventListener('input', checkValidity);
+      form.addEventListener('change', checkValidity);
+    });
   });
+</script>'''
 
-  window.deleteEmployee = async (id, fio) => {
-    if (!confirm(`Удалить сотрудника "${fio}"?`)) return;
-    try {
-      await API.request(`/api/v1/employees/${id}`, { method: 'DELETE' });
-      window.showToast('Сотрудник удален', 'success');
-      loadEmployees();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  };
-
-  WS.subscribe((data) => {
-    if (data.event === 'employee_updated' || data.event === 'employee_created') {
-      setTimeout(loadEmployees, 300);
-    }
-  });
-
-  loadDepartmentsForSelect();
-  loadEmployees();
-})();
-EOF
+if old_script in content:
+    content = content.replace(old_script, new_script)
+    with open('app/templates/base.html', 'w') as f:
+        f.write(content)
+    print("✅ Скрипт валидации упрощен (без MutationObserver).")
+else:
+    print("⚠️ Не удалось найти старый скрипт валидации.")
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Список сотрудников должен загрузиться."
+echo "✅ ГОТОВО! Страница /login должна перестать зависать."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: rewrite employees_list.js for new JSON structure"
+git commit -m "fix: remove MutationObserver to prevent page freeze"
