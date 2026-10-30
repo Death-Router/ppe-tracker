@@ -6,42 +6,50 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Меняем обрезку пути подразделения (многоточие в начале)..."
+echo "🔧 Увеличиваем колонку 'Подразделение' и уменьшаем 'Действия'..."
 
+# 1. Обновляем шаблон (ширина колонок)
+python3 - << 'PYEOF'
+with open('app/templates/positions/list.html', 'r') as f:
+    content = f.read()
+
+# Меняем ширину колонок: "Название" (auto), "Подразделение" (auto), "Действия" (120px)
+old_thead = '''            <tr>
+                <th>Название</th>
+                <th>Подразделение</th>
+                <th class="text-end" style="width: 120px;">Действия</th>
+            </tr>'''
+
+new_thead = '''            <tr>
+                <th style="width: 30%;">Название</th>
+                <th>Подразделение</th>
+                <th class="text-end" style="width: 100px;">Действия</th>
+            </tr>'''
+
+if old_thead in content:
+    content = content.replace(old_thead, new_thead)
+    print("✅ Ширина колонок обновлена (Название - 30%, Действия - 100px).")
+else:
+    print("⚠️ Не удалось найти заголовок таблицы.")
+
+with open('app/templates/positions/list.html', 'w') as f:
+    f.write(content)
+PYEOF
+
+# 2. Обновляем JS (увеличиваем лимит символов для пути)
 python3 - << 'PYEOF'
 with open('app/static/js/positions_list.js', 'r') as f:
     content = f.read()
 
-# 1. Добавляем функцию для обрезки строки с начала
-if 'function truncateStart' not in content:
-    func = '''
-  function truncateStart(str, maxLength) {
-    if (!str) return '';
-    if (str.length <= maxLength) return str;
-    return '...' + str.slice(-maxLength);
-  }
-'''
-    content = content.replace(
-        'function truncate(str, maxLength) {',
-        func + '\n  function truncate(str, maxLength) {'
-    )
-
-# 2. Заменяем использование truncate на truncateStart для пути подразделения
-old_render = '''      const deptPath = buildDeptPath(p.department_id, allDepartments);
-      const fullName = escapeHtml(p.name);
-      const shortName = escapeHtml(truncate(p.name, 60));
-      const shortDeptPath = escapeHtml(truncate(deptPath, 50));'''
-      
-new_render = '''      const deptPath = buildDeptPath(p.department_id, allDepartments);
-      const fullName = escapeHtml(p.name);
-      const shortName = escapeHtml(truncate(p.name, 60));
-      const shortDeptPath = escapeHtml(truncateStart(deptPath, 30));'''
+# Увеличиваем лимит символов для пути с 30 до 50
+old_render = '''      const shortDeptPath = escapeHtml(truncateStart(deptPath, 30));'''
+new_render = '''      const shortDeptPath = escapeHtml(truncateStart(deptPath, 50));'''
 
 if old_render in content:
     content = content.replace(old_render, new_render)
-    print("✅ Обрезка пути подразделения изменена (многоточие в начале).")
+    print("✅ Лимит символов для пути увеличен до 50.")
 else:
-    print("⚠️ Не удалось найти блок рендеринга. Возможно, структура изменилась.")
+    print("⚠️ Не удалось найти строку обрезки пути.")
 
 with open('app/static/js/positions_list.js', 'w') as f:
     f.write(content)
@@ -51,9 +59,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Бейджи теперь обрезаются с начала."
+echo "✅ ГОТОВО! Колонка подразделения стала шире, кнопки ужаты."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: truncate department path from start in positions list"
+git commit -m "ui: expand department column, shrink actions column in positions list"
