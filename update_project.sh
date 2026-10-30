@@ -6,42 +6,149 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Приводим кнопки массовых операций к размеру кнопок в таблице..."
+echo "🔧 Переделываем шапку списка СИЗ (заголовок, кнопки, фильтры)..."
 
-python3 - << 'PYEOF'
-with open('app/templates/ppe_items/list.html', 'r') as f:
-    content = f.read()
+cat > app/templates/ppe_items/list.html << 'EOF'
+{% extends "base.html" %}
+{% block content %}
+<!-- Заголовок и кнопки -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex align-items-center gap-3">
+        <h1 class="h3 mb-0">Наименования СИЗ</h1>
+        <span id="selected-count" class="badge bg-secondary d-none">Выбрано: <span>0</span></span>
+    </div>
+    <div class="d-flex align-items-center gap-2" style="width: 120px; justify-content: flex-end;">
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
+        <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" disabled onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
+        <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" disabled onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
+    </div>
+</div>
 
-# Заменяем классы у кнопок массовых операций на точно такие же, как в таблице
-old_edit_btn = '<button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-2" disabled onclick="openBulkEditModal()" title="Редактировать выбранные" style="height: 31px;"><i class="bi bi-pencil"></i></button>'
-new_edit_btn = '<button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" disabled onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>'
+<!-- Панель фильтров -->
+<div class="d-flex align-items-center gap-2 mb-3">
+    <div class="input-group" style="width: 300px;">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+    </div>
+    <select class="form-select" id="filter-function" style="width: auto;">
+        <option value="">Все функции</option>
+    </select>
+    <select class="form-select" id="filter-size-group" style="width: auto;">
+        <option value="">Все размерные группы</option>
+    </select>
+</div>
 
-old_del_btn = '<button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-2" disabled onclick="bulkDelete()" title="Удалить выбранные" style="height: 31px;"><i class="bi bi-trash"></i></button>'
-new_del_btn = '<button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" disabled onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>'
+<!-- Таблица -->
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" id="items-table">
+            <thead class="bg-brand-orange">
+            <tr>
+                <th style="width: 40px;"><input type="checkbox" id="select-all"></th>
+                <th>Наименование</th>
+                <th style="width: 200px;">Функция / Группа</th>
+                <th class="text-end" style="width: 120px;">Действия</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr><td colspan="4" class="text-center text-muted py-4">Загрузка…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
-if old_edit_btn in content:
-    content = content.replace(old_edit_btn, new_edit_btn)
-    print("✅ Кнопка 'Редактировать' уменьшена.")
-else:
-    print("⚠️ Не удалось найти кнопку 'Редактировать' с ожидаемыми классами.")
+<!-- Модалка создания -->
+<div class="modal fade" id="createModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="create-form">
+        <div class="modal-header">
+          <h5 class="modal-title">Новое наименование СИЗ</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Наименование <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="name" required maxlength="255">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Функция СИЗ</label>
+            <select class="form-select" name="function_id" id="create-function">
+                <option value="">Не указана</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Размерная группа</label>
+            <select class="form-select" name="size_group_id" id="create-size-group">
+                <option value="">Не указана</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Единица измерения</label>
+            <select class="form-select" name="unit_id" id="create-unit">
+                <option value="">Не указана</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
-if old_del_btn in content:
-    content = content.replace(old_del_btn, new_del_btn)
-    print("✅ Кнопка 'Удалить' уменьшена.")
-else:
-    print("⚠️ Не удалось найти кнопку 'Удалить' с ожидаемыми классами.")
+<!-- Модалка массового редактирования -->
+<div class="modal fade" id="bulkEditModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Массовое редактирование (выбрано <span id="bulk-count">0</span>)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Оставьте поле пустым, чтобы не изменять его.</p>
+        <div class="mb-3">
+            <label class="form-label">Функция СИЗ</label>
+            <select class="form-select" id="bulk-function">
+                <option value="">Не изменять</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Размерная группа</label>
+            <select class="form-select" id="bulk-size-group">
+                <option value="">Не изменять</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Единица измерения</label>
+            <select class="form-select" id="bulk-unit">
+                <option value="">Не изменять</option>
+            </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary" onclick="applyBulkEdit()">Применить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-with open('app/templates/ppe_items/list.html', 'w') as f:
-    f.write(content)
-PYEOF
+{% block scripts %}
+<script src="{{ url_for('static', path='js/ppe_items_list.js') }}"></script>
+{% endblock %}
+EOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Размеры кнопок должны совпадать."
+echo "✅ ГОТОВО! Шапка списка СИЗ переделана."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: make bulk action buttons same size as table buttons"
+git commit -m "ui: restructure ppe_items list header (selected count, bulk buttons, filters)"

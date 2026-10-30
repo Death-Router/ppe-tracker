@@ -1,32 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
+<!-- Заголовок и кнопки -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Наименования СИЗ</h1>
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
-</div>
-
-<!-- Панель фильтров и массовых действий -->
-<div class="d-flex align-items-center gap-2 mb-3">
-    <div class="input-group" style="min-width: 200px; max-width: 300px;">
-        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+    <div class="d-flex align-items-center gap-3">
+        <h1 class="h3 mb-0">Наименования СИЗ</h1>
+        <span id="selected-count" class="badge bg-secondary d-none">Выбрано: <span>0</span></span>
     </div>
-    
-    <select class="form-select" id="filter-function" style="width: auto;">
-        <option value="">Все функции</option>
-    </select>
-    
-    <select class="form-select" id="filter-size-group" style="width: auto;">
-        <option value="">Все размерные группы</option>
-    </select>
-
-    <div class="ms-auto d-flex align-items-center gap-2">
-        <span id="selected-count" class="fw-bold me-2 d-none">Выбрано: <span>0</span></span>
+    <div class="d-flex align-items-center gap-2" style="width: 120px; justify-content: flex-end;">
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
         <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" disabled onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
         <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" disabled onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
     </div>
 </div>
 
+<!-- Панель фильтров -->
+<div class="d-flex align-items-center gap-2 mb-3">
+    <div class="input-group" style="width: 300px;">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+    </div>
+    <select class="form-select" id="filter-function" style="width: auto;">
+        <option value="">Все функции</option>
+    </select>
+    <select class="form-select" id="filter-size-group" style="width: auto;">
+        <option value="">Все размерные группы</option>
+    </select>
+</div>
+
+<!-- Таблица -->
 <div class="card shadow-sm">
     <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0" id="items-table">
@@ -34,8 +35,8 @@
             <tr>
                 <th style="width: 40px;"><input type="checkbox" id="select-all"></th>
                 <th>Наименование</th>
-                <th>Функция / Группа</th>
-                <th class="text-end">Действия</th>
+                <th style="width: 200px;">Функция / Группа</th>
+                <th class="text-end" style="width: 120px;">Действия</th>
             </tr>
             </thead>
             <tbody>
