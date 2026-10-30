@@ -6,231 +6,183 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Перезаписываем main.py с правильным синтаксисом..."
+echo "🔧 Исправляем employees.py (убираем ссылки на PpeItem.category)..."
 
-cat > app/main.py << 'EOF'
-from pathlib import Path
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
+cat > app/api/v1/endpoints/employees.py << 'EOF'
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.exc import StaleDataError
 
-from app.api.v1.endpoints import (
-    employees, ppe_categories, ppe_items, ws, departments, positions,
-    position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
-    ppe_functions, ppe_size_groups
-)
+from app.api.v1.endpoints.ws import manager
+from app.db.session import get_db
+from app.models.employee import Employee
+from app.models.employee_ppe_size import EmployeePpeSize
+from app.models.employee_ppe_issue import EmployeePpeIssue
+from app.models.ppe_item import PpeItem
+from app.models.ppe_category import PpeCategory  # пока оставляем для размеров
+from app.models.user import User
+from app.core.deps import get_current_active_user
+from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
 
-BASE_DIR = Path(__file__).resolve().parent
-
-app = FastAPI(title="PPE Tracker API")
-app.add_middleware(SessionMiddleware, secret_key="super-secret-key-change-in-production")
-
-# --- Шаблоны ---
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-
-def format_date(value):
-    return value.strftime("%d.%m.%Y") if value else ""
-
-templates.env.filters["ru_date"] = format_date
-
-# --- Статика ---
-app.mount(
-    "/static",
-    StaticFiles(directory=str(BASE_DIR / "static")),
-    name="static",
-)
-
-# --- HTTP-роутеры ---
-app.include_router(employees.router, prefix="/api/v1")
-app.include_router(ppe_categories.router, prefix="/api/v1")
-app.include_router(ppe_items.router, prefix="/api/v1")
-app.include_router(departments.router, prefix="/api/v1")
-app.include_router(positions.router, prefix="/api/v1")
-app.include_router(position_ppe_norms.router, prefix="/api/v1")
-app.include_router(employee_ppe_issues.router, prefix="/api/v1")
-app.include_router(ppe_sizes.router, prefix="/api/v1")
-app.include_router(export.router, prefix="/api/v1")
-app.include_router(import_data.router, prefix="/api/v1")
-app.include_router(auth.router, prefix="/api/v1")
-app.include_router(units.router, prefix="/api/v1")
-app.include_router(ppe_functions.router, prefix="/api/v1")
-app.include_router(ppe_size_groups.router, prefix="/api/v1")
-
-# --- WebSocket-роутер ---
-app.include_router(ws.router)
+router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
 
-def check_auth(request: Request):
-    """Проверяет наличие сессии. Если нет — возвращает RedirectResponse."""
-    if not request.session.get("user_id"):
-        return RedirectResponse(url="/login", status_code=303)
-    return None
+def employee_options():
+    return [
+        # Размеры сотрудника (привязаны к категориям)
+        selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.category),
+        # Выдачи (привязаны к СИЗ, у которых теперь function и size_group)
+        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
+        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group),
+        # Подразделение и должность
+        selectinload(Employee.department_rel),
+        selectinload(Employee.position_rel)
+    ]
 
 
-# --- HTML-страницы ---
-@app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="login.html",
-        context={"title": "Вход"},
+async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Employee:
+    result = await db.execute(
+        select(Employee).where(Employee.id == employee_id).options(*employee_options())
     )
+    return result.scalar_one()
 
-@app.get("/employees", response_class=HTMLResponse)
-async def employees_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="employees/list.html",
-        context={"title": "Сотрудники"},
-    )
 
-@app.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
-async def employee_edit_page(request: Request, employee_id: int):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="employees/edit.html",
-        context={"title": "Редактирование", "employee_id": employee_id},
-    )
+@router.post("/", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
+async def create_employee(
+    employee_in: EmployeeCreate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    if current_user.role == "safety_officer":
+        if current_user.department_id != employee_in.department_id:
+            raise HTTPException(status_code=403, detail="Вы можете создавать сотрудников только в своем подразделении")
 
-@app.get("/ppe", response_class=HTMLResponse)
-async def ppe_tabs_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe/tabs.html",
-        context={"title": "Управление СИЗ"},
-    )
+    result = await db.execute(select(Employee).where(Employee.personnel_number == employee_in.personnel_number))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Сотрудник с таким табельным номером уже существует")
 
-@app.get("/structure", response_class=HTMLResponse)
-async def structure_tabs_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="structure/tabs.html",
-        context={"title": "Структура"},
-    )
+    employee_data = employee_in.model_dump(exclude={"ppe_sizes"})
+    db_employee = Employee(**employee_data)
+    db.add(db_employee)
+    await db.flush()
 
-@app.get("/ppe-categories", response_class=HTMLResponse)
-async def ppe_categories_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_categories/list.html",
-        context={"title": "Категории СИЗ"},
-    )
+    if employee_in.ppe_sizes:
+        cat_ids = [size.category_id for size in employee_in.ppe_sizes]
+        cats_result = await db.execute(select(PpeCategory.id).where(PpeCategory.id.in_(cat_ids)))
+        if set(cat_ids) - set(cats_result.scalars().all()):
+            await db.rollback()
+            raise HTTPException(status_code=404, detail="Категории СИЗ не найдены")
+        for size_data in employee_in.ppe_sizes:
+            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
 
-@app.get("/ppe-categories/{category_id}/edit", response_class=HTMLResponse)
-async def ppe_category_edit_page(request: Request, category_id: int):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_categories/edit.html",
-        context={"title": "Редактирование категории", "category_id": category_id},
-    )
+    await db.commit()
 
-@app.get("/ppe-items", response_class=HTMLResponse)
-async def ppe_items_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_items/list.html",
-        context={"title": "Наименования СИЗ"},
-    )
+    try:
+        await manager.broadcast_to_employee(0, {"event": "employee_created", "employee_id": db_employee.id})
+    except Exception:
+        pass
 
-@app.get("/ppe-items/{item_id}/edit", response_class=HTMLResponse)
-async def ppe_item_edit_page(request: Request, item_id: int):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_items/edit.html",
-        context={"title": "Редактирование наименования", "item_id": item_id},
-    )
+    return await get_employee_with_relations(db, db_employee.id)
 
-@app.get("/departments", response_class=HTMLResponse)
-async def departments_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="departments/list.html",
-        context={"title": "Подразделения"},
-    )
 
-@app.get("/departments/{dept_id}/edit", response_class=HTMLResponse)
-async def department_edit_page(request: Request, dept_id: int):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="departments/edit.html",
-        context={"title": "Редактирование подразделения", "dept_id": dept_id},
-    )
+@router.get("/", response_model=list[EmployeeRead])
+async def get_employees(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    query = select(Employee).options(*employee_options())
+    
+    if current_user.role == "safety_officer" and current_user.department_id:
+        query = query.where(Employee.department_id == current_user.department_id)
 
-@app.get("/positions", response_class=HTMLResponse)
-async def positions_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="positions/list.html",
-        context={"title": "Должности"},
-    )
+    result = await db.execute(query)
+    return result.scalars().all()
 
-@app.get("/positions/{pos_id}/edit", response_class=HTMLResponse)
-async def position_edit_page(request: Request, pos_id: int):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="positions/edit.html",
-        context={"title": "Редактирование должности", "pos_id": pos_id},
-    )
 
-@app.get("/norms", response_class=HTMLResponse)
-async def norms_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="norms/list.html",
-        context={"title": "Нормы выдачи СИЗ"},
-    )
+@router.get("/{employee_id}", response_model=EmployeeRead)
+async def get_employee(
+    employee_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    employee = await get_employee_with_relations(db, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    
+    if current_user.role == "safety_officer" and current_user.department_id != employee.department_id:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
 
-@app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="settings.html",
-        context={"title": "Настройки"},
-    )
+    return employee
 
-@app.get("/units", response_class=HTMLResponse)
-async def units_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="units/list.html",
-        context={"title": "Единицы измерения"},
-    )
 
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/employees")
+@router.put("/{employee_id}", response_model=EmployeeRead)
+async def update_employee(
+    employee_id: int, 
+    employee_in: EmployeeUpdate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    db_employee = result.scalar_one_or_none()
+    if not db_employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    if current_user.role == "safety_officer" and current_user.department_id != db_employee.department_id:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    if db_employee.version != employee_in.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
+
+    update_data = employee_in.model_dump(exclude_unset=True, exclude={"version", "ppe_sizes"})
+    for field, value in update_data.items():
+        setattr(db_employee, field, value)
+
+    if employee_in.ppe_sizes is not None:
+        await db.execute(delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id))
+        for size_data in employee_in.ppe_sizes:
+            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+
+    try:
+        await db.commit()
+    except StaleDataError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Конфликт версий")
+
+    try:
+        await manager.broadcast_to_employee(employee_id, {"event": "employee_updated", "employee_id": employee_id})
+    except Exception:
+        pass
+
+    return await get_employee_with_relations(db, employee_id)
+
+
+@router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_employee(
+    employee_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    db_employee = result.scalar_one_or_none()
+    if not db_employee:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+
+    if current_user.role == "safety_officer" and current_user.department_id != db_employee.department_id:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    try:
+        await db.delete(db_employee)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка удаления")
+
+    try:
+        await manager.broadcast_to_employee(0, {"event": "employee_updated", "employee_id": employee_id})
+    except Exception:
+        pass
 EOF
 
 echo "🚀 Перезапускаем контейнер..."
@@ -240,9 +192,9 @@ sleep 3
 echo "🔄 Проверяем логи..."
 docker compose logs api --tail 10
 
-echo "✅ ГОТОВО! main.py исправлен."
+echo "✅ ГОТОВО! Список сотрудников должен загрузиться."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: correct main.py syntax after adding new routers"
+git commit -m "fix: update employees API for new ppe_items structure (function/size_group)"

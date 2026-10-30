@@ -10,9 +10,9 @@ from app.models.employee import Employee
 from app.models.employee_ppe_size import EmployeePpeSize
 from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.ppe_item import PpeItem
-from app.models.ppe_category import PpeCategory
+from app.models.ppe_category import PpeCategory  # пока оставляем для размеров
 from app.models.user import User
-from app.core.deps import get_current_active_user, get_current_user
+from app.core.deps import get_current_active_user
 from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
 
 router = APIRouter(prefix="/employees", tags=["Сотрудники"])
@@ -20,8 +20,12 @@ router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
 def employee_options():
     return [
+        # Размеры сотрудника (привязаны к категориям)
         selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.category),
-        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.category),
+        # Выдачи (привязаны к СИЗ, у которых теперь function и size_group)
+        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
+        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group),
+        # Подразделение и должность
         selectinload(Employee.department_rel),
         selectinload(Employee.position_rel)
     ]
@@ -40,7 +44,6 @@ async def create_employee(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # Проверка прав: safety_officer может создавать только в своем подразделении
     if current_user.role == "safety_officer":
         if current_user.department_id != employee_in.department_id:
             raise HTTPException(status_code=403, detail="Вы можете создавать сотрудников только в своем подразделении")
@@ -80,16 +83,8 @@ async def get_employees(
 ):
     query = select(Employee).options(*employee_options())
     
-    # Фильтрация для safety_officer
     if current_user.role == "safety_officer" and current_user.department_id:
-        if current_user.include_subdepartments:
-            # Если включены дочерние подразделения, берем все сотрудники, чей department_id входит в список доступных
-            # Пока реализуем простую версию: только его подразделение. 
-            # Для иерархии нужно рекурсивно собрать все дочерние ID.
-            # (Упрощенно: только его department_id)
-            query = query.where(Employee.department_id == current_user.department_id)
-        else:
-            query = query.where(Employee.department_id == current_user.department_id)
+        query = query.where(Employee.department_id == current_user.department_id)
 
     result = await db.execute(query)
     return result.scalars().all()
@@ -105,7 +100,6 @@ async def get_employee(
     if not employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
     
-    # Проверка прав на просмотр
     if current_user.role == "safety_officer" and current_user.department_id != employee.department_id:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
@@ -124,7 +118,6 @@ async def update_employee(
     if not db_employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
-    # Проверка прав на редактирование
     if current_user.role == "safety_officer" and current_user.department_id != db_employee.department_id:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
