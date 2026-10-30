@@ -6,22 +6,66 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Принудительно переименовываем колонку через SQL..."
+echo "🔧 Обновляем схему employee.py (заменяем category_id на size_group_id)..."
 
-# Выполняем SQL-запрос напрямую в базе
-docker compose exec -T db psql -U ppe -d ppe_db << 'EOF'
--- Переименовываем колонку
-ALTER TABLE employee_ppe_sizes RENAME COLUMN category_id TO size_group_id;
+cat > app/schemas/employee.py << 'EOF'
+from datetime import date
+from pydantic import BaseModel, ConfigDict, Field
+from app.schemas.ppe_item import PpeItemRead
+from app.schemas.ppe_function import PpeFunctionRead
+from app.schemas.ppe_size_group import PpeSizeGroupRead
+from app.schemas.department import DepartmentRead
+from app.schemas.position import PositionRead
 
--- Удаляем старый внешний ключ (если есть) и создаем новый
-ALTER TABLE employee_ppe_sizes DROP CONSTRAINT IF EXISTS employee_ppe_sizes_category_id_fkey;
-ALTER TABLE employee_ppe_sizes ADD CONSTRAINT employee_ppe_sizes_size_group_id_fkey 
-    FOREIGN KEY (size_group_id) REFERENCES ppe_size_groups(id) ON DELETE CASCADE;
+# --- Схемы для размеров сотрудника (привязаны к размерным группам) ---
+class EmployeePpeSizeCreate(BaseModel):
+    size_group_id: int = Field(..., description="ID размерной группы")
+    size_value: str = Field(..., max_length=50, description="Размер")
 
--- Удаляем старый уникальный ключ и создаем новый
-ALTER TABLE employee_ppe_sizes DROP CONSTRAINT IF EXISTS uq_employee_category_size;
-ALTER TABLE employee_ppe_sizes ADD CONSTRAINT uq_employee_size_group 
-    UNIQUE (employee_id, size_group_id);
+class EmployeePpeSizeRead(BaseModel):
+    size_group_id: int
+    size_value: str
+    size_group: PpeSizeGroupRead | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+# --- Схемы для Сотрудника ---
+class EmployeeBase(BaseModel):
+    personnel_number: str = Field(..., max_length=20)
+    last_name: str = Field(..., max_length=100)
+    first_name: str = Field(..., max_length=100)
+    middle_name: str | None = Field(None, max_length=100)
+    department_id: int | None = None
+    position_id: int | None = None
+    hire_date: date | None = None
+    position_change_date: date | None = None
+    gender: str | None = Field(None, pattern="^[МЖ]$")
+    height: str | None = Field(None, max_length=10)
+
+class EmployeeCreate(EmployeeBase):
+    middle_name: str = Field(..., max_length=100)
+    department_id: int
+    position_id: int
+    hire_date: date
+    gender: str = Field(..., pattern="^[МЖ]$")
+    height: str = Field(..., max_length=10)
+    ppe_sizes: list[EmployeePpeSizeCreate] = []
+
+class EmployeeRead(EmployeeBase):
+    id: int
+    version: int
+    ppe_sizes: list[EmployeePpeSizeRead] = []
+    department_rel: DepartmentRead | None = None
+    position_rel: PositionRead | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+class EmployeeUpdate(EmployeeBase):
+    personnel_number: str | None = None
+    last_name: str | None = None
+    first_name: str | None = None
+    department_id: int | None = None
+    position_id: int | None = None
+    version: int = Field(..., description="Текущая версия записи")
+    ppe_sizes: list[EmployeePpeSizeCreate] | None = None
 EOF
 
 echo "🚀 Перезапускаем контейнер..."
@@ -31,9 +75,9 @@ sleep 3
 echo "🔄 Проверяем логи..."
 docker compose logs api --tail 10
 
-echo "✅ ГОТОВО! Колонка переименована через SQL."
+echo "✅ ГОТОВО! Схема обновлена."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: rename category_id to size_group_id via SQL"
+git commit -m "fix: update employee schemas for size_group_id"
