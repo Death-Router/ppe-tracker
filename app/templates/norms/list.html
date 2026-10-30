@@ -60,9 +60,15 @@
         </div>
         <div class="modal-body">
             <div class="mb-3">
+                <label class="form-label">Подразделение <span class="text-danger">*</span></label>
+                <select class="form-select" id="modal-department" required>
+                    <option value="">Выберите подразделение...</option>
+                </select>
+            </div>
+            <div class="mb-3">
                 <label class="form-label">Должность <span class="text-danger">*</span></label>
                 <select class="form-select" name="position_id" id="modal-position" required>
-                    <option value="">Загрузка...</option>
+                    <option value="">Сначала выберите подразделение</option>
                 </select>
             </div>
             <div class="mb-3">

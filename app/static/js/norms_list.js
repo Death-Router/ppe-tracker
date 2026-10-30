@@ -8,6 +8,7 @@
   const modalElement = document.getElementById('createNormModal');
   const modalTitle = modalElement.querySelector('.modal-title');
   const submitBtn = modalElement.querySelector('button[type="submit"]');
+  const modalDepartment = document.getElementById('modal-department');
   const modalPosition = document.getElementById('modal-position');
   const itemInput = document.getElementById('norm-item-input');
   const itemIdInput = document.getElementById('norm-item-id');
@@ -70,11 +71,32 @@
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   // Загрузка данных
+  
+  function buildHierarchy(depts, parentId = null, level = 0) {
+    let result = [];
+    const filtered = depts.filter(d => d.parent_id === parentId);
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    for (const dept of filtered) {
+      result.push({ ...dept, level });
+      const children = buildHierarchy(depts, dept.id, level + 1);
+      result = result.concat(children);
+    }
+    return result;
+  }
+
   async function loadData() {
     try {
       allNorms = await API.get('/api/v1/position_ppe_norms');
       allPositions = await API.get('/api/v1/positions');
       allPpeItems = await API.get('/api/v1/ppe_items');
+      const allDepartments = await API.get('/api/v1/departments');
+      
+      // Заполняем select подразделений в модалке (с иерархией)
+      if (modalDepartment) {
+        const hierarchy = buildHierarchy(allDepartments);
+        modalDepartment.innerHTML = '<option value="">Выберите подразделение...</option>' +
+          hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');
+      }
       
       // Заполняем фильтр должностей
       if (filterPosition) {
@@ -207,6 +229,28 @@
     }
   };
 
+
+  // Обработчик смены подразделения в модалке
+  if (modalDepartment) {
+    modalDepartment.addEventListener('change', async (e) => {
+      const deptId = Number(e.target.value);
+      if (!deptId) {
+        modalPosition.innerHTML = '<option value="">Сначала выберите подразделение</option>';
+        return;
+      }
+      
+      try {
+        const positions = await API.get('/api/v1/positions');
+        const filtered = positions.filter(p => p.department_id === deptId);
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        modalPosition.innerHTML = '<option value="">Выберите должность...</option>' +
+          filtered.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+      } catch (err) {
+        modalPosition.innerHTML = '<option value="">Ошибка загрузки</option>';
+      }
+    });
+  }
+
   // Открытие модалки для создания
   window.openCreateModal = () => {
     editingNormId = null;
@@ -215,7 +259,8 @@
     createForm.reset();
     itemInput.value = '';
     itemIdInput.value = '';
-    modalPosition.value = '';
+    modalDepartment.value = '';
+    modalPosition.innerHTML = '<option value="">Сначала выберите подразделение</option>';
   };
 
   // Редактирование нормы
@@ -226,7 +271,20 @@
       modalTitle.textContent = 'Редактирование нормы';
       submitBtn.textContent = 'Сохранить';
 
-      modalPosition.value = norm.position_id;
+      // Находим должность и её подразделение
+      const pos = allPositions.find(p => p.id === norm.position_id);
+      if (pos && pos.department_id && modalDepartment) {
+        modalDepartment.value = pos.department_id;
+        // Загружаем должности для этого подразделения
+        const positions = await API.get('/api/v1/positions');
+        const filtered = positions.filter(p => p.department_id === pos.department_id);
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        modalPosition.innerHTML = '<option value="">Выберите должность...</option>' +
+          filtered.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+        modalPosition.value = norm.position_id;
+      } else if (modalPosition) {
+        modalPosition.value = norm.position_id;
+      }
       
       const item = allPpeItems.find(i => i.id === norm.ppe_item_id);
       if (item) {
