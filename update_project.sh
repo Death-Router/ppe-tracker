@@ -6,149 +6,118 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Проверяем id в edit.html и приводим к единому виду..."
+echo "📝 Обновляем шаблон карточки сотрудника (заголовок таблицы)..."
 
 python3 - << 'PYEOF'
-with open('app/templates/ppe_items/edit.html', 'r') as f:
+with open('app/templates/employees/edit.html', 'r') as f:
     content = f.read()
 
-# Проверяем, какие id есть в HTML
-import re
-ids = re.findall(r'id="([^"]+)"', content)
-print("🔍 Найденные id в edit.html:", ids)
+# Меняем заголовок таблицы размеров
+content = content.replace(
+    '<th>Категория СИЗ</th>',
+    '<th>Размерная группа</th>'
+)
 
-# Если нет function_id, size_group_id, unit_id — добавляем/заменяем
-# Ищем поля по name и заменяем id
-replacements = [
-    ('name="function_id"', 'id="function_id"'),
-    ('name="size_group_id"', 'id="size_group_id"'),
-    ('name="unit_id"', 'id="unit_id"'),
-]
+# Меняем заголовок в модалке выдачи (если там есть "Размер (опционально)")
+# (оставляем как есть, это не критично)
 
-for name_attr, id_attr in replacements:
-    if id_attr not in content and name_attr in content:
-        # Добавляем id к элементу с name
-        content = re.sub(r'(<select[^>]*' + re.escape(name_attr) + r'[^>]*)(>)', r'\1 ' + id_attr + r'\2', content)
-        print(f"✅ Добавлен {id_attr}")
-
-with open('app/templates/ppe_items/edit.html', 'w') as f:
+with open('app/templates/employees/edit.html', 'w') as f:
     f.write(content)
+print("✅ Заголовок таблицы обновлен.")
 PYEOF
 
-echo "🔧 Упрощаем JS (ищем элементы по name, если id не найден)..."
+echo "📝 Обновляем JS карточки сотрудника (размерные группы)..."
 
-cat > app/static/js/ppe_item_edit.js << 'EOF'
-(() => {
-  console.log('🚀 ppe_item_edit.js загружен');
-  
-  const itemId = window.ITEM_ID;
-  const form = document.getElementById('item-form');
-  const btnSubmit = document.getElementById('btn-submit');
-  const conflictAlert = document.getElementById('conflict-alert');
-  const versionInput = document.getElementById('version');
+python3 - << 'PYEOF'
+with open('app/static/js/employee_edit.js', 'r') as f:
+    content = f.read()
 
-  // Ищем элементы по name, если id не найден
-  const functionSelect = document.getElementById('function_id') || form.elements['function_id'];
-  const sizeGroupSelect = document.getElementById('size_group_id') || form.elements['size_group_id'];
-  const unitSelect = document.getElementById('unit_id') || form.elements['unit_id'];
+# 1. Заменяем allCategories на allSizeGroups
+content = content.replace('let allCategories = [];', 'let allSizeGroups = [];')
 
-  console.log('🔍 functionSelect:', functionSelect);
-  console.log('🔍 sizeGroupSelect:', sizeGroupSelect);
-  console.log('🔍 unitSelect:', unitSelect);
+# 2. В loadCategories заменяем на loadSizeGroups
+content = content.replace(
+    '''  async function loadCategories() {
+    allCategories = await API.get('/api/v1/ppe_categories');
+  }''',
+    '''  async function loadSizeGroups() {
+    allSizeGroups = await API.get('/api/v1/ppe_size_groups');
+  }'''
+)
 
-  if (!form || !functionSelect || !sizeGroupSelect || !unitSelect) {
-    console.error('❌ Один или несколько элементов не найдены!');
-    return;
-  }
+# 3. В createSizeRow заменяем categoryOptions на sizeGroupOptions
+content = content.replace(
+    '''    const categoryOptions = allCategories.map(c => 
+      `<option value="${c.id}" ${c.id === Number(categoryId) ? 'selected' : ''}>${c.name}</option>`
+    ).join('');''',
+    '''    const sizeGroupOptions = allSizeGroups.map(g => 
+      `<option value="${g.id}" ${g.id === Number(categoryId) ? 'selected' : ''}>${g.name}</option>`
+    ).join('');'''
+)
 
-  let isDirty = false;
-  form.addEventListener('input', () => { isDirty = true; });
+# 4. В HTML строки заменяем category-select на size-group-select и categoryOptions на sizeGroupOptions
+content = content.replace(
+    '''        <select class="form-select form-select-sm category-select" required>
+          <option value="">Выберите категорию...</option>
+          ${categoryOptions}
+        </select>''',
+    '''        <select class="form-select form-select-sm size-group-select" required>
+          <option value="">Выберите размерную группу...</option>
+          ${sizeGroupOptions}
+        </select>'''
+)
 
-  async function loadSelects() {
-    try {
-      const functions = await API.get('/api/v1/ppe_functions');
-      functionSelect.innerHTML = '<option value="">Не указана</option>' +
-        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+# 5. Заменяем обработчик изменения категории на размерную группу
+content = content.replace(
+    '''    const catSelect = tr.querySelector('.category-select');''',
+    '''    const catSelect = tr.querySelector('.size-group-select');'''
+)
 
-      const groups = await API.get('/api/v1/ppe_size_groups');
-      sizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
-        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+# 6. В loadEmployee заменяем category_id на size_group_id
+content = content.replace(
+    '''          const tr = await createSizeRow(size.category_id, size.size_value);''',
+    '''          const tr = await createSizeRow(size.size_group_id, size.size_value);'''
+)
 
-      const units = await API.get('/api/v1/units');
-      unitSelect.innerHTML = '<option value="">Не указана</option>' +
-        units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
-    } catch (err) {
-      console.error('Ошибка загрузки справочников:', err);
-    }
-  }
+# 7. В submitForm (сохранение) заменяем category_id на size_group_id
+content = content.replace(
+    '''        ppeSizes.push({ category_id: categoryId, size_value: sizeVal });''',
+    '''        ppeSizes.push({ size_group_id: categoryId, size_value: sizeVal });'''
+)
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
+# 8. В инициализации заменяем loadCategories на loadSizeGroups
+content = content.replace(
+    '''  loadDepartments()
+    .then(loadCategories)
+    .then(loadAllPpeItems)
+    .then(() => loadEmployee());''',
+    '''  loadDepartments()
+    .then(loadSizeGroups)
+    .then(loadAllPpeItems)
+    .then(() => loadEmployee());'''
+)
 
-  async function loadItem(isWsUpdate = false) {
-    try {
-      const item = await API.get(`/api/v1/ppe_items/${itemId}`);
-      if (isWsUpdate && isDirty) {
-        window.showToast('Данные были изменены другим пользователем.', 'warning');
-        versionInput.value = item.version ?? '';
-        return;
-      }
+# 9. В getSizesForCategory заменяем запрос к ppe_sizes (category_id -> size_group_id)
+content = content.replace(
+    '''      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);''',
+    '''      const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${categoryId}`);'''
+)
 
-      if (form.elements['name']) form.elements['name'].value = item.name ?? '';
-      if (functionSelect) functionSelect.value = item.function_id ?? '';
-      if (sizeGroupSelect) sizeGroupSelect.value = item.size_group_id ?? '';
-      if (unitSelect) unitSelect.value = item.unit_id ?? '';
-      if (versionInput) versionInput.value = item.version ?? '';
+# 10. В fillIssueSizes заменяем categoryId на sizeGroupId (но параметр можно оставить)
+# (там уже используется categoryId, но это не критично, так как мы передаем size_group_id)
 
-      isDirty = false;
-      if (isWsUpdate) window.showToast('Карточка обновлена', 'info');
-    } catch (err) {
-      window.showToast(`Ошибка загрузки: ${err.message}`, 'danger');
-    }
-  }
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    btnSubmit.disabled = true;
-
-    const payload = FormHelper.serialize(form);
-    payload.function_id = payload.function_id ? Number(payload.function_id) : null;
-    payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
-    payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
-
-    try {
-      const updated = await API.put(`/api/v1/ppe_items/${itemId}`, payload);
-      if (updated?.version != null) versionInput.value = updated.version;
-      isDirty = false;
-      window.showToast('Изменения сохранены', 'success');
-    } catch (err) {
-      if (err.isConflict) {
-        conflictAlert.classList.remove('d-none');
-        conflictAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      }
-    } finally {
-      btnSubmit.disabled = false;
-    }
-  });
-
-  WS.subscribe((data) => {
-    if (data.event === 'item_updated' && data.item_id === itemId) {
-      loadItem(true);
-    }
-  });
-
-  loadSelects().then(() => loadItem());
-})();
-EOF
+with open('app/static/js/employee_edit.js', 'w') as f:
+    f.write(content)
+print("✅ JS карточки сотрудника обновлен (size_group_id).")
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Теперь JS ищет элементы по name (если id не найден)."
+echo "✅ ГОТОВО! Карточка сотрудника теперь использует размерные группы."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: use name fallback for selects in ppe_item_edit.js"
+git commit -m "ui: update employee card to use size_groups instead of categories"

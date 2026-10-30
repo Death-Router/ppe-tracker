@@ -1,5 +1,5 @@
 (() => {
-  console.log('🚀 ppe_item_edit.js загружен');
+  console.log('🚀 ppe_item_edit.js загружен (версия с отладкой)');
   
   const itemId = window.ITEM_ID;
   const form = document.getElementById('item-form');
@@ -7,17 +7,21 @@
   const conflictAlert = document.getElementById('conflict-alert');
   const versionInput = document.getElementById('version');
 
-  // Ищем элементы по name, если id не найден
-  const functionSelect = document.getElementById('function_id') || form.elements['function_id'];
-  const sizeGroupSelect = document.getElementById('size_group_id') || form.elements['size_group_id'];
-  const unitSelect = document.getElementById('unit_id') || form.elements['unit_id'];
+  const functionSelect = document.querySelector('select[name="function_id"]');
+  const sizeGroupSelect = document.querySelector('select[name="size_group_id"]');
+  const unitSelect = document.querySelector('select[name="unit_id"]');
 
-  console.log('🔍 functionSelect:', functionSelect);
-  console.log('🔍 sizeGroupSelect:', sizeGroupSelect);
-  console.log('🔍 unitSelect:', unitSelect);
+  console.log('form:', form);
+  console.log('functionSelect:', functionSelect);
+  console.log('sizeGroupSelect:', sizeGroupSelect);
+  console.log('unitSelect:', unitSelect);
 
-  if (!form || !functionSelect || !sizeGroupSelect || !unitSelect) {
-    console.error('❌ Один или несколько элементов не найдены!');
+  if (!functionSelect) console.error('❌ functionSelect не найден!');
+  if (!sizeGroupSelect) console.error('❌ sizeGroupSelect не найден!');
+  if (!unitSelect) console.error('❌ unitSelect не найден!');
+
+  if (!form) {
+    console.error('❌ Форма item-form не найдена!');
     return;
   }
 
@@ -27,16 +31,22 @@
   async function loadSelects() {
     try {
       const functions = await API.get('/api/v1/ppe_functions');
-      functionSelect.innerHTML = '<option value="">Не указана</option>' +
-        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+      if (functionSelect) {
+        functionSelect.innerHTML = '<option value="">Не указана</option>' +
+          functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+      }
 
       const groups = await API.get('/api/v1/ppe_size_groups');
-      sizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
-        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+      if (sizeGroupSelect) {
+        sizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
+          groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+      }
 
       const units = await API.get('/api/v1/units');
-      unitSelect.innerHTML = '<option value="">Не указана</option>' +
-        units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
+      if (unitSelect) {
+        unitSelect.innerHTML = '<option value="">Не указана</option>' +
+          units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
+      }
     } catch (err) {
       console.error('Ошибка загрузки справочников:', err);
     }

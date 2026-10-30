@@ -23,7 +23,7 @@
   const issuePpeList = document.getElementById('issue-ppe-list');
   const issueSizeSelect = document.getElementById('issue-size-select');
   
-  let allCategories = [];
+  let allSizeGroups = [];
   let allPpeItems = [];
   let allSizesCache = {};
   let currentNorms = [];
@@ -122,8 +122,8 @@
       filtered.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${p.name}</option>`).join('');
   }
 
-  async function loadCategories() {
-    allCategories = await API.get('/api/v1/ppe_categories');
+  async function loadSizeGroups() {
+    allSizeGroups = await API.get('/api/v1/ppe_size_groups');
   }
 
   async function loadAllPpeItems() {
@@ -133,7 +133,7 @@
   async function getSizesForCategory(categoryId) {
     if (allSizesCache[categoryId]) return allSizesCache[categoryId];
     try {
-      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);
+      const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${categoryId}`);
       allSizesCache[categoryId] = sizes;
       return sizes;
     } catch (err) {
@@ -148,8 +148,8 @@
     const tr = document.createElement('tr');
     const currentGender = genderSelect.value || null;
     
-    const categoryOptions = allCategories.map(c => 
-      `<option value="${c.id}" ${c.id === Number(categoryId) ? 'selected' : ''}>${c.name}</option>`
+    const sizeGroupOptions = allSizeGroups.map(g => 
+      `<option value="${g.id}" ${g.id === Number(categoryId) ? 'selected' : ''}>${g.name}</option>`
     ).join('');
 
     let sizeOptionsHtml = '';
@@ -175,16 +175,16 @@
 
     tr.innerHTML = `
       <td>
-        <select class="form-select form-select-sm category-select" required>
-          <option value="">Выберите категорию...</option>
-          ${categoryOptions}
+        <select class="form-select form-select-sm size-group-select" required>
+          <option value="">Выберите размерную группу...</option>
+          ${sizeGroupOptions}
         </select>
       </td>
       <td>${sizeInputHtml}</td>
       <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button></td>
     `;
     
-    const catSelect = tr.querySelector('.category-select');
+    const catSelect = tr.querySelector('.size-group-select');
     catSelect.addEventListener('change', async () => {
       const newCatId = Number(catSelect.value);
       const sizeCell = tr.children[1];
@@ -246,7 +246,7 @@
       sizesTableBody.innerHTML = '';
       if (emp.ppe_sizes && emp.ppe_sizes.length > 0) {
         for (const size of emp.ppe_sizes) {
-          const tr = await createSizeRow(size.category_id, size.size_value);
+          const tr = await createSizeRow(size.size_group_id, size.size_value);
           sizesTableBody.appendChild(tr);
         }
       }
@@ -510,7 +510,7 @@
     let hasErrors = false;
 
     rows.forEach(tr => {
-      const catSelect = tr.querySelector('.category-select');
+      const catSelect = tr.querySelector('.size-group-select');
       const sizeInput = tr.querySelector('.size-value-input');
       const categoryId = Number(catSelect.value);
       const sizeVal = sizeInput.value.trim();
@@ -519,7 +519,7 @@
         catSelect.classList.add('is-invalid');
         sizeInput.classList.add('is-invalid');
       } else {
-        ppeSizes.push({ category_id: categoryId, size_value: sizeVal });
+        ppeSizes.push({ size_group_id: categoryId, size_value: sizeVal });
       }
     });
 
@@ -560,7 +560,7 @@
 
   // Инициализация
   loadDepartments()
-    .then(loadCategories)
+    .then(loadSizeGroups)
     .then(loadAllPpeItems)
     .then(() => loadEmployee());
 })();
