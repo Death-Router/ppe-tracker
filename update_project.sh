@@ -6,32 +6,32 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Убираем навбар внутри iframe (по referer)..."
+echo "🔧 Возвращаем навбар на всех страницах (кроме iframe)..."
 
 python3 - << 'PYEOF'
 with open('app/templates/base.html', 'r') as f:
     content = f.read()
 
-# Заменяем условие: теперь проверяем и query_params, и referer
-old_condition = '{% if not request.query_params.get("embedded") %}'
-new_condition = '{% if not request.query_params.get("embedded") and "/ppe" not in (request.headers.get("referer") or "") and "/structure" not in (request.headers.get("referer") or "") %}'
+# Убираем сложное условие, оставляем только проверку query_params
+old_condition = '{% if not request.query_params.get("embedded") and "/ppe" not in (request.headers.get("referer") or "") and "/structure" not in (request.headers.get("referer") or "") %}'
+new_condition = '{% if not request.query_params.get("embedded") %}'
 
 if old_condition in content:
     content = content.replace(old_condition, new_condition)
     with open('app/templates/base.html', 'w') as f:
         f.write(content)
-    print("✅ Условие для скрытия навбара обновлено (по referer).")
+    print("✅ Условие упрощено (только embedded=1).")
 else:
-    print("⚠️ Не удалось найти условие для скрытия навбара.")
+    print("⚠️ Не удалось найти условие. Возможно, оно уже изменено.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Навбар больше не будет дублироваться внутри iframe."
+echo "✅ ГОТОВО! Навбар вернулся."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: hide navbar inside iframe using referer check"
+git commit -m "fix: restore navbar on main pages (hide only for embedded=1)"
