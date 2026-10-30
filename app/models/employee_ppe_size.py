@@ -5,18 +5,18 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.employee import Employee
-    from app.models.ppe_category import PpeCategory
+    from app.models.ppe_size_group import PpeSizeGroup
 
 class EmployeePpeSize(Base):
     __tablename__ = "employee_ppe_sizes"
     __table_args__ = (
-        UniqueConstraint("employee_id", "category_id", name="uq_employee_category_size"),
+        UniqueConstraint("employee_id", "size_group_id", name="uq_employee_size_group"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
-    category_id: Mapped[int] = mapped_column(ForeignKey("ppe_categories.id", ondelete="CASCADE"))
+    size_group_id: Mapped[int] = mapped_column(ForeignKey("ppe_size_groups.id", ondelete="CASCADE"))
     size_value: Mapped[str] = mapped_column(String(50), nullable=False)
 
     employee: Mapped["Employee"] = relationship(back_populates="ppe_sizes")
-    category: Mapped["PpeCategory"] = relationship()
+    size_group: Mapped["PpeSizeGroup"] = relationship()
