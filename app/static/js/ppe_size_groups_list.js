@@ -33,9 +33,9 @@
     tbody.innerHTML = groups.map(g => `
       <tr data-id="${g.id}" style="height: 40px;">
         <td class="py-1"><strong>${escapeHtml(g.name)}</strong></td>
-        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+        <td class="py-1 text-end text-nowrap">
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
+          <button class="btn btn-sm btn-outline-primary py-0 px-1 me-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>

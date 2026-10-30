@@ -6,82 +6,25 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Восстанавливаем управление размерами в размерных группах..."
+echo "🔧 Исправляем перенос кнопок в размерных группах (увеличиваем ширину колонки)..."
 
-# 1. Добавляем кнопку "Размеры" в таблицу и модалку в шаблон
+# 1. Обновляем шаблон (ширина колонки)
 python3 - << 'PYEOF'
 with open('app/templates/ppe_size_groups/list.html', 'r') as f:
     content = f.read()
 
-# Добавляем кнопку "Размеры" в таблицу (рядом с карандашом)
-old_actions = '''        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
-        </td>'''
-
-new_actions = '''        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
-        </td>'''
-
-if old_actions in content:
-    content = content.replace(old_actions, new_actions)
-    print("✅ Кнопка 'Размеры' добавлена в таблицу.")
-else:
-    print("⚠️ Не удалось найти блок действий в таблице.")
-
-# Добавляем модалку для управления размерами в конец блока content
-modal_html = '''
-<!-- Модалка управления размерами -->
-<div class="modal fade" id="sizesModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="size-form">
-        <input type="hidden" name="size_group_id" id="size-group-id">
-        <div class="modal-header">
-          <h5 class="modal-title">Размеры для: <span id="size-group-name"></span></h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-            <div class="mb-3">
-                <label class="form-label">Новый размер</label>
-                <div class="row g-2">
-                    <div class="col-4">
-                        <select class="form-select" name="gender">
-                            <option value="">Унисекс</option>
-                            <option value="М">Мужской</option>
-                            <option value="Ж">Женский</option>
-                        </select>
-                    </div>
-                    <div class="col-5">
-                        <input type="text" class="form-control" name="size_value" placeholder="Например, 42" required>
-                    </div>
-                    <div class="col-3">
-                        <button class="btn btn-brand-purple w-100" type="submit">Добавить</button>
-                    </div>
-                </div>
-            </div>
-            <ul class="list-group" id="sizes-list">
-                <!-- Список размеров -->
-            </ul>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-'''
-
-# Вставляем перед {% endblock %}
-if 'id="sizesModal"' not in content:
-    content = content.replace('{% endblock %}', modal_html + '\n{% endblock %}')
-    print("✅ Модалка размеров добавлена.")
+# Увеличиваем ширину колонки действий до 140px (или 150px)
+content = content.replace(
+    '<th class="text-end" style="width: 120px;">Действия</th>',
+    '<th class="text-end" style="width: 150px;">Действия</th>'
+)
 
 with open('app/templates/ppe_size_groups/list.html', 'w') as f:
     f.write(content)
+print("✅ Ширина колонки 'Действия' увеличена до 150px.")
 PYEOF
 
-# 2. Обновляем JS (добавляем логику для модалки размеров)
+# 2. Обновляем JS (делаем кнопки более компактными и убираем переносы)
 cat > app/static/js/ppe_size_groups_list.js << 'EOF'
 (() => {
   const tbody = document.querySelector('#groups-table tbody');
@@ -118,9 +61,9 @@ cat > app/static/js/ppe_size_groups_list.js << 'EOF'
     tbody.innerHTML = groups.map(g => `
       <tr data-id="${g.id}" style="height: 40px;">
         <td class="py-1"><strong>${escapeHtml(g.name)}</strong></td>
-        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+        <td class="py-1 text-end text-nowrap">
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
+          <button class="btn btn-sm btn-outline-primary py-0 px-1 me-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
@@ -259,15 +202,15 @@ cat > app/static/js/ppe_size_groups_list.js << 'EOF'
 })();
 EOF
 
-echo "✅ JS для размерных групп обновлен (добавлена логика размеров)."
+echo "✅ JS для размерных групп обновлен (компактные кнопки, text-nowrap)."
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Управление размерами восстановлено в размерных группах."
+echo "✅ ГОТОВО! Кнопки не должны переноситься на вторую строку."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "feat: restore sizes management in ppe_size_groups"
+git commit -m "ui: fix button wrapping in ppe_size_groups (wider column, text-nowrap)"
