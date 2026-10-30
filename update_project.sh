@@ -6,44 +6,77 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Заменяем SVG-щит на иконку Bootstrap (bi-shield-check)..."
+echo "🔧 Выравниваем иконки в навбаре через flexbox..."
 
 python3 - << 'PYEOF'
-import re
+with open('app/static/css/app.css', 'r') as f:
+    content = f.read()
 
+new_css = '''
+/* Выравнивание иконок и текста в навбаре */
+.navbar-nav .nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end; /* Прижимаем к низу, чтобы иконки были на одном уровне */
+    height: 100%;
+    padding-bottom: 5px;
+}
+
+/* Фиксируем высоту иконок */
+.navbar-nav .nav-link i,
+.navbar-nav .nav-link svg {
+    height: 1.8rem !important;
+    width: 1.8rem !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+
+/* Текст под иконкой */
+.navbar-nav .nav-link span {
+    line-height: 1.2;
+    font-size: 0.85rem;
+    margin-top: 2px;
+}
+'''
+
+# Удаляем старые правила для .nav-icon (если есть) и заменяем на новые
+import re
+content = re.sub(r'/\* Выравнивание иконок в навбаре \*/.*?\.nav-icon \{[^}]*\}', '', content, flags=re.DOTALL)
+content = re.sub(r'/\* Выравнивание иконок и текста в навбаре \*/.*?\.navbar-nav \.nav-link span \{[^}]*\}', '', content, flags=re.DOTALL)
+
+content += new_css
+
+with open('app/static/css/app.css', 'w') as f:
+    f.write(content)
+print("✅ CSS для выравнивания иконок обновлен.")
+PYEOF
+
+echo "🔧 Убираем лишние классы и стили из base.html (чтобы не мешали)..."
+
+python3 - << 'PYEOF'
 with open('app/templates/base.html', 'r') as f:
     content = f.read()
 
-# Заменяем SVG-иконку щита на Bootstrap иконку
-# Ищем SVG, который мы вставили ранее
-pattern = r'<svg[^>]*>.*?</svg>'
-# Но нам нужно заменить только тот, что в навбаре (внутри ссылки на /ppe)
-# Найдем блок с ссылкой на /ppe и внутри него заменим svg на i
-old_block = re.search(r'<a class="nav-link[^"]*" href="/ppe">\s*<svg.*?</svg>\s*<span.*?>СИЗ</span>\s*</a>', content, re.DOTALL)
-
-if old_block:
-    new_block = '''<a class="nav-link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="/ppe">
-                        <i class="bi bi-shield-check d-block nav-icon" style="font-size: 1.8rem;"></i>
-                        <span style="font-size: 0.85rem;">СИЗ</span>
-                    </a>'''
-    content = content.replace(old_block.group(0), new_block)
-    print("✅ SVG-щит заменен на bi-shield-check.")
-else:
-    # Если регулярка не сработала, просто заменим все svg на i (на всякий случай)
-    content = re.sub(r'<svg[^>]*>.*?</svg>', '<i class="bi bi-shield-check d-block nav-icon" style="font-size: 1.8rem;"></i>', content, flags=re.DOTALL)
-    print("✅ Все SVG заменены на bi-shield-check (альтернативный метод).")
+# Убираем класс nav-icon и inline-стили height, чтобы все иконки управлялись только CSS
+content = content.replace(' class="d-block mx-auto mb-1 nav-icon"', ' class="d-block mx-auto mb-1"')
+content = content.replace(' style="height: 1.8rem;"', '')
+content = content.replace(' style="font-size: 1.8rem; height: 1.8rem;"', ' style="font-size: 1.8rem;"')
 
 with open('app/templates/base.html', 'w') as f:
     f.write(content)
+print("✅ base.html очищен от лишних стилей.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Иконки теперь из одного шрифта и выровнены."
+echo "✅ ГОТОВО! Иконки должны выровняться."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: replace SVG shield with Bootstrap icon (bi-shield-check) for alignment"
+git commit -m "fix: align navbar icons with flexbox (equal height, bottom alignment)"
