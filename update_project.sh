@@ -6,54 +6,58 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Включаем проверку орфографии для текстовых полей (кроме ФИО)..."
+echo "🔧 Жёстко прописываем spellcheck в HTML-шаблонах..."
 
 python3 - << 'PYEOF'
-with open('app/templates/base.html', 'r') as f:
-    content = f.read()
+import os
+import re
 
-script = '''
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    // Поля, для которых проверка орфографии НЕ нужна (ФИО, номера, коды, названия)
-    const noSpellcheckNames = [
-      'last_name', 'first_name', 'middle_name', // ФИО
-      'personnel_number', // Табельный номер
-      'name', // Названия (СИЗ, категории, группы, единицы, подразделения, должности)
-      'short_name', // Сокращения
-      'category_id', 'department_id', 'position_id', 'function_id', 'size_group_id', 'unit_id', 'ppe_item_id', // ID
-      'version', 'login', 'username', 'password', 'role' // Служебные
-    ];
-
-    // Включаем проверку для всех textarea и text-инпутов
-    document.querySelectorAll('textarea, input[type="text"], input[type="search"]').forEach(el => {
-      const name = el.getAttribute('name');
-      if (name && noSpellcheckNames.includes(name)) {
-        el.setAttribute('spellcheck', 'false');
-      } else {
-        el.setAttribute('spellcheck', 'true');
-      }
-    });
-  });
-</script>
-'''
-
-if 'noSpellcheckNames' not in content:
-    content = content.replace('</body>', script + '\n</body>')
-    with open('app/templates/base.html', 'w') as f:
-        f.write(content)
-    print("✅ Скрипт проверки орфографии добавлен в base.html.")
-else:
-    print("ℹ️ Скрипт уже есть.")
+templates_dir = 'app/templates'
+for root, dirs, files in os.walk(templates_dir):
+    for file in files:
+        if not file.endswith('.html'):
+            continue
+        
+        path = os.path.join(root, file)
+        with open(path, 'r') as f:
+            content = f.read()
+        
+        # 1. Включаем spellcheck для textarea (комментарии, описания)
+        content = re.sub(
+            r'<textarea([^>]*?)>',
+            lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'<textarea{m.group(1)} spellcheck="true">',
+            content
+        )
+        
+        # 2. Включаем spellcheck для input type="text", если это не ФИО/номер/название
+        # Сначала добавляем spellcheck="false" для полей с именами из списка исключений
+        no_spell = ['last_name', 'first_name', 'middle_name', 'personnel_number', 'name', 'short_name']
+        for field in no_spell:
+            content = re.sub(
+                rf'<input([^>]*?name="{field}"[^>]*?)>',
+                lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'<input{m.group(1)} spellcheck="false">',
+                content
+            )
+        
+        # Для остальных input type="text" (например, comment) включаем spellcheck
+        content = re.sub(
+            r'<input([^>]*?type="text"[^>]*?)>',
+            lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'<input{m.group(1)} spellcheck="true">',
+            content
+        )
+        
+        with open(path, 'w') as f:
+            f.write(content)
+        print(f"✅ Обновлен {path}")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Проверка орфографии настроена."
+echo "✅ ГОТОВО! Проверка орфографии прописана в HTML."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: enable spellcheck for text fields (except names, numbers, codes)"
+git commit -m "ui: explicitly set spellcheck attributes in HTML templates"

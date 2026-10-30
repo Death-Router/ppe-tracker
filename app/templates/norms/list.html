@@ -18,7 +18,7 @@
     <div class="col-md-4">
         <div class="input-group">
             <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" id="search-input" placeholder="Поиск по должности или СИЗ...">
+            <input type="text" class="form-control" id="search-input" placeholder="Поиск по должности или СИЗ..." spellcheck="true">
         </div>
     </div>
     <div class="col-md-4">
@@ -73,14 +73,14 @@
             </div>
             <div class="mb-3">
                 <label class="form-label">СИЗ <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" list="ppe-items-list" id="norm-item-input" placeholder="Начните вводить название..." required autocomplete="off">
+                <input type="text" class="form-control" list="ppe-items-list" id="norm-item-input" placeholder="Начните вводить название..." required autocomplete="off" spellcheck="true">
                 <datalist id="ppe-items-list"></datalist>
                 <input type="hidden" name="ppe_item_id" id="norm-item-id">
             </div>
             <div class="row g-3">
                 <div class="col-6">
                     <label class="form-label">Срок (число) <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="wear_period_value" required placeholder="Например, 1">
+                    <input type="text" class="form-control" name="wear_period_value" required placeholder="Например, 1" spellcheck="true">
                 </div>
                 <div class="col-6">
                     <label class="form-label">Единица <span class="text-danger">*</span></label>
@@ -93,7 +93,7 @@
             </div>
             <div class="mb-3 mt-3">
                 <label class="form-label">Количество <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="quantity" required placeholder="Например, 1" value="1">
+                <input type="text" class="form-control" name="quantity" required placeholder="Например, 1" value="1" spellcheck="true">
             </div>
         </div>
         <div class="modal-footer">
