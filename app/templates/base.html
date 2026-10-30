@@ -113,5 +113,20 @@
 <!-- Блок для скриптов конкретной страницы -->
 {% block scripts %}{% endblock %}
 
+
+<script>
+  // Если страница загружена в iframe, скрываем навбар
+  if (window.self !== window.top) {
+    const nav = document.querySelector('nav.navbar');
+    if (nav) nav.style.display = 'none';
+    // Убираем отступы у main, чтобы контент занял всё место
+    const main = document.querySelector('main');
+    if (main) {
+      main.classList.remove('pb-5');
+      main.classList.add('pt-3');
+    }
+  }
+</script>
+
 </body>
 </html>

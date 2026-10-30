@@ -6,35 +6,46 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Убираем прочерки для пустых функций и групп в списке СИЗ..."
+echo "🔧 Скрываем навбар, если страница загружена в iframe (через JS)..."
 
 python3 - << 'PYEOF'
-with open('app/static/js/ppe_items_list.js', 'r') as f:
+with open('app/templates/base.html', 'r') as f:
     content = f.read()
 
-# Заменяем отображение функции и группы (убираем '—')
-old_badges = '''          <span class="badge bg-secondary me-1">${escapeHtml(i.function?.name ?? '—')}</span>
-          <span class="badge bg-info">${escapeHtml(i.size_group?.name ?? '—')}</span>'''
+# Добавляем скрипт, который скрывает навбар, если страница в iframe
+# Вставляем перед закрывающим тегом </body>
+script = '''
+<script>
+  // Если страница загружена в iframe, скрываем навбар
+  if (window.self !== window.top) {
+    const nav = document.querySelector('nav.navbar');
+    if (nav) nav.style.display = 'none';
+    // Убираем отступы у main, чтобы контент занял всё место
+    const main = document.querySelector('main');
+    if (main) {
+      main.classList.remove('pb-5');
+      main.classList.add('pt-3');
+    }
+  }
+</script>
+'''
 
-new_badges = '''          ${i.function?.name ? `<span class="badge bg-secondary me-1">${escapeHtml(i.function.name)}</span>` : ''}
-          ${i.size_group?.name ? `<span class="badge bg-info">${escapeHtml(i.size_group.name)}</span>` : ''}'''
-
-if old_badges in content:
-    content = content.replace(old_badges, new_badges)
-    with open('app/static/js/ppe_items_list.js', 'w') as f:
+if 'window.self !== window.top' not in content:
+    content = content.replace('</body>', script + '\n</body>')
+    with open('app/templates/base.html', 'w') as f:
         f.write(content)
-    print("✅ Прочерки убраны.")
+    print("✅ Скрипт скрытия навбара в iframe добавлен.")
 else:
-    print("⚠️ Не удалось найти блок отображения функции/группы.")
+    print("ℹ️ Скрипт уже есть.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО!"
+echo "✅ ГОТОВО! Второй навбар должен исчезнуть."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: hide empty function/size_group badges in ppe_items list"
+git commit -m "ui: hide navbar inside iframe using JS"
