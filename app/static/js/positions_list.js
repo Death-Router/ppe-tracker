@@ -35,6 +35,13 @@
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'); }
 
+  
+  function truncateStart(str, maxLength) {
+    if (!str) return '';
+    if (str.length <= maxLength) return str;
+    return '...' + str.slice(-maxLength);
+  }
+
   function truncate(str, maxLength) {
     if (!str) return '';
     if (str.length <= maxLength) return str;
@@ -51,7 +58,7 @@
       const deptPath = buildDeptPath(p.department_id, allDepartments);
       const fullName = escapeHtml(p.name);
       const shortName = escapeHtml(truncate(p.name, 60));
-      const shortDeptPath = escapeHtml(truncate(deptPath, 50));
+      const shortDeptPath = escapeHtml(truncateStart(deptPath, 30));
       
       return `
       <tr data-pos-id="${p.id}" style="height: 40px;">
