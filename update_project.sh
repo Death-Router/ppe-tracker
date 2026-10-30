@@ -6,78 +6,94 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Перезаписываем шапки списков (фиолетовая '+' слева)..."
+echo "🎨 Меняем цвет кнопки '+' на фиолетовый..."
 
-# Функция для замены шапки в шаблоне
-replace_header() {
-    local file=$1
-    local title=$2
-    local modal_id=$3
-    local extra_attrs=$4
-
-    if [ ! -f "$file" ]; then
-        echo "⚠️ Файл не найден: $file"
-        return
-    fi
-
-    python3 - "$file" "$title" "$modal_id" "$extra_attrs" << 'PYEOF'
-import sys
-import re
-
-file, title, modal_id, extra_attrs = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-
-with open(file, 'r') as f:
+# 1. Обновляем CSS
+python3 - << 'PYEOF'
+with open('app/static/css/app.css', 'r') as f:
     content = f.read()
 
-# Ищем блок с заголовком и кнопкой (разные варианты)
-# Вариант 1: <div class="d-flex justify-content-between ..."> <h1>...</h1> <button ...>
-# Вариант 2: <h1>...</h1> <button ...>
+# Удаляем старый .btn-add (зеленый) и .btn-add-purple (если есть)
+import re
+content = re.sub(r'\.btn-add\s*\{[^}]*\}', '', content)
+content = re.sub(r'\.btn-add:hover\s*\{[^}]*\}', '', content)
+content = re.sub(r'\.btn-add-purple\s*\{[^}]*\}', '', content)
+content = re.sub(r'\.btn-add-purple:hover\s*\{[^}]*\}', '', content)
 
-# Сначала попробуем найти заголовок и кнопку в одном блоке
-pattern = r'<div class="d-flex justify-content-between align-items-center[^"]*">\s*<h1[^>]*>(.*?)</h1>\s*<button[^>]*>.*?</button>\s*</div>'
-match = re.search(pattern, content, re.DOTALL)
+# Добавляем новый фиолетовый стиль
+new_css = '''
+/* Кнопка "+" (Добавить) — фиолетовая, компактная */
+.btn-add-purple {
+    background-color: #5b2c8a;
+    border-color: #5b2c8a;
+    color: #fff;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-add-purple:hover {
+    background-color: #4a2470;
+    border-color: #4a2470;
+    color: #fff;
+}
+'''
 
-if match:
-    # Заменяем на новый блок
-    new_block = f'''<div class="d-flex align-items-center gap-2 mb-3">
-    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#{modal_id}" title="Добавить"{extra_attrs}>
-        <i class="bi bi-plus-lg"></i>
-    </button>
-    <h1 class="h3 mb-0">{title}</h1>
-</div>'''
-    content = content[:match.start()] + new_block + content[match.end():]
-    print(f"✅ {file}: шапка заменена (вариант 1).")
-else:
-    # Если не нашли, просто заменим кнопку на фиолетовую (позиция останется)
+content += new_css
+with open('app/static/css/app.css', 'w') as f:
+    f.write(content)
+print("✅ CSS для фиолетовой кнопки '+' обновлен.")
+PYEOF
+
+# 2. Убеждаемся, что во всех шаблонах используется класс btn-add-purple
+python3 - << 'PYEOF'
+import os
+import re
+
+templates = [
+    'app/templates/employees/list.html',
+    'app/templates/ppe_items/list.html',
+    'app/templates/ppe_functions/list.html',
+    'app/templates/ppe_size_groups/list.html',
+    'app/templates/units/list.html',
+    'app/templates/norms/list.html',
+    'app/templates/departments/list.html',
+    'app/templates/positions/list.html',
+]
+
+for path in templates:
+    if not os.path.exists(path):
+        continue
+    
+    with open(path, 'r') as f:
+        content = f.read()
+    
+    # Заменяем все кнопки с btn-success или btn-add на btn-add-purple
     content = re.sub(
         r'<button([^>]*?)class="btn btn-success([^"]*?)"([^>]*?)>',
         r'<button\1class="btn btn-add-purple\2"\3>',
         content
     )
-    print(f"ℹ️ {file}: кнопка изменена на фиолетовую (позиция не изменена).")
-
-with open(file, 'w') as f:
-    f.write(content)
+    content = re.sub(
+        r'<button([^>]*?)class="btn btn-add([^"]*?)"([^>]*?)>',
+        r'<button\1class="btn btn-add-purple\2"\3>',
+        content
+    )
+    
+    with open(path, 'w') as f:
+        f.write(content)
+    print(f"✅ Обновлен {path}")
 PYEOF
-}
-
-# Применяем для всех шаблонов
-replace_header "app/templates/employees/list.html" "Сотрудники" "createModal" ""
-replace_header "app/templates/ppe_items/list.html" "Наименования СИЗ" "createModal" ""
-replace_header "app/templates/ppe_functions/list.html" "Функции СИЗ (Защита)" "createModal" ""
-replace_header "app/templates/ppe_size_groups/list.html" "Размерные группы" "createModal" ""
-replace_header "app/templates/units/list.html" "Единицы измерения" "createModal" ""
-replace_header "app/templates/departments/list.html" "Подразделения" "createModal" ""
-replace_header "app/templates/positions/list.html" "Должности" "createModal" ""
-replace_header "app/templates/norms/list.html" "Нормы выдачи СИЗ" "createNormModal" ""
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Шапки списков обновлены."
+echo "✅ ГОТОВО! Кнопка '+' теперь фиолетовая."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: force update list headers with purple add button (left)"
+git commit -m "ui: change add button color to purple"

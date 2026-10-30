@@ -335,22 +335,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Кнопка "+" (Добавить) — зеленая, компактная */
-.btn-add {
-    background-color: #198754;
-    border-color: #198754;
-    color: #fff;
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.btn-add:hover {
-    background-color: #146c43;
-    border-color: #146c43;
-    color: #fff;
-}
+
+
+
+/* Кнопка "+" (Добавить) — фиолетовая, компактная */
+
+
 
 /* Кнопка "+" (Добавить) — фиолетовая, компактная */
 .btn-add-purple {
