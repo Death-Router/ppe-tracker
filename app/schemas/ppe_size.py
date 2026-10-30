@@ -1,8 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 class PpeSizeBase(BaseModel):
-    category_id: int
-    size_value: str = Field(..., max_length=50)
+    size_group_id: int = Field(..., description="ID размерной группы")
+    size_value: str = Field(..., max_length=50, description="Размер")
     gender: str | None = Field(None, pattern="^[МЖ]$")
 
 class PpeSizeCreate(PpeSizeBase):

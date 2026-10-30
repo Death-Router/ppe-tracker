@@ -6,121 +6,71 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Перезаписываем position_ppe_norms.py (function и size_group)..."
+echo "🔧 Обновляем схемы и API для PpeSize (size_group_id)..."
 
-cat > app/api/v1/endpoints/position_ppe_norms.py << 'EOF'
+cat > app/schemas/ppe_size.py << 'EOF'
+from pydantic import BaseModel, ConfigDict, Field
+
+class PpeSizeBase(BaseModel):
+    size_group_id: int = Field(..., description="ID размерной группы")
+    size_value: str = Field(..., max_length=50, description="Размер")
+    gender: str | None = Field(None, pattern="^[МЖ]$")
+
+class PpeSizeCreate(PpeSizeBase):
+    pass
+
+class PpeSizeRead(PpeSizeBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+EOF
+
+cat > app/api/v1/endpoints/ppe_sizes.py << 'EOF'
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
-from app.api.v1.endpoints.ws import manager
 from app.db.session import get_db
-from app.models.position_ppe_norm import PositionPpeNorm
-from app.models.position import Position
-from app.models.ppe_item import PpeItem
-from app.models.ppe_function import PpeFunction
+from app.models.ppe_size import PpeSize
 from app.models.ppe_size_group import PpeSizeGroup
-from app.schemas.position_ppe_norm import PositionPpeNormCreate, PositionPpeNormRead, PositionPpeNormUpdate
+from app.schemas.ppe_size import PpeSizeCreate, PpeSizeRead
 
-router = APIRouter(prefix="/position_ppe_norms", tags=["Нормы выдачи СИЗ"])
+router = APIRouter(prefix="/ppe_sizes", tags=["Справочник: Размеры СИЗ"])
 
+@router.post("/", response_model=PpeSizeRead, status_code=status.HTTP_201_CREATED)
+async def create_size(size_in: PpeSizeCreate, db: AsyncSession = Depends(get_db)):
+    group_res = await db.execute(select(PpeSizeGroup).where(PpeSizeGroup.id == size_in.size_group_id))
+    if not group_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Размерная группа не найдена")
 
-def norm_options():
-    return [
-        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.function),
-        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.size_group),
-        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.unit),
-        selectinload(PositionPpeNorm.position).selectinload(Position.department)
-    ]
-
-
-async def get_norm_with_relations(db: AsyncSession, norm_id: int) -> PositionPpeNorm:
-    result = await db.execute(
-        select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id).options(*norm_options())
-    )
-    return result.scalar_one()
-
-
-@router.post("/", response_model=PositionPpeNormRead, status_code=status.HTTP_201_CREATED)
-async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends(get_db)):
-    pos_res = await db.execute(select(Position).where(Position.id == norm_in.position_id))
-    if not pos_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Должность не найдена")
-        
-    item_res = await db.execute(select(PpeItem).where(PpeItem.id == norm_in.ppe_item_id))
-    if not item_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
-
-    db_norm = PositionPpeNorm(**norm_in.model_dump())
-    db.add(db_norm)
-    
+    db_size = PpeSize(**size_in.model_dump())
+    db.add(db_size)
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(
-            status_code=400, 
-            detail="Для этой должности норма на данное СИЗ уже существует."
-        )
-        
-    return await get_norm_with_relations(db, db_norm.id)
+        raise HTTPException(status_code=400, detail="Такой размер уже существует для этой группы")
+    
+    await db.refresh(db_size)
+    return db_size
 
-
-@router.get("/", response_model=list[PositionPpeNormRead])
-async def get_norms(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).options(*norm_options()))
+@router.get("/", response_model=list[PpeSizeRead])
+async def get_sizes(size_group_id: int | None = None, gender: str | None = None, db: AsyncSession = Depends(get_db)):
+    query = select(PpeSize)
+    if size_group_id is not None:
+        query = query.where(PpeSize.size_group_id == size_group_id)
+    if gender:
+        query = query.where(PpeSize.gender == gender)
+    result = await db.execute(query)
     return result.scalars().all()
 
-
-@router.get("/{norm_id}", response_model=PositionPpeNormRead)
-async def get_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id).options(*norm_options()))
-    norm = result.scalar_one_or_none()
-    if not norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
-    return norm
-
-
-@router.put("/{norm_id}", response_model=PositionPpeNormRead)
-async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
-    if db_norm.version != norm_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
-    
-    update_data = norm_in.model_dump(exclude_unset=True, exclude={"version"})
-    for field, value in update_data.items():
-        setattr(db_norm, field, value)
-    db_norm.version += 1
-    
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая норма уже существует")
-    
-    try:
-        await manager.broadcast_to_employee(0, {"event": "norm_updated", "id": norm_id})
-    except: pass
-
-    return await get_norm_with_relations(db, norm_id)
-
-
-@router.delete("/{norm_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
-    try:
-        await db.delete(db_norm)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+@router.delete("/{size_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_size(size_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(PpeSize).where(PpeSize.id == size_id))
+    db_size = result.scalar_one_or_none()
+    if not db_size:
+        raise HTTPException(status_code=404, detail="Размер не найден")
+    await db.delete(db_size)
+    await db.commit()
 EOF
 
 echo "🚀 Перезапускаем контейнер..."
@@ -130,9 +80,9 @@ sleep 3
 echo "🔄 Проверяем логи..."
 docker compose logs api --tail 10
 
-echo "✅ ГОТОВО! position_ppe_norms.py обновлен."
+echo "✅ ГОТОВО! API размеров обновлено (size_group_id)."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: update position_ppe_norms API for function/size_group"
+git commit -m "fix: update ppe_sizes API and schema for size_group_id"
