@@ -470,3 +470,20 @@ input[type="radio"] {
     padding-bottom: 0 !important;
     margin-right: 1rem;
 }
+
+/* Принудительно делаем чекбоксы фиолетовыми (переопределяем Bootstrap) */
+.form-check-input:checked {
+    background-color: #5b2c8a !important;
+    border-color: #5b2c8a !important;
+}
+
+.form-check-input:focus {
+    border-color: #5b2c8a !important;
+    box-shadow: 0 0 0 0.2rem rgba(91, 44, 138, 0.25) !important;
+}
+
+/* Для чекбоксов внутри таблиц и модалок */
+input[type="checkbox"].form-check-input:checked {
+    background-color: #5b2c8a !important;
+    border-color: #5b2c8a !important;
+}

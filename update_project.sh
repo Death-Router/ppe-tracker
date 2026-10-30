@@ -6,61 +6,47 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🎨 Делаем все чекбоксы и радио-кнопки фиолетовыми..."
+echo "🎨 Переопределяем CSS-переменные Bootstrap для чекбоксов (фиолетовый)..."
 
 python3 - << 'PYEOF'
 with open('app/static/css/app.css', 'r') as f:
     content = f.read()
 
 new_css = '''
-/* Фиолетовый цвет для всех чекбоксов и радио-кнопок (включая модалки) */
-input[type="checkbox"],
-input[type="radio"],
-.form-check-input[type="checkbox"],
-.form-check-input[type="radio"] {
-    accent-color: #5b2c8a !important;
-    cursor: pointer;
+/* Принудительно делаем чекбоксы фиолетовыми (переопределяем Bootstrap) */
+.form-check-input:checked {
+    background-color: #5b2c8a !important;
+    border-color: #5b2c8a !important;
 }
 
-/* При фокусе (если браузер использует свой стиль) */
-input[type="checkbox"]:focus,
-input[type="radio"]:focus,
-.form-check-input[type="checkbox"]:focus,
-.form-check-input[type="radio"]:focus {
-    accent-color: #5b2c8a !important;
-    box-shadow: 0 0 0 0.2rem rgba(91, 44, 138, 0.25);
+.form-check-input:focus {
+    border-color: #5b2c8a !important;
+    box-shadow: 0 0 0 0.2rem rgba(91, 44, 138, 0.25) !important;
+}
+
+/* Для чекбоксов внутри таблиц и модалок */
+input[type="checkbox"].form-check-input:checked {
+    background-color: #5b2c8a !important;
+    border-color: #5b2c8a !important;
 }
 '''
 
-if 'accent-color: #5b2c8a' not in content:
+if '.form-check-input:checked' not in content:
     content += new_css
     with open('app/static/css/app.css', 'w') as f:
         f.write(content)
-    print("✅ CSS для фиолетовых чекбоксов добавлен.")
+    print("✅ CSS для фиолетовых чекбоксов (Bootstrap) добавлен.")
 else:
     print("ℹ️ CSS уже есть.")
-
-# Убедимся, что в base.html нет старых стилей, перебивающих цвет
-with open('app/templates/base.html', 'r') as f:
-    base_content = f.read()
-
-import re
-# Убираем старые стили для чекбоксов (если были)
-base_content = re.sub(r'input\[type="checkbox"\][^{]*\{[^}]*\}', '', base_content)
-base_content = re.sub(r'\.form-check-input[^{]*\{[^}]*\}', '', base_content)
-
-with open('app/templates/base.html', 'w') as f:
-    f.write(base_content)
-print("✅ base.html очищен от старых стилей (если были).")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Все чекбоксы теперь фиолетовые."
+echo "✅ ГОТОВО! Чекбоксы должны стать фиолетовыми."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: force purple accent-color for all checkboxes and radios"
+git commit -m "fix: force purple color for checked checkboxes (Bootstrap override)"
