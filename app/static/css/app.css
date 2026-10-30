@@ -424,10 +424,4 @@ input[type="radio"] {
     margin-top: 2px;
 }
 
-/* Моноширинный шрифт для табельного номера (каждый символ одинаковой ширины) */
-.table-employees td:nth-child(2),
-.table-employees th:nth-child(2) {
-    font-family: 'Courier New', Courier, monospace !important;
-    font-variant-numeric: tabular-nums !important; /* Для цифр */
-    font-feature-settings: "tnum" !important;
-}
+
