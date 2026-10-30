@@ -6,35 +6,32 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🎨 Меняем цвета бейджей (функция и размерная группа)..."
+echo "🎨 Меняем цвет бейджа 'Выбрано' на фиолетовый..."
 
 python3 - << 'PYEOF'
-with open('app/static/js/ppe_items_list.js', 'r') as f:
+with open('app/templates/ppe_items/list.html', 'r') as f:
     content = f.read()
 
-# Заменяем классы бейджей
-old_badges = '''          ${i.function?.name ? `<span class="badge bg-secondary me-1">${escapeHtml(i.function.name)}</span>` : ''}
-          ${i.size_group?.name ? `<span class="badge bg-info">${escapeHtml(i.size_group.name)}</span>` : ''}'''
+# Заменяем bg-secondary на bg-purple для бейджа "Выбрано"
+old_badge = '<span class="badge bg-secondary">Выбрано: <span id="selected-count">0</span></span>'
+new_badge = '<span class="badge bg-purple">Выбрано: <span id="selected-count">0</span></span>'
 
-new_badges = '''          ${i.function?.name ? `<span class="badge bg-purple me-1">${escapeHtml(i.function.name)}</span>` : ''}
-          ${i.size_group?.name ? `<span class="badge bg-brand-orange">${escapeHtml(i.size_group.name)}</span>` : ''}'''
-
-if old_badges in content:
-    content = content.replace(old_badges, new_badges)
-    with open('app/static/js/ppe_items_list.js', 'w') as f:
+if old_badge in content:
+    content = content.replace(old_badge, new_badge)
+    with open('app/templates/ppe_items/list.html', 'w') as f:
         f.write(content)
-    print("✅ Классы бейджей обновлены (bg-purple и bg-brand-orange).")
+    print("✅ Бейдж 'Выбрано' теперь фиолетовый (bg-purple).")
 else:
-    print("⚠️ Не удалось найти блок бейджей.")
+    print("⚠️ Не удалось найти бейдж 'Выбрано'.")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Бейджи теперь в цветах навбара и шапок."
+echo "✅ ГОТОВО! Бейдж обновлен."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: update badge colors (purple for function, orange for size group)"
+git commit -m "ui: change 'selected' badge color to purple"
