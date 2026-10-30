@@ -6,7 +6,7 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Жёстко прописываем spellcheck в HTML-шаблонах..."
+echo "🔧 Жёстко прописываем spellcheck в HTML (без JS)..."
 
 python3 - << 'PYEOF'
 import os
@@ -22,27 +22,27 @@ for root, dirs, files in os.walk(templates_dir):
         with open(path, 'r') as f:
             content = f.read()
         
-        # 1. Включаем spellcheck для textarea (комментарии, описания)
-        content = re.sub(
-            r'<textarea([^>]*?)>',
-            lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'<textarea{m.group(1)} spellcheck="true">',
-            content
-        )
-        
-        # 2. Включаем spellcheck для input type="text", если это не ФИО/номер/название
-        # Сначала добавляем spellcheck="false" для полей с именами из списка исключений
+        # 1. Для полей с ФИО, названиями, номерами — отключаем проверку
         no_spell = ['last_name', 'first_name', 'middle_name', 'personnel_number', 'name', 'short_name']
         for field in no_spell:
+            # Ищем input с этим name и добавляем spellcheck="false"
             content = re.sub(
-                rf'<input([^>]*?name="{field}"[^>]*?)>',
-                lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'<input{m.group(1)} spellcheck="false">',
+                rf'(<input[^>]*?name="{field}"[^>]*?)>',
+                lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'{m.group(1)} spellcheck="false">',
                 content
             )
         
-        # Для остальных input type="text" (например, comment) включаем spellcheck
+        # 2. Для остальных input type="text" (например, comment) — включаем проверку
         content = re.sub(
-            r'<input([^>]*?type="text"[^>]*?)>',
-            lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'<input{m.group(1)} spellcheck="true">',
+            r'(<input[^>]*?type="text"[^>]*?)>',
+            lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'{m.group(1)} spellcheck="true">',
+            content
+        )
+        
+        # 3. Для textarea — включаем проверку
+        content = re.sub(
+            r'(<textarea[^>]*?)>',
+            lambda m: m.group(0) if 'spellcheck' in m.group(1) else f'{m.group(1)} spellcheck="true">',
             content
         )
         
@@ -55,9 +55,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Проверка орфографии прописана в HTML."
+echo "✅ ГОТОВО! Атрибуты spellcheck прописаны в HTML."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: explicitly set spellcheck attributes in HTML templates"
+git commit -m "ui: force spellcheck attributes in HTML templates"
