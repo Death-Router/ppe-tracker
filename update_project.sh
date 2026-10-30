@@ -6,88 +6,38 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Строим иерархию подразделений в выпадающем списке должностей (нормы)..."
+echo "🎨 Приводим кнопку '+' на странице норм к общему стилю..."
 
 python3 - << 'PYEOF'
-with open('app/static/js/norms_list.js', 'r') as f:
+with open('app/templates/norms/list.html', 'r') as f:
     content = f.read()
 
-# 1. Добавляем функцию для построения иерархии (если нет)
-if 'function buildHierarchy' not in content:
-    build_func = '''
-  function buildHierarchy(depts, parentId = null, level = 0) {
-    let result = [];
-    const filtered = depts.filter(d => d.parent_id === parentId);
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
-    for (const dept of filtered) {
-      result.push({ ...dept, level });
-      const children = buildHierarchy(depts, dept.id, level + 1);
-      result = result.concat(children);
-    }
-    return result;
-  }
-'''
-    content = content.replace(
-        'async function init() {',
-        build_func + '\n  async function init() {'
-    )
+# 1. Заменяем класс кнопки "Добавить" на btn-add-purple
+content = content.replace(
+    '<button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#createNormModal">+ Добавить норму</button>',
+    '<button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createNormModal" title="Добавить норму"><i class="bi bi-plus-lg"></i></button>'
+)
 
-# 2. Обновляем инициализацию: загружаем подразделения и строим иерархию
-old_init = '''  async function init() {
-    try {
-      const positions = await API.get('/api/v1/positions');
-      posSelect.innerHTML = '<option value="">-- Выберите должность --</option>' + 
-        positions.map(p => `<option value="${p.id}">${p.department?.name ?? ''} / ${p.name}</option>`).join('');
+# 2. Перестраиваем шапку "Список норм" (кнопка слева от заголовка)
+old_header = '''    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0 text-secondary">Список норм</h5>
+        <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createNormModal" title="Добавить норму"><i class="bi bi-plus-lg"></i></button>
+    </div>'''
 
-      allPpeItems = await API.get('/api/v1/ppe_items');
-      
-      itemsDatalist.innerHTML = allPpeItems.map(i => 
-        `<option value="${i.name}" data-id="${i.id}"></option>`
-      ).join('');
-    } catch (err) {
-      window.showToast(`Ошибка инициализации: ${err.message}`, 'danger');
-    }
-  }'''
+new_header = '''    <div class="d-flex align-items-center gap-2 mb-3">
+        <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createNormModal" title="Добавить норму"><i class="bi bi-plus-lg"></i></button>
+        <h5 class="mb-0 text-secondary">Список норм</h5>
+    </div>'''
 
-new_init = '''  async function init() {
-    try {
-      const positions = await API.get('/api/v1/positions');
-      const departments = await API.get('/api/v1/departments');
-      
-      // Строим иерархию подразделений
-      const hierarchy = buildHierarchy(departments);
-      
-      // Группируем должности по подразделениям
-      const deptMap = {};
-      hierarchy.forEach(d => { deptMap[d.id] = d; });
-      
-      // Сортируем должности по названию
-      positions.sort((a, b) => a.name.localeCompare(b.name));
-      
-      posSelect.innerHTML = '<option value="">-- Выберите должность --</option>' + 
-        positions.map(p => {
-          const dept = deptMap[p.department_id];
-          const deptPath = dept ? `${'↳ '.repeat(dept.level)}${dept.name}` : '—';
-          return `<option value="${p.id}">${deptPath} / ${p.name}</option>`;
-        }).join('');
-
-      allPpeItems = await API.get('/api/v1/ppe_items');
-      
-      itemsDatalist.innerHTML = allPpeItems.map(i => 
-        `<option value="${i.name}" data-id="${i.id}"></option>`
-      ).join('');
-    } catch (err) {
-      window.showToast(`Ошибка инициализации: ${err.message}`, 'danger');
-    }
-  }'''
-
-if old_init in content:
-    content = content.replace(old_init, new_init)
-    print("✅ init() обновлен (иерархия подразделений).")
+if old_header in content:
+    content = content.replace(old_header, new_header)
+    print("✅ Шапка 'Список норм' перестроена (кнопка слева).")
 else:
-    print("⚠️ Не удалось найти init() в norms_list.js.")
+    # Если структура отличается, просто меняем класс кнопки
+    content = content.replace('btn btn-sm btn-success', 'btn btn-add-purple')
+    print("✅ Класс кнопки изменен на btn-add-purple (позиция не изменена).")
 
-with open('app/static/js/norms_list.js', 'w') as f:
+with open('app/templates/norms/list.html', 'w') as f:
     f.write(content)
 PYEOF
 
@@ -95,9 +45,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Список должностей в нормах теперь с иерархией."
+echo "✅ ГОТОВО! Кнопка '+' на странице норм теперь фиолетовая."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: add department hierarchy to position dropdown in norms page"
+git commit -m "ui: unify add button on norms page (purple, left of title)"
