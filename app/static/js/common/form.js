@@ -45,3 +45,11 @@ window.FormHelper = {
     }
   }
 };
+// --- Живая маска для полей ФИО ---
+window.attachNameValidation = function (form, fieldNames) {
+  if (!form || !window.Validators) return;
+  fieldNames.forEach(name => {
+    const el = form.elements[name];
+    if (el) Validators.applyNameMask(el);
+  });
+};
