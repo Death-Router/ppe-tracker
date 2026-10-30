@@ -446,3 +446,27 @@ input[type="radio"] {
     text-align: left !important;
     vertical-align: top !important;
 }
+
+/* Уменьшаем вертикальные отступы в навбаре */
+.navbar {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+}
+
+.navbar .container-fluid {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* Убираем лишние отступы у ссылок и иконок */
+.navbar-nav .nav-link {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+}
+
+/* Для логотипа-шестеренки */
+.navbar-brand {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-right: 1rem;
+}
