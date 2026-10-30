@@ -118,9 +118,20 @@
     return result;
   }
 
+
+  function buildDeptPath(deptId, allDepts) {
+    if (!deptId) return '';
+    const dept = allDepts.find(d => d.id === deptId);
+    if (!dept) return '';
+    const parentPath = dept.parent_id ? buildDeptPath(dept.parent_id, allDepts) : '';
+    return parentPath ? `${parentPath} / ${dept.name}` : dept.name;
+  }
+
+  let allDepartments = [];
+
   async function loadDepartments() {
-    const depts = await API.get('/api/v1/departments');
-    const hierarchy = buildHierarchy(depts);
+    allDepartments = await API.get('/api/v1/departments');
+    const hierarchy = buildHierarchy(allDepartments);
     deptSelect.innerHTML = '<option value="">Выберите...</option>' + 
       hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');
   }
