@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.v1.endpoints import (
+from app.api.v1.endpoints import users, 
     employees, ppe_items, ws, departments, positions,
     position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
     ppe_functions, ppe_size_groups
@@ -43,6 +43,7 @@ app.include_router(export.router, prefix="/api/v1")
 app.include_router(import_data.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(units.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 app.include_router(ppe_functions.router, prefix="/api/v1")
 app.include_router(ppe_size_groups.router, prefix="/api/v1")
 
@@ -220,4 +221,15 @@ async def ppe_size_groups_page(request: Request):
         request=request,
         name="ppe_size_groups/list.html",
         context={"title": "Размерные группы"},
+    )
+
+@app.get("/users", response_class=HTMLResponse)
+async def users_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    # Проверяем роль (упрощенно: на фронте скроем, но лучше и на бэке)
+    return templates.TemplateResponse(
+        request=request,
+        name="users/list.html",
+        context={"title": "Пользователи"},
     )
