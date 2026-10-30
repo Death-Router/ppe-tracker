@@ -8,6 +8,7 @@
   const filterFunction = document.getElementById('filter-function');
   const filterSizeGroup = document.getElementById('filter-size-group');
   const selectAllCheckbox = document.getElementById('select-all');
+  const bulkActions = document.getElementById('bulk-actions');
   const selectedCountSpan = document.getElementById('selected-count');
   const btnBulkEdit = document.getElementById('btn-bulk-edit');
   const btnBulkDelete = document.getElementById('btn-bulk-delete');
@@ -134,14 +135,10 @@
   function updateBulkPanel() {
     const count = selectedIds.size;
     if (count > 0) {
-      selectedCountSpan.classList.remove('d-none');
-      selectedCountSpan.querySelector('span').textContent = count;
-      btnBulkEdit.disabled = false;
-      btnBulkDelete.disabled = false;
+      bulkActions.classList.remove('d-none');
+      selectedCountSpan.textContent = count;
     } else {
-      selectedCountSpan.classList.add('d-none');
-      btnBulkEdit.disabled = true;
-      btnBulkDelete.disabled = true;
+      bulkActions.classList.add('d-none');
       selectAllCheckbox.checked = false;
     }
   }

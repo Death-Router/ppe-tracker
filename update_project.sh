@@ -6,40 +6,38 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Возвращаем фильтры и кнопки над таблицей (аккуратно)..."
+echo "🔧 Возвращаем кнопки массовых операций в заголовок (рядом с 'Выбрано')..."
 
 cat > app/templates/ppe_items/list.html << 'EOF'
 {% extends "base.html" %}
 {% block content %}
-<!-- Заголовок и кнопка "Добавить" -->
+<!-- Заголовок, счетчик выбранных и кнопки массовых операций -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="d-flex align-items-center gap-3">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
         <h1 class="h3 mb-0">Наименования СИЗ</h1>
-        <span id="selected-count" class="badge bg-secondary d-none">Выбрано: <span>0</span></span>
+        
+        <!-- Блок массовых операций (появляется при выборе) -->
+        <div id="bulk-actions" class="d-flex align-items-center gap-2 d-none">
+            <span class="badge bg-secondary">Выбрано: <span id="selected-count">0</span></span>
+            <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
+            <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
+        </div>
     </div>
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
 </div>
 
-<!-- Панель фильтров и кнопки массовых операций -->
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <div class="d-flex align-items-center gap-2">
-        <div class="input-group" style="width: 300px;">
-            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
-        </div>
-        <select class="form-select" id="filter-function" style="width: auto;">
-            <option value="">Все функции</option>
-        </select>
-        <select class="form-select" id="filter-size-group" style="width: auto;">
-            <option value="">Все размерные группы</option>
-        </select>
+<!-- Панель фильтров -->
+<div class="d-flex align-items-center gap-2 mb-3">
+    <div class="input-group" style="width: 300px;">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
     </div>
-    
-    <!-- Кнопки массовых операций (выровнены по правому краю с отступом) -->
-    <div class="d-flex align-items-center gap-2" style="margin-right: 12px;">
-        <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-1" disabled onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
-        <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" disabled onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
-    </div>
+    <select class="form-select" id="filter-function" style="width: auto;">
+        <option value="">Все функции</option>
+    </select>
+    <select class="form-select" id="filter-size-group" style="width: auto;">
+        <option value="">Все размерные группы</option>
+    </select>
 </div>
 
 <!-- Таблица -->
@@ -146,13 +144,66 @@ cat > app/templates/ppe_items/list.html << 'EOF'
 {% endblock %}
 EOF
 
+echo "📝 Обновляем JS для показа/скрытия блока массовых операций..."
+
+python3 - << 'PYEOF'
+with open('app/static/js/ppe_items_list.js', 'r') as f:
+    content = f.read()
+
+# Заменяем ссылки на элементы (selectedCountSpan и т.д.)
+content = content.replace(
+    "const selectedCountSpan = document.getElementById('selected-count');",
+    "const bulkActions = document.getElementById('bulk-actions');\n  const selectedCountSpan = document.getElementById('selected-count');"
+)
+
+# В updateBulkPanel показываем/скрываем bulkActions
+old_update = '''  function updateBulkPanel() {
+    const count = selectedIds.size;
+    if (count > 0) {
+      selectedCountSpan.classList.remove('d-none');
+      selectedCountSpan.querySelector('span').textContent = count;
+      btnBulkEdit.disabled = false;
+      btnBulkDelete.disabled = false;
+    } else {
+      selectedCountSpan.classList.add('d-none');
+      btnBulkEdit.disabled = true;
+      btnBulkDelete.disabled = true;
+      selectAllCheckbox.checked = false;
+    }
+  }'''
+
+new_update = '''  function updateBulkPanel() {
+    const count = selectedIds.size;
+    if (count > 0) {
+      bulkActions.classList.remove('d-none');
+      selectedCountSpan.textContent = count;
+    } else {
+      bulkActions.classList.add('d-none');
+      selectAllCheckbox.checked = false;
+    }
+  }'''
+
+if old_update in content:
+    content = content.replace(old_update, new_update)
+    print("✅ JS обновлен (показ/скрытие блока массовых операций).")
+else:
+    print("⚠️ Не удалось найти updateBulkPanel в JS.")
+
+# Убираем лишние disabled у кнопок (они не нужны, блок и так скрыт)
+content = content.replace(' disabled onclick="openBulkEditModal()"', ' onclick="openBulkEditModal()"')
+content = content.replace(' disabled onclick="bulkDelete()"', ' onclick="bulkDelete()"')
+
+with open('app/static/js/ppe_items_list.js', 'w') as f:
+    f.write(content)
+PYEOF
+
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Фильтры и кнопки вернулись над таблицей."
+echo "✅ ГОТОВО! Кнопки появляются после заголовка 'Выбрано'."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: restore filters and bulk buttons above table (aligned right)"
+git commit -m "ui: move bulk actions to header after 'selected' badge"
