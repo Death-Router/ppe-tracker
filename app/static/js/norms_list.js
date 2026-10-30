@@ -87,11 +87,40 @@
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
+  
+  function buildHierarchy(depts, parentId = null, level = 0) {
+    let result = [];
+    const filtered = depts.filter(d => d.parent_id === parentId);
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    for (const dept of filtered) {
+      result.push({ ...dept, level });
+      const children = buildHierarchy(depts, dept.id, level + 1);
+      result = result.concat(children);
+    }
+    return result;
+  }
+
   async function init() {
     try {
       const positions = await API.get('/api/v1/positions');
+      const departments = await API.get('/api/v1/departments');
+      
+      // Строим иерархию подразделений
+      const hierarchy = buildHierarchy(departments);
+      
+      // Группируем должности по подразделениям
+      const deptMap = {};
+      hierarchy.forEach(d => { deptMap[d.id] = d; });
+      
+      // Сортируем должности по названию
+      positions.sort((a, b) => a.name.localeCompare(b.name));
+      
       posSelect.innerHTML = '<option value="">-- Выберите должность --</option>' + 
-        positions.map(p => `<option value="${p.id}">${p.department?.name ?? ''} / ${p.name}</option>`).join('');
+        positions.map(p => {
+          const dept = deptMap[p.department_id];
+          const deptPath = dept ? `${'↳ '.repeat(dept.level)}${dept.name}` : '—';
+          return `<option value="${p.id}">${deptPath} / ${p.name}</option>`;
+        }).join('');
 
       allPpeItems = await API.get('/api/v1/ppe_items');
       
