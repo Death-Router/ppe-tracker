@@ -114,8 +114,8 @@
         </td>
         <td class="py-1" title="${fullName}">${shortName}</td>
         <td class="py-1">
-          <span class="badge bg-secondary me-1">${escapeHtml(i.function?.name ?? '—')}</span>
-          <span class="badge bg-info">${escapeHtml(i.size_group?.name ?? '—')}</span>
+          ${i.function?.name ? `<span class="badge bg-secondary me-1">${escapeHtml(i.function.name)}</span>` : ''}
+          ${i.size_group?.name ? `<span class="badge bg-info">${escapeHtml(i.size_group.name)}</span>` : ''}
         </td>
         <td class="py-1 text-end">
           <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
