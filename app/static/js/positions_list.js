@@ -6,6 +6,15 @@
   let allPositions = [];
   let allDepartments = [];
 
+  // Функция для построения полного пути к подразделению
+  function buildDeptPath(deptId, depts) {
+    if (!deptId) return '';
+    const dept = depts.find(d => d.id === deptId);
+    if (!dept) return '';
+    const parentPath = dept.parent_id ? buildDeptPath(dept.parent_id, depts) : '';
+    return parentPath ? `${parentPath} / ${dept.name}` : dept.name;
+  }
+
   async function loadData() {
     try {
       allPositions = await API.get('/api/v1/positions');
@@ -38,13 +47,18 @@
       return;
     }
     tbody.innerHTML = positions.map(p => {
-      const deptName = allDepartments.find(d => d.id === p.department_id)?.name || '—';
+      // Строим полный путь к подразделению
+      const deptPath = buildDeptPath(p.department_id, allDepartments);
       const fullName = escapeHtml(p.name);
       const shortName = escapeHtml(truncate(p.name, 60));
+      const shortDeptPath = escapeHtml(truncate(deptPath, 50));
+      
       return `
       <tr data-pos-id="${p.id}" style="height: 40px;">
         <td class="py-1" title="${fullName}">${shortName}</td>
-        <td class="py-1"><span class="badge bg-secondary">${escapeHtml(deptName)}</span></td>
+        <td class="py-1" title="${escapeHtml(deptPath)}">
+          <span class="badge bg-purple">${shortDeptPath || '—'}</span>
+        </td>
         <td class="py-1 text-end">
           <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deletePos(${p.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>

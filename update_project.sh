@@ -6,9 +6,8 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Уплотняем список должностей..."
+echo "🔧 Добавляем иерархический путь подразделения в бейджи должностей..."
 
-# 1. Обновляем JS (уплотняем строки и обрезаем длинные названия)
 cat > app/static/js/positions_list.js << 'EOF'
 (() => {
   const tbody = document.querySelector('#positions-table tbody');
@@ -17,6 +16,15 @@ cat > app/static/js/positions_list.js << 'EOF'
 
   let allPositions = [];
   let allDepartments = [];
+
+  // Функция для построения полного пути к подразделению
+  function buildDeptPath(deptId, depts) {
+    if (!deptId) return '';
+    const dept = depts.find(d => d.id === deptId);
+    if (!dept) return '';
+    const parentPath = dept.parent_id ? buildDeptPath(dept.parent_id, depts) : '';
+    return parentPath ? `${parentPath} / ${dept.name}` : dept.name;
+  }
 
   async function loadData() {
     try {
@@ -50,13 +58,18 @@ cat > app/static/js/positions_list.js << 'EOF'
       return;
     }
     tbody.innerHTML = positions.map(p => {
-      const deptName = allDepartments.find(d => d.id === p.department_id)?.name || '—';
+      // Строим полный путь к подразделению
+      const deptPath = buildDeptPath(p.department_id, allDepartments);
       const fullName = escapeHtml(p.name);
       const shortName = escapeHtml(truncate(p.name, 60));
+      const shortDeptPath = escapeHtml(truncate(deptPath, 50));
+      
       return `
       <tr data-pos-id="${p.id}" style="height: 40px;">
         <td class="py-1" title="${fullName}">${shortName}</td>
-        <td class="py-1"><span class="badge bg-secondary">${escapeHtml(deptName)}</span></td>
+        <td class="py-1" title="${escapeHtml(deptPath)}">
+          <span class="badge bg-purple">${shortDeptPath || '—'}</span>
+        </td>
         <td class="py-1 text-end">
           <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deletePos(${p.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
@@ -104,32 +117,15 @@ cat > app/static/js/positions_list.js << 'EOF'
 })();
 EOF
 
-echo "✅ JS для должностей обновлен (уплотнение, обрезка названий)."
-
-# 2. Обновляем шаблон (делаем таблицу компактнее)
-python3 - << 'PYEOF'
-with open('app/templates/positions/list.html', 'r') as f:
-    content = f.read()
-
-# Убедимся, что таблица имеет класс table-sm
-if 'table-sm' not in content:
-    content = content.replace(
-        'class="table table-hover align-middle mb-0"',
-        'class="table table-sm table-hover align-middle mb-0"'
-    )
-
-with open('app/templates/positions/list.html', 'w') as f:
-    f.write(content)
-print("✅ Шаблон должностей обновлен (table-sm).")
-PYEOF
+echo "✅ JS для должностей обновлен (полный путь подразделения в фиолетовом бейдже)."
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Список должностей уплотнен."
+echo "✅ ГОТОВО! Бейджи подразделений теперь с полным путем и фиолетовые."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: compact positions list with truncated names"
+git commit -m "ui: show full department path in purple badge on positions page"
