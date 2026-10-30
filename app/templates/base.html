@@ -129,24 +129,7 @@
 </script>
 
 
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const forms = document.querySelectorAll('form');
-    
-    forms.forEach(form => {
-      const submitBtn = form.querySelector('button[type="submit"]');
-      if (!submitBtn) return;
-      
-      const checkValidity = () => {
-        submitBtn.disabled = !form.checkValidity();
-      };
-      
-      checkValidity();
-      form.addEventListener('input', checkValidity);
-      form.addEventListener('change', checkValidity);
-    });
-  });
-</script>
+
 
 </body>
 </html>
