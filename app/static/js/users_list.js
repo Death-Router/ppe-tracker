@@ -1,7 +1,7 @@
 (() => {
   const tbody = document.querySelector('#users-table tbody');
   const form = document.getElementById('user-form');
-  const modalTitle = document.getElementById('modal-title');
+  const modalTitle = document.getElementById('user-modal-title');
   const userIdInput = document.getElementById('user-id');
   const passwordInput = document.getElementById('password');
   const passwordHint = document.getElementById('password-hint');
@@ -10,6 +10,9 @@
   const departmentGroup = document.getElementById('department-group');
   const subdepGroup = document.getElementById('subdep-group');
   const includeSubdep = document.getElementById('include-subdep');
+
+  // Если на странице нет таблицы пользователей, просто выходим
+  if (!tbody) return;
 
   let allUsers = [];
   let allDepartments = [];
@@ -23,10 +26,11 @@
       allDepartments = await API.get('/api/v1/departments');
       renderTable(allUsers);
       
-      // Заполняем выпадающий список подразделений
       const sortedDepts = [...allDepartments].sort((a, b) => a.name.localeCompare(b.name));
-      departmentSelect.innerHTML = '<option value="">Не указано</option>' +
-        sortedDepts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+      if (departmentSelect) {
+        departmentSelect.innerHTML = '<option value="">Не указано</option>' +
+          sortedDepts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+      }
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
@@ -54,7 +58,6 @@
     `}).join('');
   }
 
-  // Открытие модалки для создания
   window.openCreateModal = () => {
     editingId = null;
     modalTitle.textContent = 'Новый пользователь';
@@ -62,10 +65,9 @@
     form.reset();
     passwordInput.required = true;
     passwordHint.style.display = 'none';
-    new bootstrap.Modal(document.getElementById('createModal')).show();
+    new bootstrap.Modal(document.getElementById('createUserModal')).show();
   };
 
-  // Редактирование
   window.editUser = async (id) => {
     try {
       const user = allUsers.find(u => u.id === id);
@@ -85,13 +87,12 @@
       includeSubdep.checked = user.include_subdepartments || false;
       form.elements['is_active'].checked = user.is_active;
       
-      new bootstrap.Modal(document.getElementById('createModal')).show();
+      new bootstrap.Modal(document.getElementById('createUserModal')).show();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
   };
 
-  // Сохранение
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(form);
@@ -117,7 +118,7 @@
         await API.post('/api/v1/users/', payload);
         window.showToast('Пользователь создан', 'success');
       }
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+      bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
       loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
@@ -126,7 +127,6 @@
     }
   });
 
-  // Удаление
   window.deleteUser = async (id) => {
     if (!confirm('Удалить этого пользователя?')) return;
     try {
@@ -138,8 +138,7 @@
     }
   };
 
-  // Привязка кнопки "Добавить"
-  document.querySelector('button[data-bs-target="#createModal"]')?.addEventListener('click', openCreateModal);
+  document.querySelector('button[data-bs-target="#createUserModal"]')?.addEventListener('click', openCreateModal);
 
   loadData();
 })();
