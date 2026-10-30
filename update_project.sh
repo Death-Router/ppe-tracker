@@ -6,118 +6,278 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Обновляем шаблон карточки сотрудника (заголовок таблицы)..."
+echo "📝 Обновляем JS для норм (убираем категории, добавляем функции/группы)..."
+
+cat > app/static/js/norms_list.js << 'EOF'
+(() => {
+  const posSelect = document.getElementById('position-select');
+  const normsContainer = document.getElementById('norms-container');
+  const tbody = document.querySelector('#norms-table tbody');
+  const createForm = document.getElementById('create-norm-form');
+  const itemSelect = document.getElementById('norm-item-input'); // datalist input
+  const itemIdInput = document.getElementById('norm-item-id');
+  const itemsDatalist = document.getElementById('ppe-items-list');
+  const modalElement = document.getElementById('createNormModal');
+  const modalTitle = modalElement.querySelector('.modal-title');
+  const submitBtn = createForm.querySelector('button[type="submit"]');
+
+  let allPpeItems = [];
+  let currentPositionId = null;
+  let editingNormId = null;
+
+  // Склонения
+  function formatPeriod(value, unit) {
+    if (!value) return '—';
+    const num = parseInt(value, 10);
+    if (isNaN(num)) return `${value} ${unit}`;
+    if (unit === 'год') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} лет`;
+      if (lastDigit === 1) return `${num} год`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} года`;
+      return `${num} лет`;
+    }
+    if (unit === 'месяц') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} месяцев`;
+      if (lastDigit === 1) return `${num} месяц`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} месяца`;
+      return `${num} месяцев`;
+    }
+    if (unit === 'день') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} дней`;
+      if (lastDigit === 1) return `${num} день`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} дня`;
+      return `${num} дней`;
+    }
+    if (unit === 'смена') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} смен`;
+      if (lastDigit === 1) return `${num} смена`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} смены`;
+      return `${num} смен`;
+    }
+    return `${value} ${unit}`;
+  }
+
+  function formatUnit(value, shortName) {
+    if (!shortName) return value;
+    const num = parseInt(value, 10);
+    if (isNaN(num)) return `${value} ${shortName}`;
+    if (shortName.toLowerCase() === 'пара') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} пар`;
+      if (lastDigit === 1) return `${num} пара`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} пары`;
+      return `${num} пар`;
+    }
+    if (shortName.toLowerCase() === 'штука' || shortName.toLowerCase() === 'шт') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} штук`;
+      if (lastDigit === 1) return `${num} штука`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} штуки`;
+      return `${num} штук`;
+    }
+    if (shortName.toLowerCase() === 'комплект') {
+      const lastDigit = num % 10;
+      const lastTwo = num % 100;
+      if (lastTwo >= 11 && lastTwo <= 14) return `${num} комплектов`;
+      if (lastDigit === 1) return `${num} комплект`;
+      if (lastDigit >= 2 && lastDigit <= 4) return `${num} комплекта`;
+      return `${num} комплектов`;
+    }
+    return `${num} ${shortName}`;
+  }
+
+  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
+
+  async function init() {
+    try {
+      const positions = await API.get('/api/v1/positions');
+      posSelect.innerHTML = '<option value="">-- Выберите должность --</option>' + 
+        positions.map(p => `<option value="${p.id}">${p.department?.name ?? ''} / ${p.name}</option>`).join('');
+
+      allPpeItems = await API.get('/api/v1/ppe_items');
+      
+      itemsDatalist.innerHTML = allPpeItems.map(i => 
+        `<option value="${i.name} (${i.function?.name ?? ''} / ${i.size_group?.name ?? ''})" data-id="${i.id}"></option>`
+      ).join('');
+    } catch (err) {
+      window.showToast(`Ошибка инициализации: ${err.message}`, 'danger');
+    }
+  }
+
+  async function loadNorms(positionId) {
+    if (!positionId) {
+      normsContainer.classList.add('d-none');
+      return;
+    }
+    
+    currentPositionId = Number(positionId);
+    normsContainer.classList.remove('d-none');
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Загрузка...</td></tr>';
+
+    try {
+      const allNorms = await API.get('/api/v1/position_ppe_norms');
+      const filtered = allNorms.filter(n => n.position_id === currentPositionId);
+      renderTable(filtered);
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-3">Ошибка: ${err.message}</td></tr>`;
+    }
+  }
+
+  function renderTable(norms) {
+    if (!norms.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">Норм пока нет</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = norms.map(n => {
+      const periodStr = formatPeriod(n.wear_period_value, n.wear_period_unit);
+      const qtyStr = formatUnit(n.quantity, n.ppe_item?.unit?.short_name);
+      return `
+      <tr data-norm-id="${n.id}">
+        <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
+        <td>${periodStr}</td>
+        <td>${qtyStr}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>
+    `}).join('');
+  }
+
+  posSelect.addEventListener('change', (e) => loadNorms(e.target.value));
+
+  // Обработчик ввода в поле СИЗ (поиск по datalist)
+  itemSelect.addEventListener('input', (e) => {
+    const val = e.target.value;
+    const option = Array.from(itemsDatalist.options).find(opt => opt.value === val);
+    if (option) {
+      itemIdInput.value = option.getAttribute('data-id');
+    } else {
+      itemIdInput.value = '';
+    }
+  });
+
+  window.openCreateModal = () => {
+    editingNormId = null;
+    modalTitle.textContent = 'Новая норма выдачи';
+    submitBtn.textContent = 'Добавить';
+    createForm.reset();
+    itemSelect.value = '';
+    itemIdInput.value = '';
+  };
+
+  window.editNorm = async (normId) => {
+    try {
+      const norm = await API.get(`/api/v1/position_ppe_norms/${normId}`);
+      editingNormId = normId;
+      modalTitle.textContent = 'Редактирование нормы';
+      submitBtn.textContent = 'Сохранить';
+
+      const item = allPpeItems.find(i => i.id === norm.ppe_item_id);
+      if (item) {
+        itemSelect.value = `${item.name} (${item.function?.name ?? ''} / ${item.size_group?.name ?? ''})`;
+        itemIdInput.value = item.id;
+      }
+      createForm.elements['wear_period_value'].value = norm.wear_period_value;
+      createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
+      createForm.elements['quantity'].value = norm.quantity;
+
+      new bootstrap.Modal(modalElement).show();
+    } catch (err) {
+      window.showToast(`Ошибка загрузки нормы: ${err.message}`, 'danger');
+    }
+  };
+
+  createForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!currentPositionId) return;
+
+    const payload = {
+      position_id: currentPositionId,
+      ppe_item_id: Number(itemIdInput.value),
+      wear_period_value: createForm.elements['wear_period_value'].value.trim(),
+      wear_period_unit: createForm.elements['wear_period_unit'].value,
+      quantity: createForm.elements['quantity'].value.trim()
+    };
+
+    const btn = createForm.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    
+    try {
+      if (editingNormId) {
+        payload.version = (await API.get(`/api/v1/position_ppe_norms/${editingNormId}`)).version;
+        await API.put(`/api/v1/position_ppe_norms/${editingNormId}`, payload);
+        window.showToast('Норма обновлена', 'success');
+      } else {
+        await API.post('/api/v1/position_ppe_norms/', payload);
+        window.showToast('Норма добавлена', 'success');
+      }
+      
+      bootstrap.Modal.getInstance(modalElement).hide();
+      createForm.reset();
+      loadNorms(currentPositionId);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  window.deleteNorm = async (id) => {
+    if (!confirm('Удалить эту норму?')) return;
+    try {
+      await API.request(`/api/v1/position_ppe_norms/${id}`, { method: 'DELETE' });
+      window.showToast('Норма удалена', 'success');
+      loadNorms(currentPositionId);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
+
+  document.querySelector('button[data-bs-target="#createNormModal"]')?.addEventListener('click', openCreateModal);
+
+  WS.subscribe((data) => {
+    if (data.event === 'norm_updated' && currentPositionId) {
+      loadNorms(currentPositionId);
+    }
+  });
+
+  init();
+})();
+EOF
+
+echo "📝 Проверяем шаблон норм (нет ли старых категорий)..."
 
 python3 - << 'PYEOF'
-with open('app/templates/employees/edit.html', 'r') as f:
+with open('app/templates/norms/list.html', 'r') as f:
     content = f.read()
 
-# Меняем заголовок таблицы размеров
-content = content.replace(
-    '<th>Категория СИЗ</th>',
-    '<th>Размерная группа</th>'
-)
+# Убираем упоминания "категория" из шаблона, если они есть
+content = content.replace('Категория', 'Размерная группа')
+content = content.replace('категория', 'размерная группа')
 
-# Меняем заголовок в модалке выдачи (если там есть "Размер (опционально)")
-# (оставляем как есть, это не критично)
-
-with open('app/templates/employees/edit.html', 'w') as f:
+with open('app/templates/norms/list.html', 'w') as f:
     f.write(content)
-print("✅ Заголовок таблицы обновлен.")
-PYEOF
-
-echo "📝 Обновляем JS карточки сотрудника (размерные группы)..."
-
-python3 - << 'PYEOF'
-with open('app/static/js/employee_edit.js', 'r') as f:
-    content = f.read()
-
-# 1. Заменяем allCategories на allSizeGroups
-content = content.replace('let allCategories = [];', 'let allSizeGroups = [];')
-
-# 2. В loadCategories заменяем на loadSizeGroups
-content = content.replace(
-    '''  async function loadCategories() {
-    allCategories = await API.get('/api/v1/ppe_categories');
-  }''',
-    '''  async function loadSizeGroups() {
-    allSizeGroups = await API.get('/api/v1/ppe_size_groups');
-  }'''
-)
-
-# 3. В createSizeRow заменяем categoryOptions на sizeGroupOptions
-content = content.replace(
-    '''    const categoryOptions = allCategories.map(c => 
-      `<option value="${c.id}" ${c.id === Number(categoryId) ? 'selected' : ''}>${c.name}</option>`
-    ).join('');''',
-    '''    const sizeGroupOptions = allSizeGroups.map(g => 
-      `<option value="${g.id}" ${g.id === Number(categoryId) ? 'selected' : ''}>${g.name}</option>`
-    ).join('');'''
-)
-
-# 4. В HTML строки заменяем category-select на size-group-select и categoryOptions на sizeGroupOptions
-content = content.replace(
-    '''        <select class="form-select form-select-sm category-select" required>
-          <option value="">Выберите категорию...</option>
-          ${categoryOptions}
-        </select>''',
-    '''        <select class="form-select form-select-sm size-group-select" required>
-          <option value="">Выберите размерную группу...</option>
-          ${sizeGroupOptions}
-        </select>'''
-)
-
-# 5. Заменяем обработчик изменения категории на размерную группу
-content = content.replace(
-    '''    const catSelect = tr.querySelector('.category-select');''',
-    '''    const catSelect = tr.querySelector('.size-group-select');'''
-)
-
-# 6. В loadEmployee заменяем category_id на size_group_id
-content = content.replace(
-    '''          const tr = await createSizeRow(size.category_id, size.size_value);''',
-    '''          const tr = await createSizeRow(size.size_group_id, size.size_value);'''
-)
-
-# 7. В submitForm (сохранение) заменяем category_id на size_group_id
-content = content.replace(
-    '''        ppeSizes.push({ category_id: categoryId, size_value: sizeVal });''',
-    '''        ppeSizes.push({ size_group_id: categoryId, size_value: sizeVal });'''
-)
-
-# 8. В инициализации заменяем loadCategories на loadSizeGroups
-content = content.replace(
-    '''  loadDepartments()
-    .then(loadCategories)
-    .then(loadAllPpeItems)
-    .then(() => loadEmployee());''',
-    '''  loadDepartments()
-    .then(loadSizeGroups)
-    .then(loadAllPpeItems)
-    .then(() => loadEmployee());'''
-)
-
-# 9. В getSizesForCategory заменяем запрос к ppe_sizes (category_id -> size_group_id)
-content = content.replace(
-    '''      const sizes = await API.get(`/api/v1/ppe_sizes/?category_id=${categoryId}`);''',
-    '''      const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${categoryId}`);'''
-)
-
-# 10. В fillIssueSizes заменяем categoryId на sizeGroupId (но параметр можно оставить)
-# (там уже используется categoryId, но это не критично, так как мы передаем size_group_id)
-
-with open('app/static/js/employee_edit.js', 'w') as f:
-    f.write(content)
-print("✅ JS карточки сотрудника обновлен (size_group_id).")
+print("✅ Шаблон норм обновлен (если были упоминания).")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Карточка сотрудника теперь использует размерные группы."
+echo "✅ ГОТОВО! Нормы обновлены."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: update employee card to use size_groups instead of categories"
+git commit -m "ui: update norms to use functions and size groups"
