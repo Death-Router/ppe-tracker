@@ -26,11 +26,21 @@
 
 <!-- Панель поиска и фильтрации -->
 <div class="row g-2 mb-3">
-    <div class="col-md-5">
+    <div class="col-md-4">
         <div class="input-group">
             <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
             <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
         </div>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" id="filter-function">
+            <option value="">Все функции</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" id="filter-size-group">
+            <option value="">Все размерные группы</option>
+        </select>
     </div>
 </div>
 

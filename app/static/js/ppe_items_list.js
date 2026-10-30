@@ -5,6 +5,8 @@
   const createSizeGroupSelect = document.getElementById('create-size-group');
   const createUnitSelect = document.getElementById('create-unit');
   const searchInput = document.getElementById('search-input');
+  const filterFunction = document.getElementById('filter-function');
+  const filterSizeGroup = document.getElementById('filter-size-group');
   const bulkPanel = document.getElementById('bulk-actions');
   const bulkFunctionSelect = document.getElementById('bulk-function');
   const bulkSizeGroupSelect = document.getElementById('bulk-size-group');
@@ -30,12 +32,20 @@
         functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
       bulkFunctionSelect.innerHTML = '<option value="">-- Функция СИЗ --</option>' +
         functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+      if (filterFunction) {
+        filterFunction.innerHTML = '<option value="">Все функции</option>' +
+          functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+      }
 
       const groups = await API.get('/api/v1/ppe_size_groups');
       createSizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
         groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
       bulkSizeGroupSelect.innerHTML = '<option value="">-- Размерная группа --</option>' +
         groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+      if (filterSizeGroup) {
+        filterSizeGroup.innerHTML = '<option value="">Все размерные группы</option>' +
+          groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+      }
 
       const units = await API.get('/api/v1/units');
       createUnitSelect.innerHTML = '<option value="">Не указана</option>' +
@@ -55,6 +65,9 @@
 
   function filterItems() {
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const funcId = filterFunction ? Number(filterFunction.value) : null;
+    const groupId = filterSizeGroup ? Number(filterSizeGroup.value) : null;
+
     let filtered = allItems;
 
     if (searchTerm) {
@@ -63,6 +76,14 @@
         (item.function?.name || '').toLowerCase().includes(searchTerm) ||
         (item.size_group?.name || '').toLowerCase().includes(searchTerm)
       );
+    }
+
+    if (funcId) {
+      filtered = filtered.filter(item => item.function_id === funcId);
+    }
+
+    if (groupId) {
+      filtered = filtered.filter(item => item.size_group_id === groupId);
     }
 
     filtered.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -193,6 +214,8 @@
   }
 
   if (searchInput) searchInput.addEventListener('input', filterItems);
+  if (filterFunction) filterFunction.addEventListener('change', filterItems);
+  if (filterSizeGroup) filterSizeGroup.addEventListener('change', filterItems);
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
