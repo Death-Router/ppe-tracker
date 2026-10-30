@@ -272,3 +272,15 @@ h1, h2, h3, h4, h5, h6 {
     color: #fff !important;
     opacity: 0.65;
 }
+
+/* Фиолетовый цвет для label в формах */
+.form-label {
+    color: #5b2c8a;
+    font-weight: 500;
+}
+
+/* Также для label внутри карточек (на случай, если .form-label не используется) */
+.card label {
+    color: #5b2c8a;
+    font-weight: 500;
+}

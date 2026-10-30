@@ -6,76 +6,40 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Заменяем отступы на стрелку ↳ в иерархии подразделений..."
+echo "🎨 Делаем текст в label фиолетовым..."
 
-# 1. В employee_edit.js (карточка сотрудника)
 python3 - << 'PYEOF'
-with open('app/static/js/employee_edit.js', 'r') as f:
+with open('app/static/css/app.css', 'r') as f:
     content = f.read()
 
-# Заменяем построение строки с отступами на стрелку
-old_code = '''      hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');'''
-new_code = '''      hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');'''
+if '.form-label' not in content or 'color: #5b2c8a' not in content:
+    content += '''
+/* Фиолетовый цвет для label в формах */
+.form-label {
+    color: #5b2c8a;
+    font-weight: 500;
+}
 
-if old_code in content:
-    content = content.replace(old_code, new_code)
-    print("✅ employee_edit.js: отступы заменены на ↳.")
+/* Также для label внутри карточек (на случай, если .form-label не используется) */
+.card label {
+    color: #5b2c8a;
+    font-weight: 500;
+}
+'''
+    with open('app/static/css/app.css', 'w') as f:
+        f.write(content)
+    print("✅ CSS для фиолетовых label добавлен.")
 else:
-    print("⚠️ employee_edit.js: не удалось найти код с отступами.")
-
-with open('app/static/js/employee_edit.js', 'w') as f:
-    f.write(content)
+    print("ℹ️ CSS уже есть.")
 PYEOF
-
-# 2. В positions_list.js (если там тоже есть иерархия)
-if [ -f "app/static/js/positions_list.js" ]; then
-    python3 - << 'PYEOF'
-with open('app/static/js/positions_list.js', 'r') as f:
-    content = f.read()
-
-old_code = '''      '<option value="">Выберите подразделение...</option>' +
-        depts.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');'''
-new_code = '''      '<option value="">Выберите подразделение...</option>' +
-        depts.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');'''
-
-if old_code in content:
-    content = content.replace(old_code, new_code)
-    print("✅ positions_list.js: отступы заменены на ↳.")
-else:
-    print("ℹ️ positions_list.js: не найдено (возможно, нет иерархии в этой форме).")
-
-with open('app/static/js/positions_list.js', 'w') as f:
-    f.write(content)
-PYEOF
-fi
-
-# 3. В department_edit.js (если там есть иерархия)
-if [ -f "app/static/js/department_edit.js" ]; then
-    python3 - << 'PYEOF'
-with open('app/static/js/department_edit.js', 'r') as f:
-    content = f.read()
-
-old_code = '''      hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');'''
-new_code = '''      hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');'''
-
-if old_code in content:
-    content = content.replace(old_code, new_code)
-    print("✅ department_edit.js: отступы заменены на ↳.")
-else:
-    print("ℹ️ department_edit.js: не найдено (возможно, нет иерархии).")
-
-with open('app/static/js/department_edit.js', 'w') as f:
-    f.write(content)
-PYEOF
-fi
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Иерархия подразделений теперь со стрелками."
+echo "✅ ГОТОВО! Label стали фиолетовыми."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: replace indentation with arrow (↳) in department hierarchy"
+git commit -m "ui: make form labels purple"
