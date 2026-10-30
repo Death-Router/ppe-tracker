@@ -214,6 +214,12 @@
         const id = Number(cb.value);
         if (checked) selectedIds.add(id);
         else selectedIds.delete(id);
+        
+        const row = document.querySelector(`tr[data-item-id="${id}"]`);
+        if (row) {
+          if (checked) row.classList.add('selected-row');
+          else row.classList.remove('selected-row');
+        }
       });
       updateBulkPanel();
     });
