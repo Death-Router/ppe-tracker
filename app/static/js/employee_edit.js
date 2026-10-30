@@ -133,7 +133,7 @@
     allDepartments = await API.get('/api/v1/departments');
     const hierarchy = buildHierarchy(allDepartments);
     deptSelect.innerHTML = '<option value="">Выберите...</option>' + 
-      hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');
+      hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');
   }
 
   async function loadPositions(deptId, selectedId = null) {

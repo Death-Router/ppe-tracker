@@ -29,7 +29,7 @@
 
     const hierarchy = buildHierarchy(filtered);
     parentSelect.innerHTML = '<option value="">Нет (корневое)</option>' + 
-      hierarchy.map(d => `<option value="${d.id}">${'&nbsp;'.repeat(d.level * 3)}${escapeHtml(d.name)}</option>`).join('');
+      hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');
   }
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'); }
