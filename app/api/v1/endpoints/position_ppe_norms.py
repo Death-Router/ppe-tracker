@@ -8,23 +8,23 @@ from app.db.session import get_db
 from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.position import Position
 from app.models.ppe_item import PpeItem
-from app.models.unit import Unit
+from app.models.ppe_function import PpeFunction
+from app.models.ppe_size_group import PpeSizeGroup
 from app.schemas.position_ppe_norm import PositionPpeNormCreate, PositionPpeNormRead, PositionPpeNormUpdate
 
 router = APIRouter(prefix="/position_ppe_norms", tags=["Нормы выдачи СИЗ"])
 
 
 def norm_options():
-    """Возвращает список опций для загрузки всех вложенных связей."""
     return [
-        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.category),
+        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.function),
+        selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.size_group),
         selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.unit),
         selectinload(PositionPpeNorm.position).selectinload(Position.department)
     ]
 
 
 async def get_norm_with_relations(db: AsyncSession, norm_id: int) -> PositionPpeNorm:
-    """Загружает норму со всеми связями."""
     result = await db.execute(
         select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id).options(*norm_options())
     )
