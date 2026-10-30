@@ -96,7 +96,7 @@
       allPpeItems = await API.get('/api/v1/ppe_items');
       
       itemsDatalist.innerHTML = allPpeItems.map(i => 
-        `<option value="${i.name} (${i.function?.name ?? ''} / ${i.size_group?.name ?? ''})" data-id="${i.id}"></option>`
+        `<option value="${i.name}" data-id="${i.id}"></option>`
       ).join('');
     } catch (err) {
       window.showToast(`Ошибка инициализации: ${err.message}`, 'danger');
@@ -174,7 +174,7 @@
 
       const item = allPpeItems.find(i => i.id === norm.ppe_item_id);
       if (item) {
-        itemSelect.value = `${item.name} (${item.function?.name ?? ''} / ${item.size_group?.name ?? ''})`;
+        itemSelect.value = item.name;
         itemIdInput.value = item.id;
       }
       createForm.elements['wear_period_value'].value = norm.wear_period_value;

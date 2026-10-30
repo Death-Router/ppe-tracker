@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.api.v1.endpoints.ws import manager
@@ -8,6 +8,8 @@ from app.models.ppe_item import PpeItem
 from app.models.ppe_function import PpeFunction
 from app.models.ppe_size_group import PpeSizeGroup
 from app.models.unit import Unit
+from app.models.position_ppe_norm import PositionPpeNorm
+from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.schemas.ppe_item import PpeItemCreate, PpeItemRead, PpeItemUpdate
 
 router = APIRouter(prefix="/ppe_items", tags=["Справочник: Наименования СИЗ"])
@@ -72,6 +74,27 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     db_item = result.scalar_one_or_none()
     if not db_item:
         raise HTTPException(status_code=404, detail="Наименование не найдено")
+
+    # Проверяем, есть ли нормы на это СИЗ
+    norm_exists = await db.execute(
+        select(exists().where(PositionPpeNorm.ppe_item_id == item_id))
+    )
+    if norm_exists.scalar():
+        raise HTTPException(
+            status_code=400, 
+            detail="Нельзя удалить СИЗ, так как оно используется в нормах выдачи"
+        )
+
+    # Проверяем, есть ли выдачи этого СИЗ
+    issue_exists = await db.execute(
+        select(exists().where(EmployeePpeIssue.ppe_item_id == item_id))
+    )
+    if issue_exists.scalar():
+        raise HTTPException(
+            status_code=400, 
+            detail="Нельзя удалить СИЗ, так как оно было выдано сотрудникам"
+        )
+
     try:
         await db.delete(db_item)
         await db.commit()
