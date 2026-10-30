@@ -384,3 +384,12 @@ h1, h2, h3, h4, h5, h6 {
     background: rgba(91, 44, 138, 0.2);
     color: #000;
 }
+
+/* Фиолетовый цвет для чекбоксов и радио-кнопок */
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: #5b2c8a;
+    width: 1.2em;
+    height: 1.2em;
+    cursor: pointer;
+}
