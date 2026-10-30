@@ -6,33 +6,61 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🎨 Меняем цвета бейджей 'Активен' на фирменные..."
+echo "🎨 Делаем все чекбоксы и радио-кнопки фиолетовыми..."
 
 python3 - << 'PYEOF'
-with open('app/static/js/users_list.js', 'r') as f:
+with open('app/static/css/app.css', 'r') as f:
     content = f.read()
 
-# Меняем bg-success на bg-purple, bg-danger на bg-brand-orange
-old_active = '''${u.is_active ? '<span class="badge bg-success">Да</span>' : '<span class="badge bg-danger">Нет</span>'}'''
-new_active = '''${u.is_active ? '<span class="badge bg-purple">Да</span>' : '<span class="badge bg-brand-orange">Нет</span>'}'''
+new_css = '''
+/* Фиолетовый цвет для всех чекбоксов и радио-кнопок (включая модалки) */
+input[type="checkbox"],
+input[type="radio"],
+.form-check-input[type="checkbox"],
+.form-check-input[type="radio"] {
+    accent-color: #5b2c8a !important;
+    cursor: pointer;
+}
 
-if old_active in content:
-    content = content.replace(old_active, new_active)
-    print("✅ Цвета бейджей 'Активен' обновлены.")
+/* При фокусе (если браузер использует свой стиль) */
+input[type="checkbox"]:focus,
+input[type="radio"]:focus,
+.form-check-input[type="checkbox"]:focus,
+.form-check-input[type="radio"]:focus {
+    accent-color: #5b2c8a !important;
+    box-shadow: 0 0 0 0.2rem rgba(91, 44, 138, 0.25);
+}
+'''
+
+if 'accent-color: #5b2c8a' not in content:
+    content += new_css
+    with open('app/static/css/app.css', 'w') as f:
+        f.write(content)
+    print("✅ CSS для фиолетовых чекбоксов добавлен.")
 else:
-    print("⚠️ Не удалось найти блок с бейджем 'Активен'. Возможно, структура изменилась.")
+    print("ℹ️ CSS уже есть.")
 
-with open('app/static/js/users_list.js', 'w') as f:
-    f.write(content)
+# Убедимся, что в base.html нет старых стилей, перебивающих цвет
+with open('app/templates/base.html', 'r') as f:
+    base_content = f.read()
+
+import re
+# Убираем старые стили для чекбоксов (если были)
+base_content = re.sub(r'input\[type="checkbox"\][^{]*\{[^}]*\}', '', base_content)
+base_content = re.sub(r'\.form-check-input[^{]*\{[^}]*\}', '', base_content)
+
+with open('app/templates/base.html', 'w') as f:
+    f.write(base_content)
+print("✅ base.html очищен от старых стилей (если были).")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Бейджи стали фиолетовыми и оранжевыми."
+echo "✅ ГОТОВО! Все чекбоксы теперь фиолетовые."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: update 'active' badge colors (purple for yes, orange for no)"
+git commit -m "ui: force purple accent-color for all checkboxes and radios"
