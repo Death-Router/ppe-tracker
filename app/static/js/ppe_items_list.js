@@ -7,11 +7,17 @@
   const searchInput = document.getElementById('search-input');
   const filterFunction = document.getElementById('filter-function');
   const filterSizeGroup = document.getElementById('filter-size-group');
-  const bulkPanel = document.getElementById('bulk-actions');
-  const bulkFunctionSelect = document.getElementById('bulk-function');
-  const bulkSizeGroupSelect = document.getElementById('bulk-size-group');
   const selectAllCheckbox = document.getElementById('select-all');
   const selectedCountSpan = document.getElementById('selected-count');
+  const btnBulkEdit = document.getElementById('btn-bulk-edit');
+  const btnBulkDelete = document.getElementById('btn-bulk-delete');
+
+  // Элементы модалки массового редактирования
+  const bulkEditModal = new bootstrap.Modal(document.getElementById('bulkEditModal'));
+  const bulkFunctionSelect = document.getElementById('bulk-function');
+  const bulkSizeGroupSelect = document.getElementById('bulk-size-group');
+  const bulkUnitSelect = document.getElementById('bulk-unit');
+  const bulkCountSpan = document.getElementById('bulk-count');
 
   let allItems = [];
   let selectedIds = new Set();
@@ -28,28 +34,35 @@
   async function loadSelects() {
     try {
       const functions = await API.get('/api/v1/ppe_functions');
-      createFunctionSelect.innerHTML = '<option value="">Не указана</option>' +
-        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
-      bulkFunctionSelect.innerHTML = '<option value="">-- Функция СИЗ --</option>' +
-        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+      const groups = await API.get('/api/v1/ppe_size_groups');
+      const units = await API.get('/api/v1/units');
+
+      // Заполняем фильтры
       if (filterFunction) {
         filterFunction.innerHTML = '<option value="">Все функции</option>' +
           functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
       }
-
-      const groups = await API.get('/api/v1/ppe_size_groups');
-      createSizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
-        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
-      bulkSizeGroupSelect.innerHTML = '<option value="">-- Размерная группа --</option>' +
-        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
       if (filterSizeGroup) {
         filterSizeGroup.innerHTML = '<option value="">Все размерные группы</option>' +
           groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
       }
 
-      const units = await API.get('/api/v1/units');
+      // Заполняем селекты создания
+      createFunctionSelect.innerHTML = '<option value="">Не указана</option>' +
+        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+      createSizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
+        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
       createUnitSelect.innerHTML = '<option value="">Не указана</option>' +
         units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
+
+      // Заполняем селекты массового редактирования
+      bulkFunctionSelect.innerHTML = '<option value="">Не изменять</option>' +
+        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+      bulkSizeGroupSelect.innerHTML = '<option value="">Не изменять</option>' +
+        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+      bulkUnitSelect.innerHTML = '<option value="">Не изменять</option>' +
+        units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
+
     } catch (err) {
       console.error('Ошибка загрузки справочников:', err);
     }
@@ -77,14 +90,8 @@
         (item.size_group?.name || '').toLowerCase().includes(searchTerm)
       );
     }
-
-    if (funcId) {
-      filtered = filtered.filter(item => item.function_id === funcId);
-    }
-
-    if (groupId) {
-      filtered = filtered.filter(item => item.size_group_id === groupId);
-    }
+    if (funcId) filtered = filtered.filter(item => item.function_id === funcId);
+    if (groupId) filtered = filtered.filter(item => item.size_group_id === groupId);
 
     filtered.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     renderTable(filtered);
@@ -124,47 +131,52 @@
     updateBulkPanel();
   };
 
-  window.applyBulkFunction = async () => {
-    const funcId = bulkFunctionSelect.value;
-    if (!funcId) {
-      window.showToast('Выберите функцию', 'warning');
-      return;
+  function updateBulkPanel() {
+    const count = selectedIds.size;
+    if (count > 0) {
+      selectedCountSpan.classList.remove('d-none');
+      selectedCountSpan.querySelector('span').textContent = count;
+      btnBulkEdit.disabled = false;
+      btnBulkDelete.disabled = false;
+    } else {
+      selectedCountSpan.classList.add('d-none');
+      btnBulkEdit.disabled = true;
+      btnBulkDelete.disabled = true;
+      selectAllCheckbox.checked = false;
     }
-    if (!selectedIds.size) return;
+  }
 
-    try {
-      await API.request('/api/v1/ppe_items/bulk', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          ids: Array.from(selectedIds),
-          function_id: Number(funcId) || 0 // 0 = сбросить
-        })
-      });
-      window.showToast('Функция назначена', 'success');
-      selectedIds.clear();
-      loadItems();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
+  window.openBulkEditModal = () => {
+    if (!selectedIds.size) return;
+    bulkCountSpan.textContent = selectedIds.size;
+    bulkFunctionSelect.value = '';
+    bulkSizeGroupSelect.value = '';
+    bulkUnitSelect.value = '';
+    bulkEditModal.show();
   };
 
-  window.applyBulkSizeGroup = async () => {
+  window.applyBulkEdit = async () => {
+    const funcId = bulkFunctionSelect.value;
     const groupId = bulkSizeGroupSelect.value;
-    if (!groupId) {
-      window.showToast('Выберите размерную группу', 'warning');
+    const unitId = bulkUnitSelect.value;
+
+    if (!funcId && !groupId && !unitId) {
+      window.showToast('Выберите хотя бы одно поле для изменения', 'warning');
       return;
     }
-    if (!selectedIds.size) return;
 
     try {
       await API.request('/api/v1/ppe_items/bulk', {
         method: 'PATCH',
         body: JSON.stringify({
           ids: Array.from(selectedIds),
-          size_group_id: Number(groupId) || 0
+          function_id: funcId ? Number(funcId) : null,
+          size_group_id: groupId ? Number(groupId) : null,
+          unit_id: unitId ? Number(unitId) : null
         })
       });
-      window.showToast('Размерная группа назначена', 'success');
+      window.showToast('Выбранные СИЗ обновлены', 'success');
+      bulkEditModal.hide();
       selectedIds.clear();
       loadItems();
     } catch (err) {
@@ -188,17 +200,6 @@
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
   };
-
-  function updateBulkPanel() {
-    const count = selectedIds.size;
-    selectedCountSpan.textContent = count;
-    if (count > 0) {
-      bulkPanel.classList.remove('d-none');
-    } else {
-      bulkPanel.classList.add('d-none');
-      selectAllCheckbox.checked = false;
-    }
-  }
 
   if (selectAllCheckbox) {
     selectAllCheckbox.addEventListener('change', (e) => {

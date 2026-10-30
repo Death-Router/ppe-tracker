@@ -5,42 +5,25 @@
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
 </div>
 
-<!-- Панель массовых действий (скрыта, пока ничего не выбрано) -->
-<div id="bulk-actions" class="card shadow-sm mb-3 d-none">
-    <div class="card-body py-2 d-flex align-items-center gap-2 flex-wrap">
-        <span class="fw-bold me-2">Выбрано: <span id="selected-count">0</span></span>
-        
-        <select class="form-select form-select-sm" id="bulk-function" style="width: auto;">
-            <option value="">-- Функция СИЗ --</option>
-        </select>
-        <button class="btn btn-sm btn-outline-primary" onclick="applyBulkFunction()">Применить</button>
-
-        <select class="form-select form-select-sm" id="bulk-size-group" style="width: auto;">
-            <option value="">-- Размерная группа --</option>
-        </select>
-        <button class="btn btn-sm btn-outline-primary" onclick="applyBulkSizeGroup()">Применить</button>
-
-        <button class="btn btn-sm btn-outline-danger ms-auto" onclick="bulkDelete()">Удалить выбранные</button>
+<!-- Панель фильтров и массовых действий -->
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <div class="input-group flex-grow-1" style="min-width: 200px; max-width: 300px;">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
     </div>
-</div>
+    
+    <select class="form-select" id="filter-function" style="width: auto;">
+        <option value="">Все функции</option>
+    </select>
+    
+    <select class="form-select" id="filter-size-group" style="width: auto;">
+        <option value="">Все размерные группы</option>
+    </select>
 
-<!-- Панель поиска и фильтрации -->
-<div class="row g-2 mb-3">
-    <div class="col-md-4">
-        <div class="input-group">
-            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
-        </div>
-    </div>
-    <div class="col-md-4">
-        <select class="form-select" id="filter-function">
-            <option value="">Все функции</option>
-        </select>
-    </div>
-    <div class="col-md-4">
-        <select class="form-select" id="filter-size-group">
-            <option value="">Все размерные группы</option>
-        </select>
+    <div class="ms-auto d-flex gap-2">
+        <span id="selected-count" class="align-self-center fw-bold me-2 d-none">Выбрано: <span>0</span></span>
+        <button id="btn-bulk-edit" class="btn btn-outline-primary" disabled onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
+        <button id="btn-bulk-delete" class="btn btn-outline-danger" disabled onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
     </div>
 </div>
 
@@ -62,7 +45,7 @@
     </div>
 </div>
 
-<!-- Модальное окно создания -->
+<!-- Модалка создания -->
 <div class="modal fade" id="createModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -100,6 +83,43 @@
           <button type="submit" class="btn btn-primary">Создать</button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка массового редактирования -->
+<div class="modal fade" id="bulkEditModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Массовое редактирование (выбрано <span id="bulk-count">0</span>)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Оставьте поле пустым, чтобы не изменять его.</p>
+        <div class="mb-3">
+            <label class="form-label">Функция СИЗ</label>
+            <select class="form-select" id="bulk-function">
+                <option value="">Не изменять</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Размерная группа</label>
+            <select class="form-select" id="bulk-size-group">
+                <option value="">Не изменять</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Единица измерения</label>
+            <select class="form-select" id="bulk-unit">
+                <option value="">Не изменять</option>
+            </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary" onclick="applyBulkEdit()">Применить</button>
+      </div>
     </div>
   </div>
 </div>
