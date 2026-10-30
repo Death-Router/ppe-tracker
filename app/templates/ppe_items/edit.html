@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-6">
@@ -18,8 +19,7 @@
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label" for="name">Наименование <span class="text-danger">*</span></label>
-                    <input class="form-control" id="name" name="name" required maxlength="150">
-                    <div class="invalid-feedback">Укажите наименование.</div>
+                    <input class="form-control" id="name" name="name" required maxlength="255">
                 </div>
                 <div class="col-12">
                     <label class="form-label" for="function_id">Функция СИЗ (Защита)</label>
