@@ -284,6 +284,15 @@
       if (titleEl) {
         const fio = [emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ');
         titleEl.textContent = `Редактирование: ${fio}`;
+        // Обновляем путь к подразделению
+        const deptPathEl = document.getElementById('employee-dept-path');
+        if (deptPathEl) {
+          if (emp.department_id && allDepartments.length) {
+            deptPathEl.textContent = buildDeptPath(emp.department_id, allDepartments);
+          } else {
+            deptPathEl.textContent = '';
+          }
+        }
       }
       
       await loadIssues();

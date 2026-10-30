@@ -6,119 +6,98 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Перезаписываем employee_ppe_issues.py (function и size_group)..."
+echo "🔧 Принудительно добавляем путь к подразделению под заголовком..."
 
-cat > app/api/v1/endpoints/employee_ppe_issues.py << 'EOF'
-from datetime import date, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocketDisconnect
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from app.api.v1.endpoints.ws import manager
-from app.db.session import get_db
-from app.models.employee_ppe_issue import EmployeePpeIssue
-from app.models.employee import Employee
-from app.models.ppe_item import PpeItem
-from app.models.position_ppe_norm import PositionPpeNorm
-from app.schemas.employee_ppe_issue import EmployeePpeIssueCreate, EmployeePpeIssueRead
+python3 - << 'PYEOF'
+with open('app/templates/employees/edit.html', 'r') as f:
+    content = f.read()
 
-router = APIRouter(prefix="/employee_ppe_issues", tags=["Выдача СИЗ"])
+# Проверяем, есть ли div для пути
+if 'employee-dept-path' not in content:
+    old_header = '<h1 class="h3 mb-0" id="employee-title">Редактирование сотрудника</h1>'
+    new_header = '''<div>
+                <h1 class="h3 mb-0" id="employee-title">Редактирование сотрудника</h1>
+                <div id="employee-dept-path" class="text-muted small mt-1"></div>
+            </div>'''
+    
+    if old_header in content:
+        content = content.replace(old_header, new_header)
+        print("✅ Div для пути добавлен в шаблон.")
+    else:
+        print("⚠️ Не удалось найти заголовок.")
+else:
+    print("ℹ️ Div уже есть.")
 
+with open('app/templates/employees/edit.html', 'w') as f:
+    f.write(content)
+PYEOF
 
-@router.post("/", response_model=EmployeePpeIssueRead, status_code=status.HTTP_201_CREATED)
-async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depends(get_db)):
-    # 1. Проверяем сотрудника
-    emp_res = await db.execute(select(Employee).where(Employee.id == issue_in.employee_id))
-    employee = emp_res.scalar_one_or_none()
-    if not employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+echo "🔧 Добавляем принудительное обновление пути в JS..."
 
-    # 2. Проверяем СИЗ
-    item_res = await db.execute(select(PpeItem).where(PpeItem.id == issue_in.ppe_item_id))
-    if not item_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
+python3 - << 'PYEOF'
+with open('app/static/js/employee_edit.js', 'r') as f:
+    content = f.read()
 
-    # 3. Рассчитываем срок годности на основе нормы
-    expiry_date = None
-    if employee.position_id:
-        norm_res = await db.execute(
-            select(PositionPpeNorm).where(
-                PositionPpeNorm.position_id == employee.position_id,
-                PositionPpeNorm.ppe_item_id == issue_in.ppe_item_id
-            )
-        )
-        norm = norm_res.scalar_one_or_none()
-        if norm and norm.wear_period_unit in ('год', 'месяц'):
-            try:
-                val = int(norm.wear_period_value)
-                if norm.wear_period_unit == 'год':
-                    expiry_date = issue_in.issue_date + timedelta(days=365 * val)
-                elif norm.wear_period_unit == 'месяц':
-                    expiry_date = issue_in.issue_date + timedelta(days=30 * val)
-            except ValueError:
-                pass
+# Добавляем функцию для построения пути (если нет)
+if 'function buildDeptPath' not in content:
+    content = content.replace(
+        'async function loadDepartments() {',
+        '''function buildDeptPath(deptId, allDepts) {
+    if (!deptId) return '';
+    const dept = allDepts.find(d => d.id === deptId);
+    if (!dept) return '';
+    const parentPath = dept.parent_id ? buildDeptPath(dept.parent_id, allDepts) : '';
+    return parentPath ? `${parentPath} / ${dept.name}` : dept.name;
+  }
 
-    # 4. Создаем запись
-    db_issue = EmployeePpeIssue(
-        employee_id=issue_in.employee_id,
-        ppe_item_id=issue_in.ppe_item_id,
-        issue_date=issue_in.issue_date,
-        quantity=issue_in.quantity,
-        size_value=issue_in.size_value,
-        expiry_date=expiry_date
+  async function loadDepartments() {'''
     )
-    db.add(db_issue)
-    await db.commit()
-    await db.refresh(db_issue)
+    print("✅ Функция buildDeptPath добавлена.")
 
-    # 5. Загружаем связи для ответа
-    result = await db.execute(
-        select(EmployeePpeIssue).where(EmployeePpeIssue.id == db_issue.id)
-        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
-                 selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group))
+# Добавляем глобальную переменную (если нет)
+if 'let allDepartments = [];' not in content:
+    content = content.replace(
+        'async function loadDepartments() {',
+        'let allDepartments = [];\n\n  async function loadDepartments() {'
     )
-    return result.scalar_one()
 
-
-@router.get("/", response_model=list[EmployeePpeIssueRead])
-async def get_issues(employee_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(EmployeePpeIssue).where(EmployeePpeIssue.employee_id == employee_id)
-        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
-                 selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group))
+# Обновляем loadDepartments, чтобы сохранять allDepartments
+if 'allDepartments = await API.get' not in content:
+    content = content.replace(
+        'const depts = await API.get(\'/api/v1/departments\');',
+        'allDepartments = await API.get(\'/api/v1/departments\');\n    const depts = allDepartments;'
     )
-    return result.scalars().all()
 
+# Добавляем обновление пути в loadEmployee (после установки заголовка)
+if 'employee-dept-path' not in content:
+    content = content.replace(
+        'titleEl.textContent = `Редактирование: ${fio}`;',
+        '''titleEl.textContent = `Редактирование: ${fio}`;
+        // Обновляем путь к подразделению
+        const deptPathEl = document.getElementById('employee-dept-path');
+        if (deptPathEl) {
+          if (emp.department_id && allDepartments.length) {
+            deptPathEl.textContent = buildDeptPath(emp.department_id, allDepartments);
+          } else {
+            deptPathEl.textContent = '';
+          }
+        }'''
+    )
+    print("✅ Обновление пути добавлено в loadEmployee.")
+else:
+    print("ℹ️ Обновление пути уже есть.")
 
-@router.delete("/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_issue(issue_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(EmployeePpeIssue).where(EmployeePpeIssue.id == issue_id))
-    db_issue = result.scalar_one_or_none()
-    if not db_issue:
-        raise HTTPException(status_code=404, detail="Запись не найдена")
-
-    try:
-        await db.delete(db_issue)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
-
-    try:
-        await manager.broadcast_to_employee(0, {"event": "issue_updated", "employee_id": db_issue.employee_id})
-    except: pass
-EOF
+with open('app/static/js/employee_edit.js', 'w') as f:
+    f.write(content)
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
-sleep 3
+sleep 2
 
-echo "🔄 Проверяем логи..."
-docker compose logs api --tail 10
-
-echo "✅ ГОТОВО! API выдач обновлено (function и size_group)."
+echo "✅ ГОТОВО! Путь к подразделению должен появиться."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: update employee_ppe_issues API for function/size_group"
+git commit -m "fix: force add department path in employee card"
