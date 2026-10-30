@@ -209,3 +209,23 @@ async def users_page(request: Request):
 @app.get("/")
 async def root():
     return RedirectResponse(url="/employees")
+
+@app.get("/ppe-functions", response_class=HTMLResponse)
+async def ppe_functions_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_functions/list.html",
+        context={"title": "Функции СИЗ"},
+    )
+
+@app.get("/ppe-size-groups", response_class=HTMLResponse)
+async def ppe_size_groups_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_size_groups/list.html",
+        context={"title": "Размерные группы"},
+    )

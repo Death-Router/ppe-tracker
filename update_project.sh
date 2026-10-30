@@ -6,74 +6,57 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🎨 Делаем шапки таблиц фиолетовыми и выравниваем текст..."
+echo "🔧 Восстанавливаем маршруты для страниц функций и размерных групп..."
 
-# 1. Обновляем CSS
 python3 - << 'PYEOF'
-with open('app/static/css/app.css', 'r') as f:
+with open('app/main.py', 'r') as f:
     content = f.read()
 
-new_css = '''
-/* Фиолетовые шапки таблиц (в цвет навбара) */
-.table thead.bg-brand-purple th,
-.bg-brand-purple th {
-    background-color: #5b2c8a !important;
-    color: #ffffff !important;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.5px;
-    border-bottom: none;
-    vertical-align: top !important;
-    text-align: left !important;
-    padding: 0.75rem 0.5rem;
-}
-
-/* Для выравнивания по левому краю в шапках */
-.table thead th {
-    text-align: left !important;
-    vertical-align: top !important;
-}
+# Добавляем маршруты, если их нет
+if '/ppe-functions' not in content:
+    route_func = '''
+@app.get("/ppe-functions", response_class=HTMLResponse)
+async def ppe_functions_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_functions/list.html",
+        context={"title": "Функции СИЗ"},
+    )
 '''
+    content += route_func
+    print("✅ Маршрут /ppe-functions добавлен.")
 
-if '.bg-brand-purple' not in content:
-    content += new_css
-    with open('app/static/css/app.css', 'w') as f:
-        f.write(content)
-    print("✅ CSS для фиолетовых шапок добавлен.")
-else:
-    print("ℹ️ CSS уже есть.")
-PYEOF
+if '/ppe-size-groups' not in content:
+    route_groups = '''
+@app.get("/ppe-size-groups", response_class=HTMLResponse)
+async def ppe_size_groups_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_size_groups/list.html",
+        context={"title": "Размерные группы"},
+    )
+'''
+    content += route_groups
+    print("✅ Маршрут /ppe-size-groups добавлен.")
 
-# 2. Заменяем класс в шаблонах (bg-brand-orange -> bg-brand-purple)
-python3 - << 'PYEOF'
-import os
-import re
-
-templates_dir = 'app/templates'
-for root, dirs, files in os.walk(templates_dir):
-    for file in files:
-        if file.endswith('.html'):
-            path = os.path.join(root, file)
-            with open(path, 'r') as f:
-                content = f.read()
-            
-            # Заменяем bg-brand-orange на bg-brand-purple в thead
-            new_content = content.replace('class="bg-brand-orange"', 'class="bg-brand-purple"')
-            
-            if new_content != content:
-                with open(path, 'w') as f:
-                    f.write(new_content)
-                print(f"✅ Обновлен {path}")
+with open('app/main.py', 'w') as f:
+    f.write(content)
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
-sleep 2
+sleep 3
 
-echo "✅ ГОТОВО! Шапки таблиц стали фиолетовыми, текст выровнен."
+echo "🔄 Проверяем логи..."
+docker compose logs api --tail 10
+
+echo "✅ ГОТОВО! Маршруты восстановлены."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: make table headers purple (navbar color) and align text left/top"
+git commit -m "fix: restore HTML routes for ppe-functions and ppe-size-groups"
