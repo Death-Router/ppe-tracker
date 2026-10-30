@@ -197,3 +197,13 @@ async def units_page(request: Request):
 @app.get("/")
 async def root():
     return RedirectResponse(url="/employees")
+
+@app.get("/structure", response_class=HTMLResponse)
+async def structure_tabs_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="structure/tabs.html",
+        context={"title": "Структура"},
+    )

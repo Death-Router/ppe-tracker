@@ -48,12 +48,12 @@
 
                 <!-- СИЗ (выпадающее меню) -->
                 <li class="nav-item dropdown text-center">
-                    <a class="nav-link dropdown-toggle {% if '/ppe-' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="#" id="ppeDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="#" id="ppeDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-box-seam d-block" style="font-size: 1.2rem;"></i>
                         <span style="font-size: 0.7rem;">СИЗ</span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="ppeDropdown">
-                        <li><a class="dropdown-item" href="/ppe-items">Наименования СИЗ</a></li>
+                        <li><a class="dropdown-item" href="/ppe">Наименования СИЗ</a></li>
                         <li><a class="dropdown-item" href="/norms">Нормы выдачи</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="/ppe-categories">Категории СИЗ</a></li>
@@ -63,12 +63,12 @@
 
                 <!-- Структура (выпадающее меню) -->
                 <li class="nav-item dropdown text-center">
-                    <a class="nav-link dropdown-toggle {% if '/departments' in request.url.path or '/positions' in request.url.path %}active{% endif %}" href="#" id="structureDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}active{% endif %}" href="#" id="structureDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-diagram-3 d-block" style="font-size: 1.2rem;"></i>
                         <span style="font-size: 0.7rem;">Структура</span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="structureDropdown">
-                        <li><a class="dropdown-item" href="/departments">Подразделения</a></li>
+                        <li><a class="dropdown-item" href="/structure">Подразделения</a></li>
                         <li><a class="dropdown-item" href="/positions">Должности</a></li>
                     </ul>
                 </li>
