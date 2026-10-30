@@ -25,18 +25,17 @@
     tbody.innerHTML = employees.map(e => {
       const fio = `${e.last_name} ${e.first_name} ${e.middle_name ?? ''}`.trim();
       return `
-      <tr data-employee-id="${e.id}">
-        <td>${escapeHtml(fio)}</td>
-        <td>${escapeHtml(e.personnel_number)}</td>
-        <td>${escapeHtml(e.department_rel?.name ?? '—')}</td>
-        <td>${escapeHtml(e.position_rel?.name ?? '—')}</td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee(${e.id}, '${escapeHtml(fio)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+      <tr data-employee-id="${e.id}" style="height: 40px;">
+        <td class="py-1">${escapeHtml(fio)}</td>
+        <td class="py-1">${escapeHtml(e.personnel_number)}</td>
+        <td class="py-1">${escapeHtml(e.department_rel?.name ?? '—')}</td>
+        <td class="py-1">${escapeHtml(e.position_rel?.name ?? '—')}</td>
+        <td class="py-1 text-end">
+          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteEmployee(${e.id}, '${escapeHtml(fio)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
-      `;
-    }).join('');
+    `}).join('');
   }
 
   async function loadDepartmentsForSelect() {
@@ -73,7 +72,7 @@
     const payload = FormHelper.serialize(createForm);
     payload.department_id = Number(payload.department_id);
     payload.position_id = Number(payload.position_id);
-    payload.ppe_sizes = []; // Обязательно для EmployeeCreate
+    payload.ppe_sizes = [];
 
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
