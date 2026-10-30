@@ -6,22 +6,30 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Делаем табельный номер жирным и выравниваем по левому краю..."
+echo "🔧 Выравниваем табельный номер по центру ячейки по вертикали..."
 
 python3 - << 'PYEOF'
 with open('app/static/js/employees_list.js', 'r') as f:
     content = f.read()
 
-# Заменяем inline-стиль на жирный + выравнивание влево
-old_td = '''<td class="py-1" style="font-family: 'Courier New', Courier, monospace; font-variant-numeric: tabular-nums; text-align: center; width: 120px;">${escapeHtml(e.personnel_number)}</td>'''
+# Добавляем vertical-align: middle к inline-стилю
+old_td = '''<td class="py-1" style="font-family: 'Courier New', Courier, monospace; font-variant-numeric: tabular-nums; font-weight: bold; text-align: left; width: 120px;">${escapeHtml(e.personnel_number)}</td>'''
 
-new_td = '''<td class="py-1" style="font-family: 'Courier New', Courier, monospace; font-variant-numeric: tabular-nums; font-weight: bold; text-align: left; width: 120px;">${escapeHtml(e.personnel_number)}</td>'''
+new_td = '''<td class="py-1" style="font-family: 'Courier New', Courier, monospace; font-variant-numeric: tabular-nums; font-weight: bold; text-align: left; width: 120px; vertical-align: middle;">${escapeHtml(e.personnel_number)}</td>'''
 
 if old_td in content:
     content = content.replace(old_td, new_td)
-    print("✅ JS обновлен (жирный шрифт, выравнивание влево).")
+    print("✅ Добавлено vertical-align: middle.")
 else:
-    print("⚠️ Не удалось найти старый inline-стиль. Возможно, структура изменилась.")
+    print("⚠️ Не удалось найти старый стиль. Возможно, он уже изменен.")
+    # Попробуем найти более общий паттерн
+    import re
+    content = re.sub(
+        r'(<td[^>]*style="font-family: \'Courier New\', Courier, monospace;[^"]*")',
+        r'\1; vertical-align: middle;"',
+        content
+    )
+    print("✅ Добавлено vertical-align через регулярку.")
 
 with open('app/static/js/employees_list.js', 'w') as f:
     f.write(content)
@@ -31,9 +39,9 @@ echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Табельный номер теперь жирный и слева."
+echo "✅ ГОТОВО! Табельный номер должен выровняться по центру."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: make personnel number bold and left-aligned"
+git commit -m "ui: fix vertical alignment of personnel number"
