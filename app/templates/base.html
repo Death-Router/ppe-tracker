@@ -24,6 +24,7 @@
 </head>
 <body class="bg-light">
 
+{% if not request.query_params.get("embedded") %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
     <div class="container-fluid">
         <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 3rem;">
@@ -67,8 +68,10 @@
         </div>
     </div>
 </nav>
+{% endif %}
 
-<main class="container pb-5">
+
+<main class="container {% if not request.query_params.get("embedded") %}pb-5{% else %}pt-3{% endif %}">
     {% block content %}{% endblock %}
 </main>
 
