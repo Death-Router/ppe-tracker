@@ -10,7 +10,9 @@ from app.models.employee import Employee
 from app.models.employee_ppe_size import EmployeePpeSize
 from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.ppe_item import PpeItem
+from app.models.ppe_function import PpeFunction
 from app.models.ppe_size_group import PpeSizeGroup
+from app.models.department import Department
 from app.models.user import User
 from app.core.deps import get_current_active_user
 from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
@@ -20,12 +22,9 @@ router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
 def employee_options():
     return [
-        # Размеры сотрудника (привязаны к размерным группам)
         selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.size_group),
-        # Выдачи (привязаны к СИЗ)
         selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
         selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group),
-        # Подразделение и должность
         selectinload(Employee.department_rel),
         selectinload(Employee.position_rel)
     ]
@@ -38,6 +37,29 @@ async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Emp
     return result.scalar_one()
 
 
+async def get_allowed_department_ids(db: AsyncSession, user: User) -> list[int]:
+    """Возвращает список ID подразделений, доступных пользователю (с учётом иерархии)."""
+    if user.role == "admin" or not user.department_id:
+        return []  # Пустой список = без ограничений (все)
+
+    allowed_ids = [user.department_id]
+    
+    if user.include_subdepartments:
+        # Рекурсивно собираем дочерние подразделения
+        result = await db.execute(select(Department))
+        all_departments = result.scalars().all()
+        
+        def collect_children(parent_id):
+            children = [d.id for d in all_departments if d.parent_id == parent_id]
+            for child in children:
+                allowed_ids.append(child)
+                collect_children(child)
+        
+        collect_children(user.department_id)
+    
+    return allowed_ids
+
+
 @router.post("/", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
 async def create_employee(
     employee_in: EmployeeCreate, 
@@ -45,7 +67,8 @@ async def create_employee(
     current_user: User = Depends(get_current_active_user)
 ):
     if current_user.role == "safety_officer":
-        if current_user.department_id != employee_in.department_id:
+        allowed = await get_allowed_department_ids(db, current_user)
+        if employee_in.department_id not in allowed:
             raise HTTPException(status_code=403, detail="Вы можете создавать сотрудников только в своем подразделении")
 
     result = await db.execute(select(Employee).where(Employee.personnel_number == employee_in.personnel_number))
@@ -58,9 +81,9 @@ async def create_employee(
     await db.flush()
 
     if employee_in.ppe_sizes:
-        size_group_ids = [size.size_group_id for size in employee_in.ppe_sizes]
-        groups_result = await db.execute(select(PpeSizeGroup.id).where(PpeSizeGroup.id.in_(size_group_ids)))
-        if set(size_group_ids) - set(groups_result.scalars().all()):
+        cat_ids = [size.size_group_id for size in employee_in.ppe_sizes]
+        groups_result = await db.execute(select(PpeSizeGroup.id).where(PpeSizeGroup.id.in_(cat_ids)))
+        if set(cat_ids) - set(groups_result.scalars().all()):
             await db.rollback()
             raise HTTPException(status_code=404, detail="Размерные группы не найдены")
         for size_data in employee_in.ppe_sizes:
@@ -83,8 +106,9 @@ async def get_employees(
 ):
     query = select(Employee).options(*employee_options())
     
-    if current_user.role == "safety_officer" and current_user.department_id:
-        query = query.where(Employee.department_id == current_user.department_id)
+    allowed = await get_allowed_department_ids(db, current_user)
+    if allowed:
+        query = query.where(Employee.department_id.in_(allowed))
 
     result = await db.execute(query)
     return result.scalars().all()
@@ -100,7 +124,8 @@ async def get_employee(
     if not employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
     
-    if current_user.role == "safety_officer" and current_user.department_id != employee.department_id:
+    allowed = await get_allowed_department_ids(db, current_user)
+    if allowed and employee.department_id not in allowed:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     return employee
@@ -118,7 +143,8 @@ async def update_employee(
     if not db_employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
-    if current_user.role == "safety_officer" and current_user.department_id != db_employee.department_id:
+    allowed = await get_allowed_department_ids(db, current_user)
+    if allowed and db_employee.department_id not in allowed:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     if db_employee.version != employee_in.version:
@@ -158,7 +184,8 @@ async def delete_employee(
     if not db_employee:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
-    if current_user.role == "safety_officer" and current_user.department_id != db_employee.department_id:
+    allowed = await get_allowed_department_ids(db, current_user)
+    if allowed and db_employee.department_id not in allowed:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     try:
