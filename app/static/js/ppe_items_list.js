@@ -108,9 +108,8 @@
       const shortName = escapeHtml(truncate(i.name, 60));
       const isChecked = selectedIds.has(i.id) ? 'checked' : '';
       const rowClass = selectedIds.has(i.id) ? 'selected-row' : '';
-      const bgStyle = selectedIds.has(i.id) ? 'background-color: rgba(91, 44, 138, 0.08);' : '';
       return `
-      <tr data-item-id="${i.id}" class="${rowClass}" style="height: 40px; ${bgStyle}">
+      <tr data-item-id="${i.id}" class="${rowClass}" style="height: 40px;">
         <td class="py-1">
           <input type="checkbox" class="item-checkbox" value="${i.id}" ${isChecked} onchange="toggleSelection(${i.id}, this.checked)">
         </td>
@@ -218,8 +217,14 @@
         
         const row = document.querySelector(`tr[data-item-id="${id}"]`);
         if (row) {
-          if (checked) row.classList.add('selected-row');
-          else row.classList.remove('selected-row');
+          const cells = row.querySelectorAll('td');
+          if (checked) {
+            row.classList.add('selected-row');
+            cells.forEach(td => td.style.backgroundColor = 'rgba(91, 44, 138, 0.08)');
+          } else {
+            row.classList.remove('selected-row');
+            cells.forEach(td => td.style.backgroundColor = '');
+          }
         }
       });
       updateBulkPanel();

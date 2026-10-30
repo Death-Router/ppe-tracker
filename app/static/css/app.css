@@ -363,13 +363,12 @@ h1, h2, h3, h4, h5, h6 {
 
 
 
-/* Выбранные строки (выделенные чекбоксом) — фиолетовый фон */
-.table tbody tr.selected-row > td,
-.table tbody tr.selected-row > th {
+
+
+/* Выбранные строки (выделенные чекбоксом) — фиолетовый фон ячеек */
+.table tbody tr.selected-row > td {
     background-color: rgba(91, 44, 138, 0.08) !important;
 }
-
-.table tbody tr.selected-row:hover > td,
-.table tbody tr.selected-row:hover > th {
+.table tbody tr.selected-row:hover > td {
     background-color: rgba(91, 44, 138, 0.12) !important;
 }
