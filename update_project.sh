@@ -6,47 +6,49 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Приводим в порядок шапку формы редактирования СИЗ..."
+echo "🔧 Приводим в порядок шапку формы редактирования СИЗ (кардинально)..."
 
 python3 - << 'PYEOF'
 with open('app/templates/ppe_items/edit.html', 'r') as f:
     content = f.read()
 
-# Уменьшаем заголовок (h3 -> h4) и добавляем flex для выравнивания
+# Находим блок заголовка и заменяем его на компактный
 old_header = '''        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h1 class="h3 mb-0">Редактирование наименования</h1>
-            <a href="/ppe-items" class="btn btn-outline-secondary">← К списку</a>
-        </div>'''
-
-new_header = '''        <div class="d-flex justify-content-between align-items-center mb-3">
             <h1 class="h4 mb-0">Редактирование наименования</h1>
             <a href="/ppe-items" class="btn btn-brand-orange">← К списку</a>
         </div>'''
 
+new_header = '''        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h5 mb-0 text-nowrap">Редактирование наименования</h1>
+            <a href="/ppe-items" class="btn btn-brand-orange btn-sm">← К списку</a>
+        </div>'''
+
 if old_header in content:
     content = content.replace(old_header, new_header)
-    with open('app/templates/ppe_items/edit.html', 'w') as f:
-        f.write(content)
-    print("✅ Заголовок уменьшен до h4, кнопка 'К списку' стала оранжевой.")
+    print("✅ Шапка обновлена (h5, кнопка btn-sm).")
 else:
-    print("⚠️ Не удалось найти блок заголовка. Возможно, структура изменилась.")
-    # Попробуем просто заменить кнопку "К списку" на оранжевую
+    # Если структура отличается, пробуем найти заголовок и кнопку по отдельности
     content = content.replace(
-        'class="btn btn-outline-secondary" href="/ppe-items"',
-        'class="btn btn-brand-orange" href="/ppe-items"'
+        '<h1 class="h3 mb-0">Редактирование наименования</h1>',
+        '<h1 class="h5 mb-0 text-nowrap">Редактирование наименования</h1>'
     )
-    with open('app/templates/ppe_items/edit.html', 'w') as f:
-        f.write(content)
-    print("✅ Кнопка 'К списку' заменена на оранжевую (если нашли).")
+    content = content.replace(
+        'class="btn btn-brand-orange">← К списку</a>',
+        'class="btn btn-brand-orange btn-sm">← К списку</a>'
+    )
+    print("✅ Заголовок и кнопка обновлены (альтернативный метод).")
+
+with open('app/templates/ppe_items/edit.html', 'w') as f:
+    f.write(content)
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Шапка формы приведена в порядок."
+echo "✅ ГОТОВО! Шапка формы теперь компактная."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: tidy header in ppe_item edit page (smaller title, orange back button)"
+git commit -m "ui: compact header in ppe_item edit (h5, btn-sm)"
