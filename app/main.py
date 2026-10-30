@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.v1.endpoints import (
+from app.api.v1.endpoints import ppe_functions, ppe_size_groups, 
     employees, ppe_categories, ppe_items, ws, departments, positions,
     position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units
 )
@@ -43,6 +43,8 @@ app.include_router(export.router, prefix="/api/v1")
 app.include_router(import_data.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(units.router, prefix="/api/v1")
+app.include_router(ppe_functions.router, prefix="/api/v1")
+app.include_router(ppe_size_groups.router, prefix="/api/v1")
 
 # --- WebSocket-роутер ---
 app.include_router(ws.router)
