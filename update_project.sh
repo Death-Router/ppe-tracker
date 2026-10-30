@@ -6,107 +6,104 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Перезаписываем ppe_item_edit.js (без category)..."
+echo "🔧 Принудительно перезаписываем edit.html с правильными id..."
 
-cat > app/static/js/ppe_item_edit.js << 'EOF'
-(() => {
-  const itemId = window.ITEM_ID;
-  const form = document.getElementById('item-form');
-  const btnSubmit = document.getElementById('btn-submit');
-  const conflictAlert = document.getElementById('conflict-alert');
-  const versionInput = document.getElementById('version');
-  const functionSelect = document.getElementById('function_id');
-  const sizeGroupSelect = document.getElementById('size_group_id');
-  const unitSelect = document.getElementById('unit_id');
+cat > app/templates/ppe_items/edit.html << 'EOF'
+{% extends "base.html" %}
 
-  let isDirty = false;
-  form.addEventListener('input', () => { isDirty = true; });
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h3 mb-0">Редактирование наименования</h1>
+            <a href="/ppe-items" class="btn btn-outline-secondary">← К списку</a>
+        </div>
 
-  async function loadSelects() {
-    try {
-      const functions = await API.get('/api/v1/ppe_functions');
-      functionSelect.innerHTML = '<option value="">Не указана</option>' +
-        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+        <div id="conflict-alert" class="alert alert-warning d-none" role="alert">
+            Данные устарели, обновите страницу.
+            <button type="button" class="btn btn-sm btn-warning ms-2" onclick="location.reload()">Обновить</button>
+        </div>
 
-      const groups = await API.get('/api/v1/ppe_size_groups');
-      sizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
-        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+        <form id="item-form" class="card shadow-sm p-4" novalidate>
+            <input type="hidden" name="version" id="version" value="">
 
-      const units = await API.get('/api/v1/units');
-      unitSelect.innerHTML = '<option value="">Не указана</option>' +
-        units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
-    } catch (err) {
-      console.error('Ошибка загрузки справочников:', err);
-    }
-  }
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label" for="name">Наименование <span class="text-danger">*</span></label>
+                    <input class="form-control" id="name" name="name" required maxlength="255">
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="function_id">Функция СИЗ (Защита)</label>
+                    <select class="form-select" id="function_id" name="function_id">
+                        <option value="">Не указана</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="size_group_id">Размерная группа</label>
+                    <select class="form-select" id="size_group_id" name="size_group_id">
+                        <option value="">Не указана</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="unit_id">Единица измерения</label>
+                    <select class="form-select" id="unit_id" name="unit_id">
+                        <option value="">Не указана</option>
+                    </select>
+                </div>
+            </div>
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="/ppe-items" class="btn btn-outline-secondary">Отмена</a>
+                <button type="submit" class="btn btn-primary" id="btn-submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
 
-  async function loadItem(isWsUpdate = false) {
-    try {
-      const item = await API.get(`/api/v1/ppe_items/${itemId}`);
-      if (isWsUpdate && isDirty) {
-        window.showToast('Данные были изменены другим пользователем.', 'warning');
-        versionInput.value = item.version ?? '';
-        return;
-      }
-
-      form.elements['name'].value = item.name ?? '';
-      functionSelect.value = item.function_id ?? '';
-      sizeGroupSelect.value = item.size_group_id ?? '';
-      unitSelect.value = item.unit_id ?? '';
-      versionInput.value = item.version ?? '';
-
-      isDirty = false;
-      if (isWsUpdate) window.showToast('Карточка обновлена', 'info');
-    } catch (err) {
-      window.showToast(`Ошибка загрузки: ${err.message}`, 'danger');
-    }
-  }
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    btnSubmit.disabled = true;
-
-    const payload = FormHelper.serialize(form);
-    payload.function_id = payload.function_id ? Number(payload.function_id) : null;
-    payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
-    payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
-
-    try {
-      const updated = await API.put(`/api/v1/ppe_items/${itemId}`, payload);
-      if (updated?.version != null) versionInput.value = updated.version;
-      isDirty = false;
-      window.showToast('Изменения сохранены', 'success');
-    } catch (err) {
-      if (err.isConflict) {
-        conflictAlert.classList.remove('d-none');
-        conflictAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      }
-    } finally {
-      btnSubmit.disabled = false;
-    }
-  });
-
-  WS.subscribe((data) => {
-    if (data.event === 'item_updated' && data.item_id === itemId) {
-      loadItem(true);
-    }
-  });
-
-  loadSelects().then(() => loadItem());
-})();
+{% block scripts %}
+<script>
+  window.ITEM_ID = Number("{{ item_id }}");
+</script>
+<script src="{{ url_for('static', path='js/ppe_item_edit.js') }}"></script>
+{% endblock %}
 EOF
+
+echo "🔧 Проверяем, что в JS используются правильные id..."
+
+python3 - << 'PYEOF'
+with open('app/static/js/ppe_item_edit.js', 'r') as f:
+    content = f.read()
+
+# Убедимся, что в JS используются правильные id
+# Если там другие — заменяем
+content = content.replace(
+    "document.getElementById('category_id')",
+    "document.getElementById('function_id')"
+)
+content = content.replace(
+    "document.getElementById('create-category')",
+    "document.getElementById('function_id')"
+)
+
+# Проверяем, что все три id на месте
+required_ids = ["function_id", "size_group_id", "unit_id"]
+for rid in required_ids:
+    if rid not in content:
+        print(f"⚠️ В JS не найден id: {rid}")
+
+with open('app/static/js/ppe_item_edit.js', 'w') as f:
+    f.write(content)
+print("✅ JS проверен.")
+PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Ошибка должна исчезнуть."
+echo "✅ ГОТОВО! Проверь страницу и консоль (Ctrl+F5)."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: fully rewrite ppe_item_edit.js without category references"
+git commit -m "fix: force correct ids in ppe_item edit template and JS"
