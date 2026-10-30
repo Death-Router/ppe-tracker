@@ -10,7 +10,7 @@ from app.models.employee import Employee
 from app.models.employee_ppe_size import EmployeePpeSize
 from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.ppe_item import PpeItem
-from app.models.ppe_category import PpeCategory  # пока оставляем для размеров
+from app.models.ppe_size_group import PpeSizeGroup
 from app.models.user import User
 from app.core.deps import get_current_active_user
 from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
@@ -20,9 +20,9 @@ router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
 def employee_options():
     return [
-        # Размеры сотрудника (привязаны к категориям)
-        selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.category),
-        # Выдачи (привязаны к СИЗ, у которых теперь function и size_group)
+        # Размеры сотрудника (привязаны к размерным группам)
+        selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.size_group),
+        # Выдачи (привязаны к СИЗ)
         selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
         selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group),
         # Подразделение и должность
@@ -58,13 +58,13 @@ async def create_employee(
     await db.flush()
 
     if employee_in.ppe_sizes:
-        cat_ids = [size.category_id for size in employee_in.ppe_sizes]
-        cats_result = await db.execute(select(PpeCategory.id).where(PpeCategory.id.in_(cat_ids)))
-        if set(cat_ids) - set(cats_result.scalars().all()):
+        size_group_ids = [size.size_group_id for size in employee_in.ppe_sizes]
+        groups_result = await db.execute(select(PpeSizeGroup.id).where(PpeSizeGroup.id.in_(size_group_ids)))
+        if set(size_group_ids) - set(groups_result.scalars().all()):
             await db.rollback()
-            raise HTTPException(status_code=404, detail="Категории СИЗ не найдены")
+            raise HTTPException(status_code=404, detail="Размерные группы не найдены")
         for size_data in employee_in.ppe_sizes:
-            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+            db.add(EmployeePpeSize(employee_id=db_employee.id, size_group_id=size_data.size_group_id, size_value=size_data.size_value))
 
     await db.commit()
 
@@ -131,7 +131,7 @@ async def update_employee(
     if employee_in.ppe_sizes is not None:
         await db.execute(delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id))
         for size_data in employee_in.ppe_sizes:
-            db.add(EmployeePpeSize(employee_id=db_employee.id, category_id=size_data.category_id, size_value=size_data.size_value))
+            db.add(EmployeePpeSize(employee_id=db_employee.id, size_group_id=size_data.size_group_id, size_value=size_data.size_value))
 
     try:
         await db.commit()
