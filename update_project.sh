@@ -6,48 +6,60 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🎨 Увеличиваем иконки и подписи в навбаре..."
+echo "🔧 Выравниваем иконки в навбаре..."
 
 python3 - << 'PYEOF'
 with open('app/templates/base.html', 'r') as f:
     content = f.read()
 
-# 1. Увеличиваем размер иконок (d-block) до 1.8rem (было 1.2rem)
+# 1. Добавляем общий класс для всех иконок в навбаре (например, nav-icon)
+# Заменяем стили для SVG (щит) и для i (Bootstrap Icons)
 content = content.replace(
-    'style="font-size: 1.2rem;"',
-    'style="font-size: 1.8rem;"'
+    'class="d-block mx-auto mb-1" style="font-size: 1.8rem;"',
+    'class="d-block mx-auto mb-1 nav-icon" style="font-size: 1.8rem; height: 1.8rem;"'
 )
 
-# 2. Увеличиваем размер SVG (щит) до 1.8rem
+# Для SVG (щит) тоже добавляем класс и фиксируем высоту
 content = content.replace(
-    'width="1.2rem" height="1.2rem"',
-    'width="1.8rem" height="1.8rem"'
+    'viewBox="0 0 256 256" width="1.8rem" height="1.8rem" fill="currentColor" class="d-block mx-auto mb-1"',
+    'viewBox="0 0 256 256" width="1.8rem" height="1.8rem" fill="currentColor" class="d-block mx-auto mb-1 nav-icon" style="height: 1.8rem;"'
 )
 
-# 3. Увеличиваем размер подписей (было 0.7rem) до 0.85rem
-content = content.replace(
-    '<span style="font-size: 0.7rem;">',
-    '<span style="font-size: 0.85rem;">'
-)
+# 2. Добавляем CSS для выравнивания (в app.css)
+with open('app/static/css/app.css', 'r') as f:
+    css = f.read()
 
-# 4. Немного увеличиваем отступы между пунктами (padding)
-content = content.replace(
-    'style="padding: 0.5rem 0.75rem;"',
-    'style="padding: 0.75rem 1rem;"'
-)
+new_css = '''
+/* Выравнивание иконок в навбаре */
+.nav-icon {
+    height: 1.8rem !important;
+    width: auto;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+'''
+
+if '.nav-icon' not in css:
+    css += new_css
+    with open('app/static/css/app.css', 'w') as f:
+        f.write(css)
+    print("✅ CSS для выравнивания иконок добавлен.")
+else:
+    print("ℹ️ CSS уже есть.")
 
 with open('app/templates/base.html', 'w') as f:
     f.write(content)
-print("✅ Иконки и подписи в навбаре увеличены.")
+print("✅ Шаблон обновлен (класс nav-icon).")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Навбар стал крупнее."
+echo "✅ ГОТОВО! Иконки должны выровняться."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: increase navbar icon and label sizes"
+git commit -m "fix: align navbar icons (shield and bootstrap icons)"

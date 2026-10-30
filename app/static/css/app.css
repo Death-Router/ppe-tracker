@@ -393,3 +393,12 @@ input[type="radio"] {
     height: 1.2em;
     cursor: pointer;
 }
+
+/* Выравнивание иконок в навбаре */
+.nav-icon {
+    height: 1.8rem !important;
+    width: auto;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
