@@ -322,17 +322,7 @@ h1, h2, h3, h4, h5, h6 {
     color: #fff !important;
 }
 
-/* Кнопки удаления (корзина) — тоже фиолетовые, но с красным оттенком? 
-   Пользователь просил "как у навбара", значит все фиолетовые. 
-   Но для удаления обычно красный. Сделаем красным, но не ярким. */
-.btn-outline-danger {
-    color: #dc3545 !important;
-    border-color: #dc3545 !important;
-}
-.btn-outline-danger:hover {
-    background-color: #dc3545 !important;
-    color: #fff !important;
-}
+
 
 /* Кнопка "+" (Добавить) — зеленая, компактная */
 
@@ -358,4 +348,15 @@ h1, h2, h3, h4, h5, h6 {
     background-color: #4a2470;
     border-color: #4a2470;
     color: #fff;
+}
+
+/* Кнопки "Удалить" (корзина) — оранжевые (как шапки таблиц) */
+.btn-outline-danger {
+    color: #FF6600 !important;
+    border-color: #FF6600 !important;
+}
+.btn-outline-danger:hover {
+    background-color: #FF6600 !important;
+    color: #fff !important;
+    border-color: #FF6600 !important;
 }
