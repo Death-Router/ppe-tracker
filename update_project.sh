@@ -6,74 +6,47 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Добавляем валидацию для динамических модалок..."
+echo "🔧 Приводим в порядок шапку формы редактирования СИЗ..."
 
 python3 - << 'PYEOF'
-with open('app/templates/base.html', 'r') as f:
+with open('app/templates/ppe_items/edit.html', 'r') as f:
     content = f.read()
 
-# Скрипт, который будет следить за появлением модалок и валидировать их формы
-validation_script = '''
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    // Функция для настройки валидации на форме
-    function setupFormValidation(form) {
-      const submitBtn = form.querySelector('button[type="submit"]');
-      if (!submitBtn) return;
-      
-      const checkValidity = () => {
-        submitBtn.disabled = !form.checkValidity();
-      };
-      
-      checkValidity();
-      form.addEventListener('input', checkValidity);
-      form.addEventListener('change', checkValidity);
-    }
-    
-    // Настраиваем валидацию для всех существующих форм
-    document.querySelectorAll('form').forEach(setupFormValidation);
-    
-    // Следим за появлением новых форм в модалках
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === 1) {
-            // Если добавлен элемент form
-            if (node.tagName === 'FORM') {
-              setupFormValidation(node);
-            }
-            // Если добавлены элементы внутри формы
-            if (node.querySelectorAll) {
-              node.querySelectorAll('form').forEach(setupFormValidation);
-            }
-          }
-        });
-      });
-    });
-    
-    // Наблюдаем за всем документом
-    observer.observe(document.body, { childList: true, subtree: true });
-  });
-</script>
-'''
+# Уменьшаем заголовок (h3 -> h4) и добавляем flex для выравнивания
+old_header = '''        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h3 mb-0">Редактирование наименования</h1>
+            <a href="/ppe-items" class="btn btn-outline-secondary">← К списку</a>
+        </div>'''
 
-# Вставляем скрипт перед закрывающим тегом body, если его там нет
-if 'setupFormValidation' not in content:
-    content = content.replace('</body>', validation_script + '\n</body>')
-    with open('app/templates/base.html', 'w') as f:
+new_header = '''        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h4 mb-0">Редактирование наименования</h1>
+            <a href="/ppe-items" class="btn btn-brand-orange">← К списку</a>
+        </div>'''
+
+if old_header in content:
+    content = content.replace(old_header, new_header)
+    with open('app/templates/ppe_items/edit.html', 'w') as f:
         f.write(content)
-    print("✅ Скрипт валидации для динамических форм добавлен.")
+    print("✅ Заголовок уменьшен до h4, кнопка 'К списку' стала оранжевой.")
 else:
-    print("ℹ️ Скрипт валидации уже есть.")
+    print("⚠️ Не удалось найти блок заголовка. Возможно, структура изменилась.")
+    # Попробуем просто заменить кнопку "К списку" на оранжевую
+    content = content.replace(
+        'class="btn btn-outline-secondary" href="/ppe-items"',
+        'class="btn btn-brand-orange" href="/ppe-items"'
+    )
+    with open('app/templates/ppe_items/edit.html', 'w') as f:
+        f.write(content)
+    print("✅ Кнопка 'К списку' заменена на оранжевую (если нашли).")
 PYEOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Валидация должна работать и в модалках."
+echo "✅ ГОТОВО! Шапка формы приведена в порядок."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "fix: add validation for dynamically loaded forms (modals)"
+git commit -m "ui: tidy header in ppe_item edit page (smaller title, orange back button)"
