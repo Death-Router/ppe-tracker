@@ -27,7 +27,7 @@
       return `
       <tr data-employee-id="${e.id}" style="height: 40px;">
         <td class="py-1">${escapeHtml(fio)}</td>
-        <td class="py-1" style="font-family: 'Courier New', Courier, monospace; font-variant-numeric: tabular-nums; text-align: center; width: 120px;">${escapeHtml(e.personnel_number)}</td>
+        <td class="py-1" style="font-family: 'Courier New', Courier, monospace; font-variant-numeric: tabular-nums; font-weight: bold; text-align: left; width: 120px;">${escapeHtml(e.personnel_number)}</td>
         <td class="py-1">${escapeHtml(e.department_rel?.name ?? '—')}</td>
         <td class="py-1">${escapeHtml(e.position_rel?.name ?? '—')}</td>
         <td class="py-1 text-end">
