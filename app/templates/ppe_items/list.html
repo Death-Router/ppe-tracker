@@ -6,8 +6,8 @@
 </div>
 
 <!-- Панель фильтров и массовых действий -->
-<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-    <div class="input-group flex-grow-1" style="min-width: 200px; max-width: 300px;">
+<div class="d-flex align-items-center gap-2 mb-3">
+    <div class="input-group" style="min-width: 200px; max-width: 300px;">
         <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
         <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
     </div>
@@ -20,10 +20,10 @@
         <option value="">Все размерные группы</option>
     </select>
 
-    <div class="ms-auto d-flex gap-2">
-        <span id="selected-count" class="align-self-center fw-bold me-2 d-none">Выбрано: <span>0</span></span>
-        <button id="btn-bulk-edit" class="btn btn-outline-primary" disabled onclick="openBulkEditModal()" title="Редактировать выбранные"><i class="bi bi-pencil"></i></button>
-        <button id="btn-bulk-delete" class="btn btn-outline-danger" disabled onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
+    <div class="ms-auto d-flex align-items-center gap-2">
+        <span id="selected-count" class="fw-bold me-2 d-none">Выбрано: <span>0</span></span>
+        <button id="btn-bulk-edit" class="btn btn-sm btn-outline-primary py-0 px-2" disabled onclick="openBulkEditModal()" title="Редактировать выбранные" style="height: 31px;"><i class="bi bi-pencil"></i></button>
+        <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-2" disabled onclick="bulkDelete()" title="Удалить выбранные" style="height: 31px;"><i class="bi bi-trash"></i></button>
     </div>
 </div>
 
