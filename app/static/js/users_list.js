@@ -49,7 +49,7 @@
         <td class="py-1"><strong>${escapeHtml(u.username)}</strong></td>
         <td class="py-1"><span class="badge bg-purple">${roleName}</span></td>
         <td class="py-1">${escapeHtml(deptName)}</td>
-        <td class="py-1">${u.is_active ? '<span class="badge bg-success">Да</span>' : '<span class="badge bg-danger">Нет</span>'}</td>
+        <td class="py-1">${u.is_active ? '<span class="badge bg-purple">Да</span>' : '<span class="badge bg-brand-orange">Нет</span>'}</td>
         <td class="py-1 text-end">
           <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editUser(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteUser(${u.id})" title="Удалить"><i class="bi bi-trash"></i></button>
