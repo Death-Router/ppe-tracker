@@ -1,8 +1,11 @@
 (() => {
   const tbody = document.querySelector('#units-table tbody');
   const createForm = document.getElementById('create-form');
-  const modalTitle = document.getElementById('unit-modal-title');
-  const unitIdInput = document.getElementById('unit-id');
+  const modalElement = document.getElementById('createModal');
+  const modalTitle = modalElement ? modalElement.querySelector('.modal-title') : null;
+  const submitBtn = createForm ? createForm.querySelector('button[type="submit"]') : null;
+
+  let editingId = null;
 
   async function loadUnits() {
     try {
@@ -34,56 +37,64 @@
 
   // Открытие модалки для создания
   window.openCreateModal = () => {
-    unitIdInput.value = '';
+    if (!createForm || !modalTitle || !submitBtn) {
+      console.warn('Модалка не найдена');
+      return;
+    }
+    editingId = null;
     modalTitle.textContent = 'Новая единица измерения';
+    submitBtn.textContent = 'Создать';
     createForm.reset();
+    new bootstrap.Modal(modalElement).show();
   };
 
   // Редактирование
   window.editUnit = async (id) => {
     try {
-      const unit = await API.get(`/api/v1/units`); // Получаем все, чтобы найти нужную
-      const found = unit.find(u => u.id === id);
-      if (!found) throw new Error('Единица не найдена');
+      const units = await API.get('/api/v1/units');
+      const unit = units.find(u => u.id === id);
+      if (!unit) throw new Error('Единица не найдена');
       
-      unitIdInput.value = id;
+      editingId = id;
       modalTitle.textContent = 'Редактирование единицы';
-      createForm.elements['name'].value = found.name;
-      createForm.elements['short_name'].value = found.short_name;
+      submitBtn.textContent = 'Сохранить';
       
-      new bootstrap.Modal(document.getElementById('createModal')).show();
+      // Заполняем поля (с проверкой на существование)
+      if (createForm.elements['name']) createForm.elements['name'].value = unit.name;
+      if (createForm.elements['short_name']) createForm.elements['short_name'].value = unit.short_name;
+      
+      new bootstrap.Modal(modalElement).show();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
   };
 
-  // Сохранение (создание или обновление)
-  createForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = unitIdInput.value;
-    const payload = FormHelper.serialize(createForm);
-
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
-      if (id) {
-        await API.put(`/api/v1/units/${id}`, payload);
-        window.showToast('Единица обновлена', 'success');
-      } else {
-        await API.post('/api/v1/units/', payload);
-        window.showToast('Единица создана', 'success');
-      }
+  if (createForm) {
+    createForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = FormHelper.serialize(createForm);
+      const btn = createForm.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
       
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
-      createForm.reset();
-      unitIdInput.value = '';
-      loadUnits();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      btn.disabled = false;
-    }
-  });
+      try {
+        if (editingId) {
+          payload.version = (await API.get(`/api/v1/units/${editingId}`)).version;
+          await API.put(`/api/v1/units/${editingId}`, payload);
+          window.showToast('Единица обновлена', 'success');
+        } else {
+          await API.post('/api/v1/units/', payload);
+          window.showToast('Единица создана', 'success');
+        }
+        bootstrap.Modal.getInstance(modalElement).hide();
+        createForm.reset();
+        loadUnits();
+      } catch (err) {
+        window.showToast(`Ошибка: ${err.message}`, 'danger');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+  }
 
   window.deleteUnit = async (id, name) => {
     if (!confirm(`Удалить единицу "${name}"?`)) return;
@@ -96,7 +107,7 @@
     }
   };
 
-  // Привязка кнопки "Добавить" к режиму создания
+  // Привязка кнопки "Добавить" к открытию модалки
   document.querySelector('button[data-bs-target="#createModal"]')?.addEventListener('click', openCreateModal);
 
   loadUnits();
