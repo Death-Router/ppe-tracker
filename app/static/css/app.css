@@ -425,3 +425,24 @@ input[type="radio"] {
 }
 
 
+
+/* Фиолетовые шапки таблиц (в цвет навбара) */
+.table thead.bg-brand-purple th,
+.bg-brand-purple th {
+    background-color: #5b2c8a !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    border-bottom: none;
+    vertical-align: top !important;
+    text-align: left !important;
+    padding: 0.75rem 0.5rem;
+}
+
+/* Для выравнивания по левому краю в шапках */
+.table thead th {
+    text-align: left !important;
+    vertical-align: top !important;
+}
