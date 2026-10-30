@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.v1.endpoints import (
-    employees, ppe_categories, ppe_items, ws, departments, positions,
+    employees, ppe_items, ws, departments, positions,
     position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
     ppe_functions, ppe_size_groups, users
 )
@@ -33,7 +33,6 @@ app.mount(
 
 # --- HTTP-роутеры ---
 app.include_router(employees.router, prefix="/api/v1")
-app.include_router(ppe_categories.router, prefix="/api/v1")
 app.include_router(ppe_items.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
 app.include_router(positions.router, prefix="/api/v1")
@@ -53,7 +52,6 @@ app.include_router(ws.router)
 
 
 def check_auth(request: Request):
-    """Проверяет наличие сессии. Если нет — возвращает RedirectResponse."""
     if not request.session.get("user_id"):
         return RedirectResponse(url="/login", status_code=303)
     return None
@@ -106,26 +104,6 @@ async def structure_tabs_page(request: Request):
         request=request,
         name="structure/tabs.html",
         context={"title": "Структура"},
-    )
-
-@app.get("/ppe-categories", response_class=HTMLResponse)
-async def ppe_categories_page(request: Request):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_categories/list.html",
-        context={"title": "Категории СИЗ"},
-    )
-
-@app.get("/ppe-categories/{category_id}/edit", response_class=HTMLResponse)
-async def ppe_category_edit_page(request: Request, category_id: int):
-    redirect = check_auth(request)
-    if redirect: return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe_categories/edit.html",
-        context={"title": "Редактирование категории", "category_id": category_id},
     )
 
 @app.get("/ppe-items", response_class=HTMLResponse)
