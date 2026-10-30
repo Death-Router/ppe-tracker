@@ -1,7 +1,8 @@
 (() => {
   const tbody = document.querySelector('#items-table tbody');
   const createForm = document.getElementById('create-form');
-  const createCategorySelect = document.getElementById('create-category');
+  const createFunctionSelect = document.getElementById('create-function');
+  const createSizeGroupSelect = document.getElementById('create-size-group');
   const searchInput = document.getElementById('search-input');
   const categoryFilter = document.getElementById('category-filter');
 
@@ -10,40 +11,24 @@
   async function loadItems() {
     try {
       allItems = await API.get('/api/v1/ppe_items');
-      populateCategoryFilter(allItems);
       filterItems();
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
-  async function loadCategoriesForSelect() {
+  async function loadSelects() {
     try {
-      const categories = await API.get('/api/v1/ppe_categories');
-      createCategorySelect.innerHTML = '<option value="">Выберите категорию...</option>' +
-        categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-    } catch (err) {
-      createCategorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
-    }
-  }
+      const functions = await API.get('/api/v1/ppe_functions');
+      createFunctionSelect.innerHTML = '<option value="">Не указана</option>' +
+        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
 
-  async function loadUnitsForSelect() {
-    try {
-      const units = await API.get('/api/v1/units');
-      const unitSelect = document.getElementById('create-unit');
-      if (unitSelect) {
-        unitSelect.innerHTML = '<option value="">Не указана</option>' +
-          units.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.short_name)})</option>`).join('');
-      }
+      const groups = await API.get('/api/v1/ppe_size_groups');
+      createSizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
+        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
     } catch (err) {
-      console.error('Ошибка загрузки единиц:', err);
+      console.error('Ошибка загрузки справочников:', err);
     }
-  }
-
-  function populateCategoryFilter(items) {
-    const categories = [...new Set(items.map(i => i.category?.name).filter(Boolean))];
-    categoryFilter.innerHTML = '<option value="">Все категории</option>' +
-      categories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
   }
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
@@ -55,25 +40,18 @@
   }
 
   function filterItems() {
-    const searchTerm = searchInput.value.toLowerCase().trim();
-    const selectedCategory = categoryFilter.value;
-
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
     let filtered = allItems;
 
     if (searchTerm) {
       filtered = filtered.filter(item => 
         item.name.toLowerCase().includes(searchTerm) || 
-        (item.category?.name || '').toLowerCase().includes(searchTerm)
+        (item.function?.name || '').toLowerCase().includes(searchTerm) ||
+        (item.size_group?.name || '').toLowerCase().includes(searchTerm)
       );
     }
 
-    if (selectedCategory) {
-      filtered = filtered.filter(item => item.category?.name === selectedCategory);
-    }
-
-    // Сортировка по алфавиту (по названию)
     filtered.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-
     renderTable(filtered);
   }
 
@@ -88,7 +66,10 @@
       return `
       <tr data-item-id="${i.id}" style="height: 40px;">
         <td class="py-1" title="${fullName}">${shortName}</td>
-        <td class="py-1"><span class="badge bg-secondary">${escapeHtml(i.category?.name ?? '—')}</span></td>
+        <td class="py-1">
+          <span class="badge bg-secondary me-1">${escapeHtml(i.function?.name ?? '—')}</span>
+          <span class="badge bg-info">${escapeHtml(i.size_group?.name ?? '—')}</span>
+        </td>
         <td class="py-1 text-end">
           <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteItem(${i.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
@@ -97,19 +78,15 @@
     `}).join('');
   }
 
-  searchInput.addEventListener('input', filterItems);
-  categoryFilter.addEventListener('change', filterItems);
+  if (searchInput) searchInput.addEventListener('input', filterItems);
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
-    payload.category_id = Number(payload.category_id);
-    if (payload.unit_id) {
-      payload.unit_id = Number(payload.unit_id);
-    } else {
-      payload.unit_id = null;
-    }
-    
+    payload.function_id = payload.function_id ? Number(payload.function_id) : null;
+    payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
+    payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
+
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {
@@ -140,7 +117,6 @@
     if (data.event === 'item_updated') loadItems();
   });
 
-  loadCategoriesForSelect();
-  loadUnitsForSelect();
+  loadSelects();
   loadItems();
 })();

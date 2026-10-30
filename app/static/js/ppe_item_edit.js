@@ -4,18 +4,22 @@
   const btnSubmit = document.getElementById('btn-submit');
   const conflictAlert = document.getElementById('conflict-alert');
   const versionInput = document.getElementById('version');
-  const categorySelect = document.getElementById('category_id');
+  const functionSelect = document.getElementById('function_id');
+  const sizeGroupSelect = document.getElementById('size_group_id');
   const unitSelect = document.getElementById('unit_id');
 
   let isDirty = false;
   form.addEventListener('input', () => { isDirty = true; });
 
-  // Загрузка категорий и единиц
   async function loadSelects() {
     try {
-      const categories = await API.get('/api/v1/ppe_categories');
-      categorySelect.innerHTML = '<option value="">Выберите категорию...</option>' +
-        categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      const functions = await API.get('/api/v1/ppe_functions');
+      functionSelect.innerHTML = '<option value="">Не указана</option>' +
+        functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+
+      const groups = await API.get('/api/v1/ppe_size_groups');
+      sizeGroupSelect.innerHTML = '<option value="">Не указана</option>' +
+        groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
 
       const units = await API.get('/api/v1/units');
       unitSelect.innerHTML = '<option value="">Не указана</option>' +
@@ -27,7 +31,6 @@
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
-  // Загрузка данных СИЗ
   async function loadItem(isWsUpdate = false) {
     try {
       const item = await API.get(`/api/v1/ppe_items/${itemId}`);
@@ -38,7 +41,8 @@
       }
 
       form.elements['name'].value = item.name ?? '';
-      categorySelect.value = item.category_id ?? '';
+      functionSelect.value = item.function_id ?? '';
+      sizeGroupSelect.value = item.size_group_id ?? '';
       unitSelect.value = item.unit_id ?? '';
       versionInput.value = item.version ?? '';
 
@@ -49,18 +53,14 @@
     }
   }
 
-  // Сохранение
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     btnSubmit.disabled = true;
 
     const payload = FormHelper.serialize(form);
-    payload.category_id = Number(payload.category_id);
-    if (payload.unit_id) {
-      payload.unit_id = Number(payload.unit_id);
-    } else {
-      payload.unit_id = null;
-    }
+    payload.function_id = payload.function_id ? Number(payload.function_id) : null;
+    payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
+    payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
 
     try {
       const updated = await API.put(`/api/v1/ppe_items/${itemId}`, payload);
@@ -85,6 +85,5 @@
     }
   });
 
-  // Инициализация: сначала справочники, потом данные
   loadSelects().then(() => loadItem());
 })();
