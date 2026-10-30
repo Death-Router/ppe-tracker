@@ -6,32 +6,149 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🔧 Увеличиваем иконку настроек в 2 раза..."
+echo "📝 Обновляем навбар (3 раздела с выпадающими меню)..."
 
-python3 - << 'PYEOF'
-with open('app/templates/base.html', 'r') as f:
-    content = f.read()
+cat > app/templates/base.html << 'EOF'
+{# app/templates/base.html #}
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ title or "Учёт СИЗ" }}{% endblock %}</title>
 
-# Увеличиваем размер иконки настроек (было 1.5rem, стало 3rem)
-old_icon = '<a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 1.5rem;">'
-new_icon = '<a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 3rem;">'
+    <!-- Google Fonts (Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-if old_icon in content:
-    content = content.replace(old_icon, new_icon)
-    with open('app/templates/base.html', 'w') as f:
-        f.write(content)
-    print("✅ Размер иконки настроек увеличен до 3rem.")
-else:
-    print("⚠️ Не удалось найти иконку настроек в base.html.")
-PYEOF
+    <!-- Bootstrap 5 CSS -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
+    <div class="container-fluid">
+        <!-- Иконка настроек слева (увеличенная) -->
+        <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 3rem;">
+            <i class="bi bi-gear-fill"></i>
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#mainNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="mainNav">
+            <ul class="navbar-nav mx-auto">
+                <!-- Сотрудники -->
+                <li class="nav-item text-center">
+                    <a class="nav-link {% if '/employees' in request.url.path %}active{% endif %}" href="/employees">
+                        <i class="bi bi-people d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Сотрудники</span>
+                    </a>
+                </li>
+
+                <!-- СИЗ (выпадающее меню) -->
+                <li class="nav-item dropdown text-center">
+                    <a class="nav-link dropdown-toggle {% if '/ppe-' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="#" id="ppeDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-box-seam d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">СИЗ</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="ppeDropdown">
+                        <li><a class="dropdown-item" href="/ppe-items">Наименования СИЗ</a></li>
+                        <li><a class="dropdown-item" href="/norms">Нормы выдачи</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/ppe-categories">Категории СИЗ</a></li>
+                        <li><a class="dropdown-item" href="/units">Единицы измерения</a></li>
+                    </ul>
+                </li>
+
+                <!-- Структура (выпадающее меню) -->
+                <li class="nav-item dropdown text-center">
+                    <a class="nav-link dropdown-toggle {% if '/departments' in request.url.path or '/positions' in request.url.path %}active{% endif %}" href="#" id="structureDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-diagram-3 d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Структура</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="structureDropdown">
+                        <li><a class="dropdown-item" href="/departments">Подразделения</a></li>
+                        <li><a class="dropdown-item" href="/positions">Должности</a></li>
+                    </ul>
+                </li>
+            </ul>
+            <ul class="navbar-nav">
+                <li class="nav-item text-center">
+                    <a class="nav-link" href="#" onclick="event.preventDefault(); fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => window.location.href='/login');">
+                        <i class="bi bi-box-arrow-right d-block" style="font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.7rem;">Выйти</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<main class="container pb-5">
+    {% block content %}{% endblock %}
+</main>
+
+<!-- Контейнер для toast-уведомлений -->
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"
+     style="z-index: 1100;"></div>
+
+<!-- Bootstrap 5 Bundle (включает Popper) -->
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+    crossorigin="anonymous"></script>
+
+<!-- Хелпер для toast'ов (доступен всем скриптам) -->
+<script>
+    window.showToast = function (message, variant = 'info') {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = `toast align-items-center text-bg-${variant} border-0`;
+        el.setAttribute('role', 'alert');
+        el.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                        data-bs-dismiss="toast"></button>
+            </div>`;
+        container.appendChild(el);
+        const t = new bootstrap.Toast(el, { delay: 4000 });
+        t.show();
+        el.addEventListener('hidden.bs.toast', () => el.remove());
+    };
+</script>
+
+<!-- Общие хелперы (API, WebSocket, Forms) -->
+<script src="{{ url_for('static', path='js/common/api.js') }}"></script>
+<script src="{{ url_for('static', path='js/common/ws.js') }}"></script>
+<script src="{{ url_for('static', path='js/common/form.js') }}"></script>
+
+<!-- Блок для скриптов конкретной страницы -->
+{% block scripts %}{% endblock %}
+
+</body>
+</html>
+EOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Иконка настроек теперь в два раза больше."
+echo "✅ ГОТОВО! Навбар переделан в 3 логических раздела."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: double size of settings gear icon"
+git commit -m "ui: restructure navbar into 3 logical sections with dropdowns"
