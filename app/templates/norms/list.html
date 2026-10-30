@@ -1,59 +1,74 @@
 {% extends "base.html" %}
-
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-3">
-    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createNormModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>
-    <h5 class="mb-0 text-secondary">Нормы выдачи СИЗ</h1>
+    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createNormModal" title="Добавить норму">
+        <i class="bi bi-plus-lg"></i>
+    </button>
+    <h1 class="h3 mb-0">Нормы выдачи СИЗ</h1>
+    
+    <!-- Блок массовых операций (появляется при выборе) -->
+    <div id="bulk-actions" class="d-flex align-items-center gap-2 d-none ms-3">
+        <span class="badge bg-purple">Выбрано: <span id="selected-count">0</span></span>
+        <button id="btn-bulk-delete" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="bulkDelete()" title="Удалить выбранные"><i class="bi bi-trash"></i></button>
+    </div>
 </div>
 
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <label class="form-label fw-bold">Выберите должность:</label>
-        <select class="form-select" id="position-select">
-            <option value="">Загрузка должностей...</option>
+<!-- Панель фильтров -->
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <div class="input-group">
+            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="search-input" placeholder="Поиск по должности или СИЗ...">
+        </div>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" id="filter-position">
+            <option value="">Все должности</option>
         </select>
     </div>
 </div>
 
-<div id="norms-container" class="d-none">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0 text-secondary">Список норм</h5>
-</div>
-    
-    <div class="card shadow-sm">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" id="norms-table">
-                <thead class="bg-brand-orange">
-                    <tr>
-                        <th>СИЗ</th>
-                        <th>Срок износа</th>
-                        <th>Количество</th>
-                        <th class="text-end">Действия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                </tbody>
-            </table>
-        </div>
+<!-- Таблица норм -->
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" id="norms-table">
+            <thead class="bg-brand-orange">
+            <tr>
+                <th style="width: 40px;"><input type="checkbox" id="select-all"></th>
+                <th>Должность</th>
+                <th>СИЗ</th>
+                <th>Срок износа</th>
+                <th>Количество</th>
+                <th class="text-end" style="width: 120px;">Действия</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr><td colspan="6" class="text-center text-muted py-4">Загрузка…</td></tr>
+            </tbody>
+        </table>
     </div>
 </div>
 
-<!-- Модальное окно создания нормы -->
+<!-- Модалка создания/редактирования нормы -->
 <div class="modal fade" id="createNormModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form data-validate="true" id="create-norm-form">
+      <form id="create-norm-form">
         <div class="modal-header">
           <h5 class="modal-title">Новая норма выдачи</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
             <div class="mb-3">
-                <label class="form-label">Наименование СИЗ <span class="text-danger">*</span></label>
+                <label class="form-label">Должность <span class="text-danger">*</span></label>
+                <select class="form-select" name="position_id" id="modal-position" required>
+                    <option value="">Загрузка...</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">СИЗ <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" list="ppe-items-list" id="norm-item-input" placeholder="Начните вводить название..." required autocomplete="off">
-                <datalist id="ppe-items-list">
-                    <!-- Опции будут заполнены через JS -->
-                </datalist>
+                <datalist id="ppe-items-list"></datalist>
                 <input type="hidden" name="ppe_item_id" id="norm-item-id">
             </div>
             <div class="row g-3">
@@ -72,12 +87,12 @@
             </div>
             <div class="mb-3 mt-3">
                 <label class="form-label">Количество <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="quantity" required placeholder="Например, 1 пара" value="1">
+                <input type="text" class="form-control" name="quantity" required placeholder="Например, 1" value="1">
             </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-brand-orange" data-bs-dismiss="modal">Отмена</button>
-          <button type="submit" class="btn btn-brand-purple">Добавить</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Добавить</button>
         </div>
       </form>
     </div>

@@ -1,17 +1,23 @@
 (() => {
-  const posSelect = document.getElementById('position-select');
-  const normsContainer = document.getElementById('norms-container');
   const tbody = document.querySelector('#norms-table tbody');
-  const createForm = document.getElementById('create-norm-form');
-  const itemSelect = document.getElementById('norm-item-input'); // datalist input
-  const itemIdInput = document.getElementById('norm-item-id');
-  const itemsDatalist = document.getElementById('ppe-items-list');
+  const searchInput = document.getElementById('search-input');
+  const filterPosition = document.getElementById('filter-position');
+  const selectAllCheckbox = document.getElementById('select-all');
+  const selectedCountSpan = document.getElementById('selected-count');
+  const bulkActions = document.getElementById('bulk-actions');
   const modalElement = document.getElementById('createNormModal');
   const modalTitle = modalElement.querySelector('.modal-title');
-  const submitBtn = createForm.querySelector('button[type="submit"]');
+  const submitBtn = modalElement.querySelector('button[type="submit"]');
+  const modalPosition = document.getElementById('modal-position');
+  const itemInput = document.getElementById('norm-item-input');
+  const itemIdInput = document.getElementById('norm-item-id');
+  const itemsDatalist = document.getElementById('ppe-items-list');
+  const createForm = document.getElementById('create-norm-form');
 
+  let allNorms = [];
+  let allPositions = [];
   let allPpeItems = [];
-  let currentPositionId = null;
+  let selectedIds = new Set();
   let editingNormId = null;
 
   // Склонения
@@ -34,22 +40,6 @@
       if (lastDigit === 1) return `${num} месяц`;
       if (lastDigit >= 2 && lastDigit <= 4) return `${num} месяца`;
       return `${num} месяцев`;
-    }
-    if (unit === 'день') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} дней`;
-      if (lastDigit === 1) return `${num} день`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} дня`;
-      return `${num} дней`;
-    }
-    if (unit === 'смена') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} смен`;
-      if (lastDigit === 1) return `${num} смена`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} смены`;
-      return `${num} смен`;
     }
     return `${value} ${unit}`;
   }
@@ -74,108 +64,188 @@
       if (lastDigit >= 2 && lastDigit <= 4) return `${num} штуки`;
       return `${num} штук`;
     }
-    if (shortName.toLowerCase() === 'комплект') {
-      const lastDigit = num % 10;
-      const lastTwo = num % 100;
-      if (lastTwo >= 11 && lastTwo <= 14) return `${num} комплектов`;
-      if (lastDigit === 1) return `${num} комплект`;
-      if (lastDigit >= 2 && lastDigit <= 4) return `${num} комплекта`;
-      return `${num} комплектов`;
-    }
     return `${num} ${shortName}`;
   }
 
   function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
-  
-  function buildHierarchy(depts, parentId = null, level = 0) {
-    let result = [];
-    const filtered = depts.filter(d => d.parent_id === parentId);
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
-    for (const dept of filtered) {
-      result.push({ ...dept, level });
-      const children = buildHierarchy(depts, dept.id, level + 1);
-      result = result.concat(children);
-    }
-    return result;
-  }
-
-  async function init() {
+  // Загрузка данных
+  async function loadData() {
     try {
-      const positions = await API.get('/api/v1/positions');
-      const departments = await API.get('/api/v1/departments');
-      
-      // Строим иерархию подразделений
-      const hierarchy = buildHierarchy(departments);
-      
-      // Группируем должности по подразделениям
-      const deptMap = {};
-      hierarchy.forEach(d => { deptMap[d.id] = d; });
-      
-      // Сортируем должности по названию
-      positions.sort((a, b) => a.name.localeCompare(b.name));
-      
-      posSelect.innerHTML = '<option value="">-- Выберите должность --</option>' + 
-        positions.map(p => {
-          const dept = deptMap[p.department_id];
-          const deptPath = dept ? `${'↳ '.repeat(dept.level)}${dept.name}` : '—';
-          return `<option value="${p.id}">${deptPath} / ${p.name}</option>`;
-        }).join('');
-
+      allNorms = await API.get('/api/v1/position_ppe_norms');
+      allPositions = await API.get('/api/v1/positions');
       allPpeItems = await API.get('/api/v1/ppe_items');
       
-      itemsDatalist.innerHTML = allPpeItems.map(i => 
-        `<option value="${i.name}" data-id="${i.id}"></option>`
-      ).join('');
+      // Заполняем фильтр должностей
+      if (filterPosition) {
+        const sortedPositions = [...allPositions].sort((a, b) => a.name.localeCompare(b.name));
+        filterPosition.innerHTML = '<option value="">Все должности</option>' +
+          sortedPositions.map(p => {
+            const dept = p.department?.name ?? '';
+            return `<option value="${p.id}">${dept} / ${escapeHtml(p.name)}</option>`;
+          }).join('');
+      }
+
+      // Заполняем datalist для СИЗ
+      if (itemsDatalist) {
+        itemsDatalist.innerHTML = allPpeItems.map(i => 
+          `<option value="${escapeHtml(i.name)}" data-id="${i.id}"></option>`
+        ).join('');
+      }
+
+      // Заполняем select должностей в модалке
+      if (modalPosition) {
+        const sortedPositions = [...allPositions].sort((a, b) => a.name.localeCompare(b.name));
+        modalPosition.innerHTML = '<option value="">Выберите должность...</option>' +
+          sortedPositions.map(p => {
+            const dept = p.department?.name ?? '';
+            return `<option value="${p.id}">${dept} / ${escapeHtml(p.name)}</option>`;
+          }).join('');
+      }
+
+      filterAndRender();
     } catch (err) {
-      window.showToast(`Ошибка инициализации: ${err.message}`, 'danger');
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
-  async function loadNorms(positionId) {
-    if (!positionId) {
-      normsContainer.classList.add('d-none');
-      return;
-    }
-    
-    currentPositionId = Number(positionId);
-    normsContainer.classList.remove('d-none');
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Загрузка...</td></tr>';
+  // Фильтрация и отрисовка
+  function filterAndRender() {
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const posFilter = filterPosition ? Number(filterPosition.value) : null;
 
-    try {
-      const allNorms = await API.get('/api/v1/position_ppe_norms');
-      const filtered = allNorms.filter(n => n.position_id === currentPositionId);
-      renderTable(filtered);
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-3">Ошибка: ${err.message}</td></tr>`;
+    let filtered = allNorms;
+
+    if (searchTerm) {
+      filtered = filtered.filter(n => {
+        const posName = n.position?.name ?? '';
+        const itemName = n.ppe_item?.name ?? '';
+        return posName.toLowerCase().includes(searchTerm) || itemName.toLowerCase().includes(searchTerm);
+      });
     }
+
+    if (posFilter) {
+      filtered = filtered.filter(n => n.position_id === posFilter);
+    }
+
+    renderTable(filtered);
   }
 
   function renderTable(norms) {
     if (!norms.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">Норм пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Норм пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = norms.map(n => {
+      const isChecked = selectedIds.has(n.id) ? 'checked' : '';
+      const rowClass = selectedIds.has(n.id) ? 'selected-row' : '';
+      const posName = n.position?.name ?? '—';
+      const deptName = n.position?.department?.name ?? '';
+      const posStr = deptName ? `${deptName} / ${posName}` : posName;
+      const itemName = n.ppe_item?.name ?? '—';
       const periodStr = formatPeriod(n.wear_period_value, n.wear_period_unit);
       const qtyStr = formatUnit(n.quantity, n.ppe_item?.unit?.short_name);
       return `
-      <tr data-norm-id="${n.id}">
-        <td><strong>${escapeHtml(n.ppe_item?.name ?? '—')}</strong></td>
-        <td>${periodStr}</td>
-        <td>${qtyStr}</td>
-        <td class="text-end">
+      <tr data-norm-id="${n.id}" class="${rowClass}" style="height: 40px;">
+        <td class="py-1">
+          <input type="checkbox" class="item-checkbox" value="${n.id}" ${isChecked} onchange="toggleSelection(${n.id}, this.checked)">
+        </td>
+        <td class="py-1"><strong>${escapeHtml(posStr)}</strong></td>
+        <td class="py-1">${escapeHtml(itemName)}</td>
+        <td class="py-1">${periodStr}</td>
+        <td class="py-1">${qtyStr}</td>
+        <td class="py-1 text-end">
           <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
+    updateBulkPanel();
   }
 
-  posSelect.addEventListener('change', (e) => loadNorms(e.target.value));
+  window.toggleSelection = (id, checked) => {
+    if (checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+    updateBulkPanel();
+    const row = document.querySelector(`tr[data-norm-id="${id}"]`);
+    if (row) {
+      const cells = row.querySelectorAll('td');
+      if (checked) {
+        row.classList.add('selected-row');
+        cells.forEach(td => td.style.backgroundColor = 'rgba(91, 44, 138, 0.08)');
+      } else {
+        row.classList.remove('selected-row');
+        cells.forEach(td => td.style.backgroundColor = '');
+      }
+    }
+  };
 
-  // Обработчик ввода в поле СИЗ (поиск по datalist)
-  itemSelect.addEventListener('input', (e) => {
+  function updateBulkPanel() {
+    const count = selectedIds.size;
+    if (count > 0) {
+      bulkActions.classList.remove('d-none');
+      selectedCountSpan.textContent = count;
+    } else {
+      bulkActions.classList.add('d-none');
+      selectAllCheckbox.checked = false;
+    }
+  }
+
+  window.bulkDelete = async () => {
+    if (!selectedIds.size) return;
+    if (!confirm(`Удалить ${selectedIds.size} выбранных норм?`)) return;
+
+    try {
+      for (const id of selectedIds) {
+        await API.request(`/api/v1/position_ppe_norms/${id}`, { method: 'DELETE' });
+      }
+      window.showToast('Выбранные нормы удалены', 'success');
+      selectedIds.clear();
+      loadData();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
+
+  // Открытие модалки для создания
+  window.openCreateModal = () => {
+    editingNormId = null;
+    modalTitle.textContent = 'Новая норма выдачи';
+    submitBtn.textContent = 'Добавить';
+    createForm.reset();
+    itemInput.value = '';
+    itemIdInput.value = '';
+    modalPosition.value = '';
+  };
+
+  // Редактирование нормы
+  window.editNorm = async (id) => {
+    try {
+      const norm = await API.get(`/api/v1/position_ppe_norms/${id}`);
+      editingNormId = id;
+      modalTitle.textContent = 'Редактирование нормы';
+      submitBtn.textContent = 'Сохранить';
+
+      modalPosition.value = norm.position_id;
+      
+      const item = allPpeItems.find(i => i.id === norm.ppe_item_id);
+      if (item) {
+        itemInput.value = item.name;
+        itemIdInput.value = item.id;
+      }
+      
+      createForm.elements['wear_period_value'].value = norm.wear_period_value;
+      createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
+      createForm.elements['quantity'].value = norm.quantity;
+
+      new bootstrap.Modal(modalElement).show();
+    } catch (err) {
+      window.showToast(`Ошибка загрузки: ${err.message}`, 'danger');
+    }
+  };
+
+  // Обработчик ввода СИЗ (datalist)
+  itemInput.addEventListener('input', (e) => {
     const val = e.target.value;
     const option = Array.from(itemsDatalist.options).find(opt => opt.value === val);
     if (option) {
@@ -185,52 +255,24 @@
     }
   });
 
-  window.openCreateModal = () => {
-    editingNormId = null;
-    modalTitle.textContent = 'Новая норма выдачи';
-    submitBtn.textContent = 'Добавить';
-    createForm.reset();
-    itemSelect.value = '';
-    itemIdInput.value = '';
-  };
-
-  window.editNorm = async (normId) => {
-    try {
-      const norm = await API.get(`/api/v1/position_ppe_norms/${normId}`);
-      editingNormId = normId;
-      modalTitle.textContent = 'Редактирование нормы';
-      submitBtn.textContent = 'Сохранить';
-
-      const item = allPpeItems.find(i => i.id === norm.ppe_item_id);
-      if (item) {
-        itemSelect.value = item.name;
-        itemIdInput.value = item.id;
-      }
-      createForm.elements['wear_period_value'].value = norm.wear_period_value;
-      createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
-      createForm.elements['quantity'].value = norm.quantity;
-
-      new bootstrap.Modal(modalElement).show();
-    } catch (err) {
-      window.showToast(`Ошибка загрузки нормы: ${err.message}`, 'danger');
-    }
-  };
-
+  // Создание/обновление нормы
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!currentPositionId) return;
-
     const payload = {
-      position_id: currentPositionId,
+      position_id: Number(modalPosition.value),
       ppe_item_id: Number(itemIdInput.value),
       wear_period_value: createForm.elements['wear_period_value'].value.trim(),
       wear_period_unit: createForm.elements['wear_period_unit'].value,
       quantity: createForm.elements['quantity'].value.trim()
     };
 
+    if (!payload.ppe_item_id) {
+      window.showToast('Выберите СИЗ из списка', 'danger');
+      return;
+    }
+
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
-    
     try {
       if (editingNormId) {
         payload.version = (await API.get(`/api/v1/position_ppe_norms/${editingNormId}`)).version;
@@ -240,10 +282,9 @@
         await API.post('/api/v1/position_ppe_norms/', payload);
         window.showToast('Норма добавлена', 'success');
       }
-      
       bootstrap.Modal.getInstance(modalElement).hide();
       createForm.reset();
-      loadNorms(currentPositionId);
+      loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
@@ -251,24 +292,53 @@
     }
   });
 
+  // Удаление
   window.deleteNorm = async (id) => {
     if (!confirm('Удалить эту норму?')) return;
     try {
       await API.request(`/api/v1/position_ppe_norms/${id}`, { method: 'DELETE' });
       window.showToast('Норма удалена', 'success');
-      loadNorms(currentPositionId);
+      loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
   };
 
+  // Выбрать все
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll('.item-checkbox').forEach(cb => {
+        cb.checked = checked;
+        const id = Number(cb.value);
+        if (checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        const row = document.querySelector(`tr[data-norm-id="${id}"]`);
+        if (row) {
+          const cells = row.querySelectorAll('td');
+          if (checked) {
+            row.classList.add('selected-row');
+            cells.forEach(td => td.style.backgroundColor = 'rgba(91, 44, 138, 0.08)');
+          } else {
+            row.classList.remove('selected-row');
+            cells.forEach(td => td.style.backgroundColor = '');
+          }
+        }
+      });
+      updateBulkPanel();
+    });
+  }
+
+  // Фильтры
+  if (searchInput) searchInput.addEventListener('input', filterAndRender);
+  if (filterPosition) filterPosition.addEventListener('change', filterAndRender);
+
+  // Кнопка "Добавить" открывает модалку в режиме создания
   document.querySelector('button[data-bs-target="#createNormModal"]')?.addEventListener('click', openCreateModal);
 
   WS.subscribe((data) => {
-    if (data.event === 'norm_updated' && currentPositionId) {
-      loadNorms(currentPositionId);
-    }
+    if (data.event === 'norm_updated') loadData();
   });
 
-  init();
+  loadData();
 })();
