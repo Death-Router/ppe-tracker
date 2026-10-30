@@ -1,12 +1,25 @@
 (() => {
+  console.log('🚀 ppe_item_edit.js загружен');
+  
   const itemId = window.ITEM_ID;
   const form = document.getElementById('item-form');
   const btnSubmit = document.getElementById('btn-submit');
   const conflictAlert = document.getElementById('conflict-alert');
   const versionInput = document.getElementById('version');
-  const functionSelect = document.getElementById('function_id');
-  const sizeGroupSelect = document.getElementById('size_group_id');
-  const unitSelect = document.getElementById('unit_id');
+
+  // Ищем элементы по name, если id не найден
+  const functionSelect = document.getElementById('function_id') || form.elements['function_id'];
+  const sizeGroupSelect = document.getElementById('size_group_id') || form.elements['size_group_id'];
+  const unitSelect = document.getElementById('unit_id') || form.elements['unit_id'];
+
+  console.log('🔍 functionSelect:', functionSelect);
+  console.log('🔍 sizeGroupSelect:', sizeGroupSelect);
+  console.log('🔍 unitSelect:', unitSelect);
+
+  if (!form || !functionSelect || !sizeGroupSelect || !unitSelect) {
+    console.error('❌ Один или несколько элементов не найдены!');
+    return;
+  }
 
   let isDirty = false;
   form.addEventListener('input', () => { isDirty = true; });
@@ -40,11 +53,11 @@
         return;
       }
 
-      form.elements['name'].value = item.name ?? '';
-      functionSelect.value = item.function_id ?? '';
-      sizeGroupSelect.value = item.size_group_id ?? '';
-      unitSelect.value = item.unit_id ?? '';
-      versionInput.value = item.version ?? '';
+      if (form.elements['name']) form.elements['name'].value = item.name ?? '';
+      if (functionSelect) functionSelect.value = item.function_id ?? '';
+      if (sizeGroupSelect) sizeGroupSelect.value = item.size_group_id ?? '';
+      if (unitSelect) unitSelect.value = item.unit_id ?? '';
+      if (versionInput) versionInput.value = item.version ?? '';
 
       isDirty = false;
       if (isWsUpdate) window.showToast('Карточка обновлена', 'info');
