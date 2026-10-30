@@ -6,75 +6,78 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "🎨 Принудительно обновляем шапки во всех списках (фиолетовая '+' слева)..."
+echo "🔧 Перезаписываем шапки списков (фиолетовая '+' слева)..."
 
-python3 - << 'PYEOF'
-import os
+# Функция для замены шапки в шаблоне
+replace_header() {
+    local file=$1
+    local title=$2
+    local modal_id=$3
+    local extra_attrs=$4
+
+    if [ ! -f "$file" ]; then
+        echo "⚠️ Файл не найден: $file"
+        return
+    fi
+
+    python3 - "$file" "$title" "$modal_id" "$extra_attrs" << 'PYEOF'
+import sys
 import re
 
-# Список шаблонов и их заголовков (для замены)
-templates = {
-    'app/templates/employees/list.html': 'Сотрудники',
-    'app/templates/ppe_items/list.html': 'Наименования СИЗ',
-    'app/templates/ppe_functions/list.html': 'Функции СИЗ (Защита)',
-    'app/templates/ppe_size_groups/list.html': 'Размерные группы',
-    'app/templates/units/list.html': 'Единицы измерения',
-    'app/templates/norms/list.html': 'Нормы выдачи СИЗ',
-    'app/templates/departments/list.html': 'Подразделения',
-    'app/templates/positions/list.html': 'Должности',
-}
+file, title, modal_id, extra_attrs = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
-for path, title in templates.items():
-    if not os.path.exists(path):
-        print(f"⚠️ Файл не найден: {path}")
-        continue
-    
-    with open(path, 'r') as f:
-        content = f.read()
-    
-    # 1. Заменяем CSS-класс кнопки "Добавить" на btn-add-purple
-    # (ищем все кнопки с btn-success и заменяем на btn-add-purple)
+with open(file, 'r') as f:
+    content = f.read()
+
+# Ищем блок с заголовком и кнопкой (разные варианты)
+# Вариант 1: <div class="d-flex justify-content-between ..."> <h1>...</h1> <button ...>
+# Вариант 2: <h1>...</h1> <button ...>
+
+# Сначала попробуем найти заголовок и кнопку в одном блоке
+pattern = r'<div class="d-flex justify-content-between align-items-center[^"]*">\s*<h1[^>]*>(.*?)</h1>\s*<button[^>]*>.*?</button>\s*</div>'
+match = re.search(pattern, content, re.DOTALL)
+
+if match:
+    # Заменяем на новый блок
+    new_block = f'''<div class="d-flex align-items-center gap-2 mb-3">
+    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#{modal_id}" title="Добавить"{extra_attrs}>
+        <i class="bi bi-plus-lg"></i>
+    </button>
+    <h1 class="h3 mb-0">{title}</h1>
+</div>'''
+    content = content[:match.start()] + new_block + content[match.end():]
+    print(f"✅ {file}: шапка заменена (вариант 1).")
+else:
+    # Если не нашли, просто заменим кнопку на фиолетовую (позиция останется)
     content = re.sub(
         r'<button([^>]*?)class="btn btn-success([^"]*?)"([^>]*?)>',
         r'<button\1class="btn btn-add-purple\2"\3>',
         content
     )
-    
-    # 2. Убираем текст "Добавить" и оставляем только иконку "+"
-    content = re.sub(
-        r'(<button[^>]*class="[^"]*btn-add-purple[^"]*"[^>]*>)\s*\+?\s*Добавить\s*(</button>)',
-        r'\1<i class="bi bi-plus-lg"></i>\2',
-        content
-    )
-    
-    # 3. Перестраиваем заголовок и кнопку (если они в одном блоке)
-    # Ищем блок с заголовком и кнопкой (разные варианты)
-    
-    # Вариант A: <div class="d-flex justify-content-between ..."> <h1>...</h1> <button ...> ... </div>
-    pattern_a = r'<div class="d-flex justify-content-between align-items-center mb-3">\s*<h1[^>]*>(.*?)</h1>\s*<button[^>]*class="[^"]*btn-add-purple[^"]*"[^>]*>.*?</button>\s*</div>'
-    
-    def replacer_a(match):
-        title_text = match.group(1)
-        return f'<div class="d-flex align-items-center gap-2 mb-3">\n    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить"><i class="bi bi-plus-lg"></i></button>\n    <h1 class="h3 mb-0">{title_text}</h1>\n</div>'
-    
-    content, count = re.subn(pattern_a, replacer_a, content, flags=re.DOTALL)
-    
-    if count > 0:
-        print(f"✅ {path}: кнопка '+' перенесена влево.")
-    else:
-        print(f"ℹ️ {path}: кнопка '+' изменена на фиолетовую (позиция не изменена).")
-    
-    with open(path, 'w') as f:
-        f.write(content)
+    print(f"ℹ️ {file}: кнопка изменена на фиолетовую (позиция не изменена).")
+
+with open(file, 'w') as f:
+    f.write(content)
 PYEOF
+}
+
+# Применяем для всех шаблонов
+replace_header "app/templates/employees/list.html" "Сотрудники" "createModal" ""
+replace_header "app/templates/ppe_items/list.html" "Наименования СИЗ" "createModal" ""
+replace_header "app/templates/ppe_functions/list.html" "Функции СИЗ (Защита)" "createModal" ""
+replace_header "app/templates/ppe_size_groups/list.html" "Размерные группы" "createModal" ""
+replace_header "app/templates/units/list.html" "Единицы измерения" "createModal" ""
+replace_header "app/templates/departments/list.html" "Подразделения" "createModal" ""
+replace_header "app/templates/positions/list.html" "Должности" "createModal" ""
+replace_header "app/templates/norms/list.html" "Нормы выдачи СИЗ" "createNormModal" ""
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
 sleep 2
 
-echo "✅ ГОТОВО! Проверь страницы (Ctrl+F5)."
+echo "✅ ГОТОВО! Шапки списков обновлены."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "ui: force update add buttons to purple and left-aligned"
+git commit -m "ui: force update list headers with purple add button (left)"
