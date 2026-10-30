@@ -6,187 +6,232 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
-echo "📝 Создаем схемы для PpeFunction и PpeSizeGroup..."
+echo "🔧 Перезаписываем main.py с правильным синтаксисом..."
 
-cat > app/schemas/ppe_function.py << 'EOF'
-from pydantic import BaseModel, ConfigDict, Field
+cat > app/main.py << 'EOF'
+from pathlib import Path
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
-class PpeFunctionBase(BaseModel):
-    name: str = Field(..., max_length=100)
+from app.api.v1.endpoints import (
+    employees, ppe_categories, ppe_items, ws, departments, positions,
+    position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
+    ppe_functions, ppe_size_groups
+)
 
-class PpeFunctionCreate(PpeFunctionBase):
-    pass
+BASE_DIR = Path(__file__).resolve().parent
 
-class PpeFunctionRead(PpeFunctionBase):
-    id: int
-    version: int
-    model_config = ConfigDict(from_attributes=True)
+app = FastAPI(title="PPE Tracker API")
+app.add_middleware(SessionMiddleware, secret_key="super-secret-key-change-in-production")
 
-class PpeFunctionUpdate(PpeFunctionBase):
-    name: str | None = None
-    version: int
-EOF
+# --- Шаблоны ---
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-cat > app/schemas/ppe_size_group.py << 'EOF'
-from pydantic import BaseModel, ConfigDict, Field
+def format_date(value):
+    return value.strftime("%d.%m.%Y") if value else ""
 
-class PpeSizeGroupBase(BaseModel):
-    name: str = Field(..., max_length=100)
+templates.env.filters["ru_date"] = format_date
 
-class PpeSizeGroupCreate(PpeSizeGroupBase):
-    pass
+# --- Статика ---
+app.mount(
+    "/static",
+    StaticFiles(directory=str(BASE_DIR / "static")),
+    name="static",
+)
 
-class PpeSizeGroupRead(PpeSizeGroupBase):
-    id: int
-    version: int
-    model_config = ConfigDict(from_attributes=True)
+# --- HTTP-роутеры ---
+app.include_router(employees.router, prefix="/api/v1")
+app.include_router(ppe_categories.router, prefix="/api/v1")
+app.include_router(ppe_items.router, prefix="/api/v1")
+app.include_router(departments.router, prefix="/api/v1")
+app.include_router(positions.router, prefix="/api/v1")
+app.include_router(position_ppe_norms.router, prefix="/api/v1")
+app.include_router(employee_ppe_issues.router, prefix="/api/v1")
+app.include_router(ppe_sizes.router, prefix="/api/v1")
+app.include_router(export.router, prefix="/api/v1")
+app.include_router(import_data.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(units.router, prefix="/api/v1")
+app.include_router(ppe_functions.router, prefix="/api/v1")
+app.include_router(ppe_size_groups.router, prefix="/api/v1")
 
-class PpeSizeGroupUpdate(PpeSizeGroupBase):
-    name: str | None = None
-    version: int
-EOF
+# --- WebSocket-роутер ---
+app.include_router(ws.router)
 
-echo "📝 Создаем API для PpeFunction..."
 
-cat > app/api/v1/endpoints/ppe_functions.py << 'EOF'
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
-from app.db.session import get_db
-from app.models.ppe_function import PpeFunction
-from app.schemas.ppe_function import PpeFunctionCreate, PpeFunctionRead, PpeFunctionUpdate
+def check_auth(request: Request):
+    """Проверяет наличие сессии. Если нет — возвращает RedirectResponse."""
+    if not request.session.get("user_id"):
+        return RedirectResponse(url="/login", status_code=303)
+    return None
 
-router = APIRouter(prefix="/ppe_functions", tags=["Справочник: Функции СИЗ"])
 
-@router.post("/", response_model=PpeFunctionRead, status_code=status.HTTP_201_CREATED)
-async def create_function(func_in: PpeFunctionCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeFunction).where(PpeFunction.name == func_in.name))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Такая функция уже существует")
-    db_func = PpeFunction(**func_in.model_dump())
-    db.add(db_func)
-    await db.commit()
-    await db.refresh(db_func)
-    return db_func
-
-@router.get("/", response_model=list[PpeFunctionRead])
-async def get_functions(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeFunction).order_by(PpeFunction.name))
-    return result.scalars().all()
-
-@router.put("/{func_id}", response_model=PpeFunctionRead)
-async def update_function(func_id: int, func_in: PpeFunctionUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeFunction).where(PpeFunction.id == func_id))
-    db_func = result.scalar_one_or_none()
-    if not db_func:
-        raise HTTPException(status_code=404, detail="Функция не найдена")
-    if db_func.version != func_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
-    
-    update_data = func_in.model_dump(exclude_unset=True, exclude={"version"})
-    for field, value in update_data.items():
-        setattr(db_func, field, value)
-    db_func.version += 1
-    await db.commit()
-    await db.refresh(db_func)
-    return db_func
-
-@router.delete("/{func_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_function(func_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeFunction).where(PpeFunction.id == func_id))
-    db_func = result.scalar_one_or_none()
-    if not db_func:
-        raise HTTPException(status_code=404, detail="Функция не найдена")
-    try:
-        await db.delete(db_func)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить функцию, есть привязанные СИЗ")
-EOF
-
-echo "📝 Создаем API для PpeSizeGroup..."
-
-cat > app/api/v1/endpoints/ppe_size_groups.py << 'EOF'
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
-from app.models.ppe_size_group import PpeSizeGroup
-from app.schemas.ppe_size_group import PpeSizeGroupCreate, PpeSizeGroupRead, PpeSizeGroupUpdate
-
-router = APIRouter(prefix="/ppe_size_groups", tags=["Справочник: Размерные группы"])
-
-@router.post("/", response_model=PpeSizeGroupRead, status_code=status.HTTP_201_CREATED)
-async def create_group(group_in: PpeSizeGroupCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeSizeGroup).where(PpeSizeGroup.name == group_in.name))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Такая группа уже существует")
-    db_group = PpeSizeGroup(**group_in.model_dump())
-    db.add(db_group)
-    await db.commit()
-    await db.refresh(db_group)
-    return db_group
-
-@router.get("/", response_model=list[PpeSizeGroupRead])
-async def get_groups(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeSizeGroup).order_by(PpeSizeGroup.name))
-    return result.scalars().all()
-
-@router.put("/{group_id}", response_model=PpeSizeGroupRead)
-async def update_group(group_id: int, group_in: PpeSizeGroupUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeSizeGroup).where(PpeSizeGroup.id == group_id))
-    db_group = result.scalar_one_or_none()
-    if not db_group:
-        raise HTTPException(status_code=404, detail="Группа не найдена")
-    if db_group.version != group_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
-    
-    update_data = group_in.model_dump(exclude_unset=True, exclude={"version"})
-    for field, value in update_data.items():
-        setattr(db_group, field, value)
-    db_group.version += 1
-    await db.commit()
-    await db.refresh(db_group)
-    return db_group
-
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_group(group_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeSizeGroup).where(PpeSizeGroup.id == group_id))
-    db_group = result.scalar_one_or_none()
-    if not db_group:
-        raise HTTPException(status_code=404, detail="Группа не найдена")
-    try:
-        await db.delete(db_group)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить группу, есть привязанные СИЗ или размеры")
-EOF
-
-echo "🔧 Подключаем новые роутеры в main.py..."
-
-python3 - << 'PYEOF'
-with open('app/main.py', 'r') as f:
-    content = f.read()
-
-if 'ppe_functions' not in content.split('app.include_router')[0]:
-    # Добавляем импорты
-    content = content.replace(
-        'from app.api.v1.endpoints import (',
-        'from app.api.v1.endpoints import ppe_functions, ppe_size_groups, '
+# --- HTML-страницы ---
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"title": "Вход"},
     )
-    # Добавляем include_router
-    content = content.replace(
-        'app.include_router(units.router, prefix="/api/v1")',
-        'app.include_router(units.router, prefix="/api/v1")\napp.include_router(ppe_functions.router, prefix="/api/v1")\napp.include_router(ppe_size_groups.router, prefix="/api/v1")'
-    )
-    print("✅ Новые роутеры подключены.")
 
-with open('app/main.py', 'w') as f:
-    f.write(content)
-PYEOF
+@app.get("/employees", response_class=HTMLResponse)
+async def employees_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="employees/list.html",
+        context={"title": "Сотрудники"},
+    )
+
+@app.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
+async def employee_edit_page(request: Request, employee_id: int):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="employees/edit.html",
+        context={"title": "Редактирование", "employee_id": employee_id},
+    )
+
+@app.get("/ppe", response_class=HTMLResponse)
+async def ppe_tabs_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe/tabs.html",
+        context={"title": "Управление СИЗ"},
+    )
+
+@app.get("/structure", response_class=HTMLResponse)
+async def structure_tabs_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="structure/tabs.html",
+        context={"title": "Структура"},
+    )
+
+@app.get("/ppe-categories", response_class=HTMLResponse)
+async def ppe_categories_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_categories/list.html",
+        context={"title": "Категории СИЗ"},
+    )
+
+@app.get("/ppe-categories/{category_id}/edit", response_class=HTMLResponse)
+async def ppe_category_edit_page(request: Request, category_id: int):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_categories/edit.html",
+        context={"title": "Редактирование категории", "category_id": category_id},
+    )
+
+@app.get("/ppe-items", response_class=HTMLResponse)
+async def ppe_items_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_items/list.html",
+        context={"title": "Наименования СИЗ"},
+    )
+
+@app.get("/ppe-items/{item_id}/edit", response_class=HTMLResponse)
+async def ppe_item_edit_page(request: Request, item_id: int):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="ppe_items/edit.html",
+        context={"title": "Редактирование наименования", "item_id": item_id},
+    )
+
+@app.get("/departments", response_class=HTMLResponse)
+async def departments_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="departments/list.html",
+        context={"title": "Подразделения"},
+    )
+
+@app.get("/departments/{dept_id}/edit", response_class=HTMLResponse)
+async def department_edit_page(request: Request, dept_id: int):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="departments/edit.html",
+        context={"title": "Редактирование подразделения", "dept_id": dept_id},
+    )
+
+@app.get("/positions", response_class=HTMLResponse)
+async def positions_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="positions/list.html",
+        context={"title": "Должности"},
+    )
+
+@app.get("/positions/{pos_id}/edit", response_class=HTMLResponse)
+async def position_edit_page(request: Request, pos_id: int):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="positions/edit.html",
+        context={"title": "Редактирование должности", "pos_id": pos_id},
+    )
+
+@app.get("/norms", response_class=HTMLResponse)
+async def norms_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="norms/list.html",
+        context={"title": "Нормы выдачи СИЗ"},
+    )
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={"title": "Настройки"},
+    )
+
+@app.get("/units", response_class=HTMLResponse)
+async def units_page(request: Request):
+    redirect = check_auth(request)
+    if redirect: return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="units/list.html",
+        context={"title": "Единицы измерения"},
+    )
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/employees")
+EOF
 
 echo "🚀 Перезапускаем контейнер..."
 docker compose restart api
@@ -195,9 +240,9 @@ sleep 3
 echo "🔄 Проверяем логи..."
 docker compose logs api --tail 10
 
-echo "✅ ГОТОВО! API для функций и размерных групп создано."
+echo "✅ ГОТОВО! main.py исправлен."
 
 # --- Git Commit ---
 echo "📦 Фиксируем изменения в Git..."
 git add .
-git commit -m "feat: add API and schemas for ppe_functions and ppe_size_groups"
+git commit -m "fix: correct main.py syntax after adding new routers"

@@ -5,9 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.v1.endpoints import ppe_functions, ppe_size_groups, 
+from app.api.v1.endpoints import (
     employees, ppe_categories, ppe_items, ws, departments, positions,
-    position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units
+    position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
+    ppe_functions, ppe_size_groups
 )
 
 BASE_DIR = Path(__file__).resolve().parent
