@@ -133,27 +133,24 @@ async def employee_edit_page(request: Request, employee_id: int):
         context={"title": "Редактирование", "employee_id": employee_id},
     )
 
-@app.get("/ppe", response_class=HTMLResponse)
+@app.get("/ppe")
 async def ppe_tabs_page(request: Request):
+    """Старый адрес раздела: ведёт на первую вкладку.
+
+    Раньше здесь была страница с iframe, из-за которой модалки открывались
+    внутри рамки. Теперь каждая вкладка — обычная страница.
+    """
     redirect = check_auth(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="ppe/tabs.html",
-        context={"title": "Управление СИЗ"},
-    )
+    return RedirectResponse(url="/ppe-items", status_code=303)
 
-@app.get("/structure", response_class=HTMLResponse)
+@app.get("/structure")
 async def structure_tabs_page(request: Request):
     redirect = check_auth(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="structure/tabs.html",
-        context={"title": "Структура"},
-    )
+    return RedirectResponse(url="/departments", status_code=303)
 
 @app.get("/ppe-items", response_class=HTMLResponse)
 async def ppe_items_page(request: Request):

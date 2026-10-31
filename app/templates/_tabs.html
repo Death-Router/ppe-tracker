@@ -1,0 +1,35 @@
+{# Вкладки раздела «Управление СИЗ».
+   Раньше это были iframe внутри одной страницы: модалки открывались в рамке,
+   backdrop накрывал только таблицу, а прокрутка была двойной. Теперь каждая
+   вкладка — обычная страница со своим адресом. #}
+{% macro ppe_tabs(active) %}
+<ul class="nav nav-tabs tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if active == 'items' %}active{% endif %}" href="/ppe-items">СИЗ</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if active == 'norms' %}active{% endif %}" href="/norms">Нормы выдачи</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if active == 'functions' %}active{% endif %}" href="/ppe-functions">Функции СИЗ</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if active == 'size-groups' %}active{% endif %}" href="/ppe-size-groups">Размерные группы</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if active == 'units' %}active{% endif %}" href="/units">Единицы измерения</a>
+    </li>
+</ul>
+{% endmacro %}
+
+{# То же для «Структуры» #}
+{% macro structure_tabs(active) %}
+<ul class="nav nav-tabs tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if active == 'departments' %}active{% endif %}" href="/departments">Подразделения</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if active == 'positions' %}active{% endif %}" href="/positions">Должности</a>
+    </li>
+</ul>
+{% endmacro %}

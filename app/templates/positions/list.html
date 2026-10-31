@@ -1,5 +1,9 @@
 {% extends "base.html" %}
+{% from "_tabs.html" import structure_tabs %}
 {% block content %}
+{# Вкладки раздела #}
+{{ structure_tabs('positions') }}
+
 <div class="page-head">
     <button class="btn btn-add" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить">
         <i class="bi bi-plus-lg"></i>

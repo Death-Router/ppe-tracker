@@ -48,13 +48,13 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="app-nav__link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}is-active{% endif %}" href="/ppe">
+                    <a class="app-nav__link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path or '/ppe-functions' in request.url.path or '/ppe-size-groups' in request.url.path %}is-active{% endif %}" href="/ppe-items">
                         <i class="bi bi-shield-check"></i>
                         <span>СИЗ</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="app-nav__link {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}is-active{% endif %}" href="/structure">
+                    <a class="app-nav__link {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}is-active{% endif %}" href="/departments">
                         <i class="bi bi-diagram-3"></i>
                         <span>Структура</span>
                     </a>
@@ -115,39 +115,6 @@
 <script src="{{ url_for('static', path='js/common/validation.js') }}"></script>
 <script src="{{ url_for('static', path='js/common/pager.js') }}"></script>
 
-<script>
-    // Во вкладках (iframe) живут только списки. Если во фрейме открылась
-    // другая страница — например, карточка редактирования по старой ссылке —
-    // вытаскиваем её в основное окно, иначе навбар дублируется.
-    if (window.isEmbedded && !window.location.pathname.match(/\/(employees|departments|positions|ppe-items|norms|ppe-functions|ppe-size-groups|units|users)$/)) {
-        const target = window.location.pathname + window.location.search;
-        window.top.location.replace(target);
-    }
-
-    // Сообщаем родителю фактическую высоту содержимого: тогда во вкладке нет
-    // второй полосы прокрутки и список виден целиком, а не обрезан
-    if (window.isEmbedded) {
-        const reportHeight = () => {
-            const height = Math.max(
-                document.body.scrollHeight,
-                document.documentElement.scrollHeight
-            );
-            try {
-                window.parent.postMessage({ type: 'embed-height', height }, '*');
-            } catch (e) {
-                // родитель недоступен — не критично
-            }
-        };
-
-        window.addEventListener('load', reportHeight);
-        // Высота меняется после загрузки данных, пагинации и поиска
-        if (window.ResizeObserver) {
-            new ResizeObserver(reportHeight).observe(document.body);
-        }
-        document.addEventListener('click', () => setTimeout(reportHeight, 100));
-        document.addEventListener('input', () => setTimeout(reportHeight, 400));
-    }
-</script>
 
 <!-- Блок для скриптов конкретной страницы -->
 {% block scripts %}{% endblock %}

@@ -727,24 +727,7 @@ input[type="radio"] {
     opacity: 0.6;
 }
 
-/* Встроенные страницы (вкладки на iframe) */
-.embed-frame {
-    width: 100%;
-    /* Высоту выставляет скрипт по содержимому: фиксированная 100vh давала
-       вторую полосу прокрутки внутри рамки */
-    height: 520px;
-    min-height: 320px;
-    border: 0;
-    display: block;
-}
 
-body.is-embedded .app-nav {
-    display: none;
-}
-
-body.is-embedded .app-main {
-    padding-top: var(--space-3);
-}
 
 /* --------------------------------------------------------------------------
    13. Адаптивность

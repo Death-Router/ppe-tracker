@@ -1,5 +1,9 @@
 {% extends "base.html" %}
+{% from "_tabs.html" import ppe_tabs %}
 {% block content %}
+{# Вкладки раздела #}
+{{ ppe_tabs('size-groups') }}
+
 <div class="page-head">
     <button class="btn btn-add" id="btn-create" title="Добавить">
         <i class="bi bi-plus-lg"></i>
