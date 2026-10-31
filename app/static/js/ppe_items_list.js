@@ -91,10 +91,12 @@
       if (filterFunction) {
         filterFunction.innerHTML = '<option value="">Все функции</option>' +
           functions.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+        window.fitSelectWidth(filterFunction);
       }
       if (filterSizeGroup) {
         filterSizeGroup.innerHTML = '<option value="">Все размерные группы</option>' +
           groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+        window.fitSelectWidth(filterSizeGroup);
       }
 
       // Заполняем селекты создания

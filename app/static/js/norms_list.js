@@ -110,6 +110,7 @@
             const dept = p.department?.name ?? '';
             return `<option value="${p.id}">${dept} / ${escapeHtml(p.name)}</option>`;
           }).join('');
+        window.fitSelectWidth(filterPosition);
       }
 
       // Заполняем datalist для СИЗ
