@@ -139,7 +139,7 @@
     }
   };
 
-  document.querySelector('button[data-bs-target="#createUserModal"]')?.addEventListener('click', openCreateModal);
+  document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
   loadData();
 })();

@@ -392,7 +392,7 @@
   if (filterPosition) filterPosition.addEventListener('change', () => loadPage(1));
 
   // Кнопка "Добавить" открывает модалку в режиме создания
-  document.querySelector('button[data-bs-target="#createNormModal"]')?.addEventListener('click', openCreateModal);
+  document.getElementById('btn-create-norm')?.addEventListener('click', openCreateModal);
 
   WS.subscribe((data) => {
     if (data.event === 'norm_updated') loadData();

@@ -109,7 +109,7 @@
   };
 
   // Привязка кнопки "Добавить" к открытию модалки
-  document.querySelector('button[data-bs-target="#createModal"]')?.addEventListener('click', openCreateModal);
+  document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
   loadFunctions();
 })();
