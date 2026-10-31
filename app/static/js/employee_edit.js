@@ -11,6 +11,7 @@
   const genderSelect = form.elements['gender']; 
   
   const sizesTableBody = document.querySelector('#sizes-table tbody');
+  const sizesModalBody = document.getElementById('sizes-modal-body');
   const addSizeBtn = document.getElementById('add-size-btn');
 
   const issueForm = document.getElementById('issue-form');
@@ -271,18 +272,16 @@
       deptSelect.value = emp.department_id ?? '';
       await loadPositions(emp.department_id, emp.position_id);
 
-      // Отрисовка размеров
-      sizesTableBody.innerHTML = '';
-      if (emp.ppe_sizes && emp.ppe_sizes.length > 0) {
-        for (const size of emp.ppe_sizes) {
-          const tr = await createSizeRow(size.size_group_id, size.size_value);
-          sizesTableBody.appendChild(tr);
-        }
-      }
-
+      // Данные храним целиком: из них рисуются режимы просмотра и модалки
+      currentEmployee = emp;
+      // Строки размеров в модалке создаются при её открытии: держать их
+      // постоянно в DOM незачем, а fillSizesModal заполнит их по запросу
       versionInput.value = emp.version ?? '';
       isDirty = false;
       window.FormValidation.refresh();
+
+      renderReadonlyMain();
+      renderSizesView();
 
       // Меняем заголовок на ФИО
       const titleEl = document.getElementById('employee-title');
@@ -540,46 +539,63 @@
   };
 
   // --- Сохранение сотрудника ---
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    btnSubmit.disabled = true;
-    
+  // --- Модалки ---------------------------------------------------------
+  const mainModalEl = document.getElementById('mainModal');
+  const sizesModalEl = document.getElementById('sizesModal');
+  const btnSaveMain = document.getElementById('btn-save-main');
+  const btnSaveSizes = document.getElementById('btn-save-sizes');
+
+  let currentEmployee = null;
+
+  // Версия общая для карточки и всех модалок: если сохранить в одной,
+  // остальные должны увидеть новую, иначе получим ложный конфликт 409
+  function syncVersion(version) {
+    if (version == null) return;
+    versionInput.value = version;
+    if (currentEmployee) currentEmployee.version = version;
+  }
+
+  function collectSizes() {
     const ppeSizes = [];
-    const rows = sizesTableBody.querySelectorAll('tr');
     let hasErrors = false;
 
-    rows.forEach(tr => {
+    sizesModalBody.querySelectorAll('tr').forEach((tr) => {
       const catSelect = tr.querySelector('.size-group-select');
       const sizeInput = tr.querySelector('.size-value-input');
-      const categoryId = Number(catSelect.value);
-      const sizeVal = sizeInput.value.trim();
+      const categoryId = Number(catSelect?.value);
+      const sizeVal = sizeInput?.value.trim() ?? '';
+
       if (!categoryId || !sizeVal) {
         hasErrors = true;
-        catSelect.classList.add('is-invalid');
-        sizeInput.classList.add('is-invalid');
+        catSelect?.classList.add('is-invalid');
+        sizeInput?.classList.add('is-invalid');
       } else {
         ppeSizes.push({ size_group_id: categoryId, size_value: sizeVal });
       }
     });
 
-    if (hasErrors) {
-      window.showToast('Заполните все поля в таблице размеров', 'danger');
-      window.FormValidation.refresh();
-      return;
-    }
+    return { ppeSizes, hasErrors };
+  }
 
+  function buildPayload() {
     const payload = FormHelper.serialize(form);
     payload.department_id = Number(payload.department_id);
     payload.position_id = Number(payload.position_id);
     if (!payload.hire_date) payload.hire_date = null;
     if (!payload.position_change_date) payload.position_change_date = null;
-    payload.ppe_sizes = ppeSizes;
+    payload.version = Number(versionInput.value);
+    return payload;
+  }
 
+  async function saveAll(payload, successMessage, btn) {
+    btn.disabled = true;
     try {
       const updated = await API.put(`/api/v1/employees/${employeeId}`, payload);
-      if (updated?.version != null) versionInput.value = updated.version;
+      syncVersion(updated?.version);
       isDirty = false;
-      window.showToast('Изменения сохранены', 'success');
+      window.showToast(successMessage, 'success');
+      await loadEmployee();
+      return true;
     } catch (err) {
       if (err.isConflict) {
         conflictAlert.classList.remove('d-none');
@@ -587,10 +603,131 @@
       } else {
         window.showToast(`Ошибка: ${err.message}`, 'danger');
       }
+      return false;
     } finally {
+      btn.disabled = false;
       window.FormValidation.refresh();
     }
+  }
+
+  // Сохранение основных данных: размеры берём как есть из модалки размеров,
+  // чтобы не стереть их пустым списком
+  btnSaveMain?.addEventListener('click', async () => {
+    const { ppeSizes } = collectSizes();
+    if (!form.reportValidity()) return;
+
+    const payload = buildPayload();
+    payload.ppe_sizes = ppeSizes;
+
+    if (await saveAll(payload, 'Основные данные сохранены', btnSaveMain)) {
+      bootstrap.Modal.getOrCreateInstance(mainModalEl).hide();
+    }
   });
+
+  // Сохранение размеров отдельно: остальные поля отправляем текущими
+  btnSaveSizes?.addEventListener('click', async () => {
+    const { ppeSizes, hasErrors } = collectSizes();
+    if (hasErrors) {
+      window.showToast('Заполните все поля в таблице размеров', 'danger');
+      return;
+    }
+
+    const payload = buildPayload();
+    payload.ppe_sizes = ppeSizes;
+
+    if (await saveAll(payload, 'Размеры сохранены', btnSaveSizes)) {
+      bootstrap.Modal.getOrCreateInstance(sizesModalEl).hide();
+    }
+  });
+
+  document.getElementById('btn-edit-main')?.addEventListener('click', () => {
+    renderReadonlyMain();
+    bootstrap.Modal.getOrCreateInstance(mainModalEl).show();
+  });
+
+  document.getElementById('btn-edit-sizes')?.addEventListener('click', async () => {
+    await fillSizesModal();
+    bootstrap.Modal.getOrCreateInstance(sizesModalEl).show();
+  });
+
+  document.getElementById('btn-add-size')?.addEventListener('click', async () => {
+    const tr = await createSizeRow();
+    sizesModalBody.appendChild(tr);
+    window.FormValidation.refresh();
+  });
+
+  sizesModalBody?.addEventListener('click', (event) => {
+    const btn = event.target.closest('.remove-size-btn');
+    if (btn) btn.closest('tr').remove();
+  });
+
+  // Копируем актуальные размеры карточки в модалку при открытии
+  async function fillSizesModal() {
+    sizesModalBody.innerHTML = '';
+    const sizes = currentEmployee?.ppe_sizes ?? [];
+    for (const size of sizes) {
+      const tr = await createSizeRow(size.size_group_id, size.size_value);
+      sizesModalBody.appendChild(tr);
+    }
+  }
+
+  // Просмотр основных данных: форма остаётся источником значений,
+  // а вкладка показывает их без возможности правки
+  function renderReadonlyMain() {
+    const container = document.getElementById('main-readonly');
+    if (!container) return;
+
+    const value = (name) => form.elements[name]?.value?.trim() || '—';
+    const deptText = currentEmployee?.department_id
+      ? buildDeptPath(currentEmployee.department_id, allDepartments)
+      : '—';
+    const positionText = currentEmployee?.position?.name
+      || form.elements['position_id']?.selectedOptions?.[0]?.textContent
+      || '—';
+    const formatDate = (raw) => {
+      if (!raw) return '—';
+      const [y, m, d] = raw.split('T')[0].split('-');
+      return d ? `${d}.${m}.${y}` : raw;
+    };
+    const genderText = { 'М': 'Мужской', 'Ж': 'Женский' }[value('gender')] ?? '—';
+
+    const rows = [
+      ['Фамилия', value('last_name')],
+      ['Имя', value('first_name')],
+      ['Отчество', value('middle_name')],
+      ['Табельный номер', value('personnel_number')],
+      ['Дата приема', formatDate(value('hire_date') === '—' ? '' : value('hire_date'))],
+      ['Дата перевода', formatDate(value('position_change_date') === '—' ? '' : value('position_change_date'))],
+      ['Подразделение', deptText],
+      ['Должность', positionText],
+      ['Пол', genderText],
+      ['Рост', value('height')],
+    ];
+
+    container.innerHTML = rows.map(([label, val]) => `
+      <div class="readonly-grid__item">
+        <div class="readonly-grid__label">${escapeHtml(label)}</div>
+        <div class="readonly-grid__value">${escapeHtml(val ?? '')}</div>
+      </div>
+    `).join('');
+  }
+
+  // Просмотр размеров на вкладке
+  function renderSizesView() {
+    if (!sizesTableBody) return;
+    const sizes = currentEmployee?.ppe_sizes ?? [];
+    if (!sizes.length) {
+      sizesTableBody.innerHTML = '<tr><td colspan="2" class="state">Размеры не указаны</td></tr>';
+      return;
+    }
+    sizesTableBody.innerHTML = sizes.map((s) => {
+      const group = allSizeGroups.find((g) => g.id === s.size_group_id);
+      return `<tr>
+        <td>${escapeHtml(group?.name ?? '—')}</td>
+        <td>${escapeHtml(s.size_value ?? '—')}</td>
+      </tr>`;
+    }).join('');
+  }
 
   WS.subscribe((data) => {
     if (data.event === 'employee_updated' && data.employee_id === employeeId) loadEmployee(true);

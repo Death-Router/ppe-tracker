@@ -40,57 +40,16 @@
         <!-- Вкладка 1: Основные данные -->
         <div class="tab-pane fade show active" id="main" role="tabpanel">
             <div class="panel">
+                <div class="panel__head">
+                    <h5 class="panel__title">Основные данные</h5>
+                    <div class="page-head__spacer"></div>
+                    <button type="button" class="btn btn-sm btn-brand" id="btn-edit-main">
+                        <i class="bi bi-pencil"></i> Изменить
+                    </button>
+                </div>
                 <div class="panel__body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label" for="last_name">Фамилия <span class="req">*</span></label>
-                            <input class="form-control" id="last_name" name="last_name" required maxlength="100">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="first_name">Имя <span class="req">*</span></label>
-                            <input class="form-control" id="first_name" name="first_name" required maxlength="100">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="middle_name">Отчество <span class="req">*</span></label>
-                            <input class="form-control" id="middle_name" name="middle_name" required maxlength="100">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="personnel_number">Табельный номер <span class="req">*</span></label>
-                            <input class="form-control" id="personnel_number" name="personnel_number" required maxlength="20">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="department_id">Подразделение <span class="req">*</span></label>
-                            <select class="form-select" id="department_id" name="department_id" required>
-                                <option value="">Загрузка...</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="position_id">Должность <span class="req">*</span></label>
-                            <select class="form-select" id="position_id" name="position_id" required>
-                                <option value="">Сначала выберите подразделение</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label" for="hire_date">Дата приема <span class="req">*</span></label>
-                            <input type="date" class="form-control" id="hire_date" name="hire_date" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label" for="position_change_date">Дата перевода</label>
-                            <input type="date" class="form-control" id="position_change_date" name="position_change_date">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label" for="gender">Пол <span class="req">*</span></label>
-                            <select class="form-select" id="gender" name="gender" required>
-                                <option value="">Не указан</option>
-                                <option value="М">Мужской</option>
-                                <option value="Ж">Женский</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label" for="height">Рост <span class="req">*</span></label>
-                            <input class="form-control" id="height" name="height" placeholder="Например, 182" maxlength="10" required>
-                        </div>
-                    </div>
+                    <!-- Значения только для чтения: правка в модалке -->
+                    <div class="readonly-grid" id="main-readonly"></div>
                 </div>
             </div>
         </div>
@@ -101,21 +60,20 @@
                 <div class="panel__head">
                     <h5 class="panel__title">Размеры СИЗ</h5>
                     <div class="page-head__spacer"></div>
-                    <button type="button" class="btn btn-sm btn-brand" id="add-size-btn">
-                        <i class="bi bi-plus-lg"></i> Добавить размер
+                    <button type="button" class="btn btn-sm btn-brand" id="btn-edit-sizes">
+                        <i class="bi bi-pencil"></i> Изменить
                     </button>
                 </div>
                 <div class="table-responsive">
-                    <table class="data-table" id="sizes-table">
+                    <table class="data-table data-table--dense" id="sizes-table">
                         <thead>
                         <tr>
                             <th>Размерная группа</th>
                             <th class="col-medium">Размер</th>
-                            <th class="col-actions">Действие</th>
                         </tr>
                         </thead>
                         <tbody>
-                        <!-- Сюда будут добавляться строки -->
+                        <!-- Заполняется скриптом из загруженных размеров -->
                         </tbody>
                     </table>
                 </div>
@@ -251,4 +209,104 @@
   });
 </script>
 <script src="{{ url_for('static', path='js/employee_edit.js') }}"></script>
+
+<!-- Модалка основных данных: те же id полей, что ждёт employee_edit.js -->
+<div class="modal fade" id="mainModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Основные данные</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="last_name">Фамилия <span class="req">*</span></label>
+                        <input class="form-control" id="last_name" name="last_name" required maxlength="100">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="first_name">Имя <span class="req">*</span></label>
+                        <input class="form-control" id="first_name" name="first_name" required maxlength="100">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="middle_name">Отчество <span class="req">*</span></label>
+                        <input class="form-control" id="middle_name" name="middle_name" required maxlength="100">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="personnel_number">Табельный номер <span class="req">*</span></label>
+                        <input class="form-control" id="personnel_number" name="personnel_number" required maxlength="20">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="department_id">Подразделение <span class="req">*</span></label>
+                        <select class="form-select" id="department_id" name="department_id" required>
+                            <option value="">Загрузка...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="position_id">Должность <span class="req">*</span></label>
+                        <select class="form-select" id="position_id" name="position_id" required>
+                            <option value="">Сначала выберите подразделение</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="hire_date">Дата приема <span class="req">*</span></label>
+                        <input type="date" class="form-control" id="hire_date" name="hire_date" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="position_change_date">Дата перевода</label>
+                        <input type="date" class="form-control" id="position_change_date" name="position_change_date">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="gender">Пол <span class="req">*</span></label>
+                        <select class="form-select" id="gender" name="gender" required>
+                            <option value="">Не указан</option>
+                            <option value="М">Мужской</option>
+                            <option value="Ж">Женский</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="height">Рост <span class="req">*</span></label>
+                        <input class="form-control" id="height" name="height" placeholder="Например, 182" maxlength="10" required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-brand" id="btn-save-main">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка размеров: список добавляется скриптом -->
+<div class="modal fade" id="sizesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Размеры СИЗ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <table class="data-table data-table--dense" id="sizes-modal-table">
+                    <thead>
+                    <tr>
+                        <th>Размерная группа</th>
+                        <th class="col-medium">Размер</th>
+                        <th class="col-actions">Действие</th>
+                    </tr>
+                    </thead>
+                    <tbody id="sizes-modal-body"></tbody>
+                </table>
+                <button type="button" class="btn btn-sm btn-brand mt-3" id="btn-add-size">
+                    <i class="bi bi-plus-lg"></i> Добавить размер
+                </button>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-brand" id="btn-save-sizes">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
