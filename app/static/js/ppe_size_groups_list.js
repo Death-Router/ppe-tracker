@@ -144,7 +144,7 @@
       return `
       <li class="list-group-item d-flex justify-content-between align-items-center py-1">
         ${escapeHtml(s.size_value)}${genderLabel}
-        <button type="button" class="btn btn-icon btn-icon--danger" onclick="deleteSize(${s.id})">✕</button>
+        <button type="button" class="btn btn-icon btn-icon--danger" onclick="deleteSize(${s.id})" title="Удалить размер" aria-label="Удалить размер">✕</button>
       </li>
     `}).join('');
   }

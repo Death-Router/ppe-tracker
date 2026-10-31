@@ -208,7 +208,7 @@
         </select>
       </td>
       <td>${sizeInputHtml}</td>
-      <td class="text-center"><button type="button" class="btn btn-icon btn-icon--danger remove-size-btn">✕</button></td>
+      <td class="text-center"><button type="button" class="btn btn-icon btn-icon--danger remove-size-btn" title="Удалить размер" aria-label="Удалить размер">✕</button></td>
     `;
     
     const catSelect = tr.querySelector('.size-group-select');
@@ -385,7 +385,7 @@
           <td>${new Date(issue.issue_date).toLocaleDateString('ru-RU')}</td>
           <td>${expiryStr}</td>
           <td>${formattedQuantity}</td>
-          <td class="text-center"><button type="button" class="btn btn-icon btn-icon--danger" onclick="deleteIssue(${issue.id})">✕</button></td>
+          <td class="text-center"><button type="button" class="btn btn-icon btn-icon--danger" onclick="deleteIssue(${issue.id})" title="Удалить выдачу" aria-label="Удалить выдачу">✕</button></td>
         </tr>
       `;
     }).join('');

@@ -15,9 +15,31 @@ router = APIRouter(prefix="/positions", tags=["Справочник: Должн�
 async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get_db)):
     cat_result = await db.execute(select(Department).where(Department.id == pos_in.department_id))
     if not cat_result.scalar_one_or_none(): raise HTTPException(status_code=404, detail="Подразделение не найдено")
+
+    # Две одинаковые должности в одном подразделении — это ошибка ввода,
+    # а не две разные сущности: нормы на них пришлось бы задавать дважды.
+    dup = await db.execute(
+        select(Position.id).where(
+            Position.department_id == pos_in.department_id,
+            Position.name == pos_in.name,
+        )
+    )
+    if dup.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="В этом подразделении уже есть должность с таким названием",
+        )
+
     db_pos = Position(**pos_in.model_dump())
     db.add(db_pos)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="В этом подразделении уже есть должность с таким названием",
+        )
     await db.refresh(db_pos)
     result = await db.execute(select(Position).where(Position.id == db_pos.id).options(selectinload(Position.department)))
     return result.scalar_one()
@@ -45,10 +67,34 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
         dept_res = await db.execute(select(Department).where(Department.id == pos_in.department_id))
         if not dept_res.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Подразделение не найдено")
+
+    # Переименование в уже существующую должность того же подразделения
+    target_name = pos_in.name if pos_in.name is not None else db_pos.name
+    target_dept = pos_in.department_id if pos_in.department_id is not None else db_pos.department_id
+    dup = await db.execute(
+        select(Position.id).where(
+            Position.department_id == target_dept,
+            Position.name == target_name,
+            Position.id != pos_id,
+        )
+    )
+    if dup.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="В этом подразделении уже есть должность с таким названием",
+        )
+
     for field, value in pos_in.model_dump(exclude_unset=True, exclude={"version"}).items():
         setattr(db_pos, field, value)
     db_pos.version += 1
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="В этом подразделении уже есть должность с таким названием",
+        )
     try: await manager.broadcast_to_employee(0, {"event": "position_updated", "id": pos_id})
     except Exception: pass
     result = await db.execute(select(Position).where(Position.id == pos_id).options(selectinload(Position.department)))

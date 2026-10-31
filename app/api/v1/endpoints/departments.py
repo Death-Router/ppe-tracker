@@ -11,6 +11,31 @@ from app.schemas.department import DepartmentCreate, DepartmentRead, DepartmentU
 
 router = APIRouter(prefix="/departments", tags=["Справочник: Подразделения"])
 
+
+async def creates_cycle(db: AsyncSession, dept_id: int, new_parent_id: int) -> bool:
+    """Проверяет, не создаст ли смена родителя петлю в дереве.
+
+    Идём от нового родителя вверх по цепочке предков: если встретили само
+    подразделение — значит оно уже является его предком, и ссылка замкнёт цикл.
+    Ограничение по глубине — страховка от уже испорченных данных.
+    """
+    seen: set[int] = set()
+    current: int | None = new_parent_id
+    depth = 0
+
+    while current is not None and depth < 1000:
+        if current == dept_id:
+            return True
+        if current in seen:
+            return True
+        seen.add(current)
+
+        result = await db.execute(select(Department.parent_id).where(Department.id == current))
+        current = result.scalar_one_or_none()
+        depth += 1
+
+    return False
+
 @router.post("/", response_model=DepartmentRead, status_code=status.HTTP_201_CREATED)
 async def create_department(dept_in: DepartmentCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.name == dept_in.name))
@@ -54,6 +79,14 @@ async def update_department(dept_id: int, dept_in: DepartmentUpdate, db: AsyncSe
         parent_res = await db.execute(select(Department).where(Department.id == dept_in.parent_id))
         if not parent_res.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Вышестоящее подразделение не найдено")
+
+        # Проверка «сам себе» не ловит цикл A -> B -> A. Такой цикл вешает
+        # рекурсивный обход дочерних подразделений и ломает дерево в UI.
+        if await creates_cycle(db, dept_id, dept_in.parent_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Нельзя сделать вышестоящим подразделение, которое уже подчинено этому",
+            )
     
     update_data = dept_in.model_dump(exclude_unset=True, exclude={"version"})
     for field, value in update_data.items():
