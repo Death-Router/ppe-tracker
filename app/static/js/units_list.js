@@ -91,7 +91,7 @@
       } catch (err) {
         window.showToast(`Ошибка: ${err.message}`, 'danger');
       } finally {
-        if (btn) btn.disabled = false;
+        window.FormValidation.refresh();
       }
     });
   }

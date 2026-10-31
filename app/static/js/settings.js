@@ -35,7 +35,7 @@
       resultDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
       window.showToast(err.message, 'danger');
     } finally {
-      btn.disabled = false;
+      window.FormValidation.refresh();
       btn.textContent = 'Загрузить';
     }
   });
@@ -76,7 +76,7 @@
       resultDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
       window.showToast(err.message, 'danger');
     } finally {
-      btn.disabled = false;
+      window.FormValidation.refresh();
       btn.textContent = 'Загрузить';
     }
   });
@@ -117,7 +117,7 @@
       resultDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
       window.showToast(err.message, 'danger');
     } finally {
-      btn.disabled = false;
+      window.FormValidation.refresh();
       btn.textContent = 'Загрузить';
     }
   });

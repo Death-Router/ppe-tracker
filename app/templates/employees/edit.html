@@ -225,7 +225,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-brand-orange" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-brand" onclick="submitIssueForm(event)">Выдать</button>
+                    <button type="button" class="btn btn-brand" data-form-submit onclick="submitIssueForm(event)">Выдать</button>
                 </div>
             </form>
         </div>
@@ -236,6 +236,19 @@
 {% block scripts %}
 <script>
   window.EMPLOYEE_ID = Number("{{ employee_id }}");
+</script>
+<script>
+  // Подставляем сегодняшнюю дату при открытии окна выдачи
+  document.getElementById('issueModal').addEventListener('show.bs.modal', () => {
+    const dateInput = document.getElementById('issue-date');
+    if (dateInput && !dateInput.value) {
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      dateInput.value = `${now.getFullYear()}-${month}-${day}`;
+    }
+    window.FormValidation.refresh();
+  });
 </script>
 <script src="{{ url_for('static', path='js/employee_edit.js') }}"></script>
 {% endblock %}

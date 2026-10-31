@@ -168,12 +168,7 @@
 
   deptSelect.addEventListener('change', async (e) => {
     await loadPositions(e.target.value);
-    // Принудительно обновляем валидацию после загрузки должностей
-    const form = document.getElementById('employee-form');
-    if (form) {
-      const btn = form.querySelector('button[type="submit"]');
-      if (btn) btn.disabled = !form.checkValidity();
-    }
+    window.FormValidation.refresh();
   });
 
   // --- Управление размерами (по категориям) ---
@@ -244,6 +239,7 @@
     tr.querySelector('.remove-size-btn').addEventListener('click', () => {
       tr.remove();
       isDirty = true;
+      window.FormValidation.refresh();
     });
     return tr;
   }
@@ -252,6 +248,7 @@
     const tr = await createSizeRow();
     sizesTableBody.appendChild(tr);
     isDirty = true;
+    window.FormValidation.refresh();
   });
 
   // --- Загрузка сотрудника ---
@@ -286,6 +283,7 @@
 
       versionInput.value = emp.version ?? '';
       isDirty = false;
+      window.FormValidation.refresh();
 
       // Меняем заголовок на ФИО
       const titleEl = document.getElementById('employee-title');
@@ -527,7 +525,7 @@
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
-      if (btn) btn.disabled = false;
+      window.FormValidation.refresh();
     }
   };
 
@@ -567,7 +565,7 @@
 
     if (hasErrors) {
       window.showToast('Заполните все поля в таблице размеров', 'danger');
-      btnSubmit.disabled = false;
+      window.FormValidation.refresh();
       return;
     }
 
@@ -591,7 +589,7 @@
         window.showToast(`Ошибка: ${err.message}`, 'danger');
       }
     } finally {
-      btnSubmit.disabled = false;
+      window.FormValidation.refresh();
     }
   });
 

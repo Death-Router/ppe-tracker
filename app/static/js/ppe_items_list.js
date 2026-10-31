@@ -253,7 +253,7 @@
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
-      btn.disabled = false;
+      window.FormValidation.refresh();
     }
   });
 

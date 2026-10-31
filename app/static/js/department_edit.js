@@ -49,6 +49,7 @@
       
       versionInput.value = dept.version ?? '';
       isDirty = false;
+      window.FormValidation.refresh(form);
       if (isWsUpdate) window.showToast('Карточка обновлена', 'info');
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
@@ -75,7 +76,7 @@
         window.showToast(`Ошибка: ${err.message}`, 'danger');
       }
     } finally {
-      btnSubmit.disabled = false;
+      window.FormValidation.refresh();
     }
   });
 

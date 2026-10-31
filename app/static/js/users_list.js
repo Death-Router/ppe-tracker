@@ -65,6 +65,7 @@
     form.reset();
     passwordInput.required = true;
     passwordHint.style.display = 'none';
+    window.FormValidation.refresh(form);
     new bootstrap.Modal(document.getElementById('createUserModal')).show();
   };
 
@@ -85,6 +86,7 @@
       roleSelect.value = user.role;
       departmentSelect.value = user.department_id || '';
       includeSubdep.checked = user.include_subdepartments || false;
+      window.FormValidation.refresh(form);
       form.elements['is_active'].checked = user.is_active;
       
       new bootstrap.Modal(document.getElementById('createUserModal')).show();
@@ -123,7 +125,7 @@
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     } finally {
-      btn.disabled = false;
+      window.FormValidation.refresh();
     }
   });
 
