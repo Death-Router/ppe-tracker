@@ -32,10 +32,7 @@
     --line: #e6e9ef;
 
     /* Статусы */
-    --success: #1f9d55;
-    --success-light: #e7f6ee;
     --danger: #d64545;
-    --danger-light: #fdecec;
 
     /* Геометрия */
     --radius-xl: 18px;
@@ -391,21 +388,6 @@ a {
 .badge-orange {
     background-color: var(--accent);
     color: #fff;
-}
-
-.badge-muted {
-    background-color: #eef1f5;
-    color: var(--ink-soft);
-}
-
-.badge-success {
-    background-color: var(--success-light);
-    color: var(--success);
-}
-
-.badge-danger {
-    background-color: var(--danger-light);
-    color: var(--danger);
 }
 
 /* --------------------------------------------------------------------------

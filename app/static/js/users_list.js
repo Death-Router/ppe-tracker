@@ -49,7 +49,7 @@
         <td><strong>${escapeHtml(u.username)}</strong></td>
         <td><span class="badge-soft badge-purple">${roleName}</span></td>
         <td>${escapeHtml(deptName)}</td>
-        <td>${u.is_active ? '<span class="badge-soft badge-success">Да</span>' : '<span class="badge-soft badge-danger">Нет</span>'}</td>
+        <td>${u.is_active ? '<span class="badge-soft badge-purple">Да</span>' : '<span class="badge-soft badge-orange">Нет</span>'}</td>
         <td class="col-actions">
           <button class="btn btn-icon" onclick="editUser(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger" onclick="deleteUser(${u.id})" title="Удалить"><i class="bi bi-trash"></i></button>
