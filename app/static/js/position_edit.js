@@ -15,7 +15,6 @@
       depts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
   }
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   async function loadPosition(isWsUpdate = false) {
     try {

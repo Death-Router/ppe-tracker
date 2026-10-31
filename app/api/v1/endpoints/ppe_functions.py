@@ -15,7 +15,11 @@ async def create_function(func_in: PpeFunctionCreate, db: AsyncSession = Depends
         raise HTTPException(status_code=400, detail="Такая функция уже существует")
     db_func = PpeFunction(**func_in.model_dump())
     db.add(db_func)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Такая функция уже существует")
     await db.refresh(db_func)
     return db_func
 

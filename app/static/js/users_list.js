@@ -18,7 +18,6 @@
   let allDepartments = [];
   let editingId = null;
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   async function loadData() {
     try {
@@ -66,7 +65,7 @@
     passwordInput.required = true;
     passwordHint.style.display = 'none';
     window.FormValidation.refresh(form);
-    new bootstrap.Modal(document.getElementById('createUserModal')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('createUserModal')).show();
   };
 
   window.editUser = async (id) => {
@@ -89,7 +88,7 @@
       window.FormValidation.refresh(form);
       form.elements['is_active'].checked = user.is_active;
       
-      new bootstrap.Modal(document.getElementById('createUserModal')).show();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('createUserModal')).show();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -120,7 +119,7 @@
         await API.post('/api/v1/users/', payload);
         window.showToast('Пользователь создан', 'success');
       }
-      bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('createUserModal')).hide();
       loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');

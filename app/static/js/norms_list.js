@@ -68,7 +68,6 @@
     return `${num} ${shortName}`;
   }
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   // Загрузка данных
   
@@ -296,7 +295,7 @@
       createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
       createForm.elements['quantity'].value = norm.quantity;
 
-      new bootstrap.Modal(modalElement).show();
+      bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (err) {
       window.showToast(`Ошибка загрузки: ${err.message}`, 'danger');
     }
@@ -340,7 +339,7 @@
         await API.post('/api/v1/position_ppe_norms/', payload);
         window.showToast('Норма добавлена', 'success');
       }
-      bootstrap.Modal.getInstance(modalElement).hide();
+      bootstrap.Modal.getOrCreateInstance(modalElement).hide();
       createForm.reset();
       loadData();
     } catch (err) {

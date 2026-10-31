@@ -13,6 +13,19 @@
   const sizeGroupIdInput = document.getElementById('size-group-id');
 
   let editingId = null;
+  let editingVersion = null;
+
+  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
+  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const name = btn.dataset.name || '';
+    if (btn.dataset.action === 'delete') window.deleteGroup(id, name);
+    if (btn.dataset.action === 'sizes') window.openSizesModal(id, name);
+
+  });
 
   async function loadGroups() {
     try {
@@ -23,8 +36,6 @@
     }
   }
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
-
   function renderTable(groups) {
     if (!groups.length) {
       tbody.innerHTML = `<tr><td colspan="2" class="state">Групп пока нет</td></tr>`;
@@ -34,9 +45,9 @@
       <tr data-id="${g.id}">
         <td><strong>${escapeHtml(g.name)}</strong></td>
         <td class="py-1 text-end text-nowrap">
-          <button class="btn btn-icon me-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
+          <button class="btn btn-icon me-1" data-action="sizes" data-id="${g.id}" data-name="${escapeHtml(g.name)}" title="Размеры"><i class="bi bi-rulers"></i></button>
           <button class="btn btn-icon me-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-icon btn-icon--danger" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${g.id}" data-name="${escapeHtml(g.name)}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -45,10 +56,11 @@
   // Открытие модалки для создания/редактирования группы
   window.openCreateModal = () => {
     editingId = null;
+    editingVersion = null;
     modalTitle.textContent = 'Новая размерная группа';
     submitBtn.textContent = 'Создать';
     createForm.reset();
-    new bootstrap.Modal(modalElement).show();
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
   };
 
   window.editGroup = async (id) => {
@@ -58,11 +70,12 @@
       if (!group) throw new Error('Группа не найдена');
       
       editingId = id;
+      editingVersion = group.version ?? null;
       modalTitle.textContent = 'Редактирование группы';
       submitBtn.textContent = 'Сохранить';
       createForm.elements['name'].value = group.name;
       
-      new bootstrap.Modal(modalElement).show();
+      bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -76,14 +89,14 @@
     
     try {
       if (editingId) {
-        payload.version = (await API.get(`/api/v1/ppe_size_groups/${editingId}`)).version;
+        payload.version = editingVersion;
         await API.put(`/api/v1/ppe_size_groups/${editingId}`, payload);
         window.showToast('Группа обновлена', 'success');
       } else {
         await API.post('/api/v1/ppe_size_groups/', payload);
         window.showToast('Группа создана', 'success');
       }
-      bootstrap.Modal.getInstance(modalElement).hide();
+      bootstrap.Modal.getOrCreateInstance(modalElement).hide();
       createForm.reset();
       loadGroups();
     } catch (err) {
@@ -110,7 +123,7 @@
     sizeGroupName.textContent = groupName;
     sizesList.innerHTML = '<li class="list-group-item text-muted">Загрузка...</li>';
     
-    const modal = new bootstrap.Modal(sizesModalElement);
+    const modal = bootstrap.Modal.getOrCreateInstance(sizesModalElement);
     modal.show();
 
     try {

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.ppe_size_group import PpeSizeGroup
@@ -14,7 +15,11 @@ async def create_group(group_in: PpeSizeGroupCreate, db: AsyncSession = Depends(
         raise HTTPException(status_code=400, detail="Такая группа уже существует")
     db_group = PpeSizeGroup(**group_in.model_dump())
     db.add(db_group)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Такая группа уже существует")
     await db.refresh(db_group)
     return db_group
 

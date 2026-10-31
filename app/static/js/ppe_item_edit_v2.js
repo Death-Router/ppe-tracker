@@ -52,7 +52,6 @@
     }
   }
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   async function loadItem(isWsUpdate = false) {
     try {

@@ -6,6 +6,17 @@
   const submitBtn = modalElement.querySelector('button[type="submit"]');
 
   let editingId = null;
+  let editingVersion = null;
+
+  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
+  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const name = btn.dataset.name || '';
+    if (btn.dataset.action === 'delete') window.deleteFunction(id, name);
+  });
 
   async function loadFunctions() {
     try {
@@ -15,8 +26,6 @@
       tbody.innerHTML = `<tr><td colspan="2" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
-
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   function renderTable(funcs) {
     if (!funcs.length) {
@@ -28,7 +37,7 @@
         <td><strong>${escapeHtml(f.name)}</strong></td>
         <td class="col-actions">
           <button class="btn btn-icon" onclick="editFunction(${f.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-icon btn-icon--danger" onclick="deleteFunction(${f.id}, '${escapeHtml(f.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${f.id}" data-name="${escapeHtml(f.name)}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -37,10 +46,11 @@
   // Открытие модалки для создания
   window.openCreateModal = () => {
     editingId = null;
+    editingVersion = null;
     modalTitle.textContent = 'Новая функция';
     submitBtn.textContent = 'Создать';
     createForm.reset();
-    new bootstrap.Modal(modalElement).show();
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
   };
 
   // Редактирование
@@ -51,11 +61,12 @@
       if (!func) throw new Error('Функция не найдена');
       
       editingId = id;
+      editingVersion = func.version ?? null;
       modalTitle.textContent = 'Редактирование функции';
       submitBtn.textContent = 'Сохранить';
       createForm.elements['name'].value = func.name;
       
-      new bootstrap.Modal(modalElement).show();
+      bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -69,14 +80,14 @@
     
     try {
       if (editingId) {
-        payload.version = (await API.get(`/api/v1/ppe_functions/${editingId}`)).version;
+        payload.version = editingVersion;
         await API.put(`/api/v1/ppe_functions/${editingId}`, payload);
         window.showToast('Функция обновлена', 'success');
       } else {
         await API.post('/api/v1/ppe_functions/', payload);
         window.showToast('Функция создана', 'success');
       }
-      bootstrap.Modal.getInstance(modalElement).hide();
+      bootstrap.Modal.getOrCreateInstance(modalElement).hide();
       createForm.reset();
       loadFunctions();
     } catch (err) {

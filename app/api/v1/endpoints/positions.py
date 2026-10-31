@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocketDisconnect, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +40,11 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
     db_pos = result.scalar_one_or_none()
     if not db_pos: raise HTTPException(status_code=404, detail="Не найдено")
     if db_pos.version != pos_in.version: raise HTTPException(status_code=409, detail="Данные устарели")
+    # Без проверки несуществующий department_id ронял бы commit в 500 (FK)
+    if pos_in.department_id is not None:
+        dept_res = await db.execute(select(Department).where(Department.id == pos_in.department_id))
+        if not dept_res.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Подразделение не найдено")
     for field, value in pos_in.model_dump(exclude_unset=True, exclude={"version"}).items():
         setattr(db_pos, field, value)
     db_pos.version += 1

@@ -14,13 +14,23 @@
   const btnBulkDelete = document.getElementById('btn-bulk-delete');
 
   // Элементы модалки массового редактирования
-  const bulkEditModal = new bootstrap.Modal(document.getElementById('bulkEditModal'));
+  const bulkEditModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkEditModal'));
   const bulkFunctionSelect = document.getElementById('bulk-function');
   const bulkSizeGroupSelect = document.getElementById('bulk-size-group');
   const bulkUnitSelect = document.getElementById('bulk-unit');
   const bulkCountSpan = document.getElementById('bulk-count');
 
   let allItems = [];
+
+  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
+  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const name = btn.dataset.name || '';
+    if (btn.dataset.action === 'delete') window.deleteItem(id, name);
+  });
   let selectedIds = new Set();
 
   async function loadItems() {
@@ -68,8 +78,6 @@
       console.error('Ошибка загрузки справочников:', err);
     }
   }
-
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   function truncate(str, maxLength) {
     if (!str) return '';
@@ -120,7 +128,7 @@
         </td>
         <td class="col-actions">
           <a class="btn btn-icon" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-icon btn-icon--danger" onclick="deleteItem(${i.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${i.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
@@ -247,7 +255,7 @@
     try {
       await API.post('/api/v1/ppe_items/', payload);
       window.showToast('Наименование создано', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
       createForm.reset();
       loadItems();
     } catch (err) {

@@ -7,6 +7,16 @@
 
   let editingId = null;
 
+  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
+  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const name = btn.dataset.name || '';
+    if (btn.dataset.action === 'delete') window.deleteUnit(id, name);
+  });
+
   async function loadUnits() {
     try {
       const units = await API.get('/api/v1/units');
@@ -15,8 +25,6 @@
       tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
-
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   function renderTable(units) {
     if (!units.length) {
@@ -29,7 +37,7 @@
         <td>${escapeHtml(u.short_name)}</td>
         <td class="col-actions">
           <button class="btn btn-icon" onclick="editUnit(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-icon btn-icon--danger" onclick="deleteUnit(${u.id}, '${escapeHtml(u.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${u.id}" data-name="${escapeHtml(u.name)}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -45,7 +53,7 @@
     modalTitle.textContent = 'Новая единица измерения';
     submitBtn.textContent = 'Создать';
     createForm.reset();
-    new bootstrap.Modal(modalElement).show();
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
   };
 
   // Редактирование
@@ -63,7 +71,7 @@
       if (createForm.elements['name']) createForm.elements['name'].value = unit.name;
       if (createForm.elements['short_name']) createForm.elements['short_name'].value = unit.short_name;
       
-      new bootstrap.Modal(modalElement).show();
+      bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -78,14 +86,13 @@
       
       try {
         if (editingId) {
-          payload.version = (await API.get(`/api/v1/units/${editingId}`)).version;
           await API.put(`/api/v1/units/${editingId}`, payload);
           window.showToast('Единица обновлена', 'success');
         } else {
           await API.post('/api/v1/units/', payload);
           window.showToast('Единица создана', 'success');
         }
-        bootstrap.Modal.getInstance(modalElement).hide();
+        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
         createForm.reset();
         loadUnits();
       } catch (err) {

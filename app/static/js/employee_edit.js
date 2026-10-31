@@ -102,7 +102,6 @@
     return `${num} ${shortName}`;
   }
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'); }
 
   // --- Загрузка справочников ---
 
@@ -394,7 +393,7 @@
 
   // --- Модалка выдачи (datalist) ---
   window.openIssueModalForNorm = (ppeItemId) => {
-    const modal = new bootstrap.Modal(document.getElementById('issueModal'));
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('issueModal'));
     
     fetch('/api/v1/ppe_items')
       .then(r => r.json())
@@ -517,7 +516,7 @@
     try {
       await API.post('/api/v1/employee_ppe_issues/', payload);
       window.showToast('СИЗ выдано', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('issueModal')).hide();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('issueModal')).hide();
       formEl.reset();
       issueItemIdInput.value = '';
       issueItemInput.value = '';

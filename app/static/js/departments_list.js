@@ -35,14 +35,6 @@
     }
   }
 
-  function escapeHtml(s) {
-    return String(s ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
-  }
 
   function truncate(str, maxLength) {
     if (!str) return '';
@@ -95,7 +87,7 @@
     try {
       await API.post('/api/v1/departments/', payload);
       window.showToast('Подразделение создано', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
       createForm.reset();
       loadDepartments();
     } catch (err) {

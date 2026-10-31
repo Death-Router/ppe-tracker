@@ -13,14 +13,6 @@
     }
   }
 
-  function escapeHtml(s) {
-    return String(s ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
-  }
 
   function renderTable(employees) {
     if (!employees.length) {
@@ -92,7 +84,7 @@
     try {
       await API.post('/api/v1/employees/', payload);
       window.showToast('Сотрудник создан', 'success');
-      bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
       createForm.reset();
       createPosSelect.innerHTML = '<option value="">Сначала выберите цех</option>';
       loadEmployees();

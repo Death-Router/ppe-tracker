@@ -24,11 +24,12 @@ def norm_options():
     ]
 
 
-async def get_norm_with_relations(db: AsyncSession, norm_id: int) -> PositionPpeNorm:
+async def get_norm_with_relations(db: AsyncSession, norm_id: int) -> PositionPpeNorm | None:
     result = await db.execute(
         select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id).options(*norm_options())
     )
-    return result.scalar_one()
+    # scalar_one() падал бы NoResultFound (500) вместо 404
+    return result.scalar_one_or_none()
 
 
 @router.post("/", response_model=PositionPpeNormRead, status_code=status.HTTP_201_CREATED)
@@ -53,7 +54,10 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
             detail="Для этой должности норма на данное СИЗ уже существует."
         )
         
-    return await get_norm_with_relations(db, db_norm.id)
+    norm = await get_norm_with_relations(db, db_norm.id)
+    if norm is None:
+        raise HTTPException(status_code=404, detail="Норма не найдена")
+    return norm
 
 
 @router.get("/", response_model=list[PositionPpeNormRead])
@@ -95,7 +99,10 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
         await manager.broadcast_to_employee(0, {"event": "norm_updated", "id": norm_id})
     except: pass
 
-    return await get_norm_with_relations(db, norm_id)
+    norm = await get_norm_with_relations(db, norm_id)
+    if norm is None:
+        raise HTTPException(status_code=404, detail="Норма не найдена")
+    return norm
 
 
 @router.delete("/{norm_id}", status_code=status.HTTP_204_NO_CONTENT)
