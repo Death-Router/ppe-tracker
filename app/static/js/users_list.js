@@ -63,7 +63,7 @@
     userIdInput.value = '';
     form.reset();
     passwordInput.required = true;
-    passwordHint.style.display = 'none';
+    passwordHint.classList.add('d-none');
     window.FormValidation.refresh(form);
     bootstrap.Modal.getOrCreateInstance(document.getElementById('createUserModal')).show();
   };
@@ -80,7 +80,7 @@
       form.elements['username'].value = user.username;
       passwordInput.value = '';
       passwordInput.required = false;
-      passwordHint.style.display = 'block';
+      passwordHint.classList.remove('d-none');
       
       roleSelect.value = user.role;
       departmentSelect.value = user.department_id || '';

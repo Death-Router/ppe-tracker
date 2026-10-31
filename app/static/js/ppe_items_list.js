@@ -115,7 +115,7 @@
       const fullName = escapeHtml(i.name);
       const shortName = escapeHtml(truncate(i.name, 60));
       const isChecked = selectedIds.has(i.id) ? 'checked' : '';
-      const rowClass = selectedIds.has(i.id) ? 'selected-row' : '';
+      const rowClass = selectedIds.has(i.id) ? 'is-selected' : '';
       return `
       <tr data-item-id="${i.id}" class="${rowClass}">
         <td>
@@ -143,8 +143,8 @@
     // Обновляем класс строки
     const row = document.querySelector(`tr[data-item-id="${id}"]`);
     if (row) {
-      if (checked) row.classList.add('selected-row');
-      else row.classList.remove('selected-row');
+      if (checked) row.classList.add('is-selected');
+      else row.classList.remove('is-selected');
     }
   };
 
@@ -222,18 +222,10 @@
         const id = Number(cb.value);
         if (checked) selectedIds.add(id);
         else selectedIds.delete(id);
-        
+
+        // Подсветка — только классом, цвета живут в app.css
         const row = document.querySelector(`tr[data-item-id="${id}"]`);
-        if (row) {
-          const cells = row.querySelectorAll('td');
-          if (checked) {
-            row.classList.add('selected-row');
-            cells.forEach(td => td.style.backgroundColor = 'rgba(91, 44, 138, 0.08)');
-          } else {
-            row.classList.remove('selected-row');
-            cells.forEach(td => td.style.backgroundColor = '');
-          }
-        }
+        if (row) row.classList.toggle('is-selected', checked);
       });
       updateBulkPanel();
     });

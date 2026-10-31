@@ -159,7 +159,7 @@
     }
     tbody.innerHTML = norms.map(n => {
       const isChecked = selectedIds.has(n.id) ? 'checked' : '';
-      const rowClass = selectedIds.has(n.id) ? 'selected-row' : '';
+      const rowClass = selectedIds.has(n.id) ? 'is-selected' : '';
       const posName = n.position?.name ?? '—';
       const deptName = n.position?.department?.name ?? '';
       const posStr = deptName ? `${deptName} / ${posName}` : posName;
@@ -184,21 +184,17 @@
     updateBulkPanel();
   }
 
+  // Подсветка выбранной строки — только классом, цвета берутся из app.css
+  function markRow(id, selected) {
+    const row = document.querySelector(`tr[data-norm-id="${id}"]`);
+    if (row) row.classList.toggle('is-selected', selected);
+  }
+
   window.toggleSelection = (id, checked) => {
     if (checked) selectedIds.add(id);
     else selectedIds.delete(id);
     updateBulkPanel();
-    const row = document.querySelector(`tr[data-norm-id="${id}"]`);
-    if (row) {
-      const cells = row.querySelectorAll('td');
-      if (checked) {
-        row.classList.add('selected-row');
-        cells.forEach(td => td.style.backgroundColor = 'rgba(91, 44, 138, 0.08)');
-      } else {
-        row.classList.remove('selected-row');
-        cells.forEach(td => td.style.backgroundColor = '');
-      }
-    }
+    markRow(id, checked);
   };
 
   function updateBulkPanel() {
@@ -217,10 +213,11 @@
     if (!confirm(`Удалить ${selectedIds.size} выбранных норм?`)) return;
 
     try {
-      for (const id of selectedIds) {
-        await API.request(`/api/v1/position_ppe_norms/${id}`, { method: 'DELETE' });
-      }
-      window.showToast('Выбранные нормы удалены', 'success');
+      // Один запрос вместо цикла: либо удалились все, либо ни одна
+      const result = await API.post('/api/v1/position_ppe_norms/bulk-delete', {
+        ids: [...selectedIds],
+      });
+      window.showToast(result?.message || 'Выбранные нормы удалены', 'success');
       selectedIds.clear();
       loadData();
     } catch (err) {
@@ -370,17 +367,7 @@
         const id = Number(cb.value);
         if (checked) selectedIds.add(id);
         else selectedIds.delete(id);
-        const row = document.querySelector(`tr[data-norm-id="${id}"]`);
-        if (row) {
-          const cells = row.querySelectorAll('td');
-          if (checked) {
-            row.classList.add('selected-row');
-            cells.forEach(td => td.style.backgroundColor = 'rgba(91, 44, 138, 0.08)');
-          } else {
-            row.classList.remove('selected-row');
-            cells.forEach(td => td.style.backgroundColor = '');
-          }
-        }
+        markRow(id, checked);
       });
       updateBulkPanel();
     });

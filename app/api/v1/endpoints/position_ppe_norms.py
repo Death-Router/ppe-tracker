@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
@@ -103,6 +104,45 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
     if norm is None:
         raise HTTPException(status_code=404, detail="Норма не найдена")
     return norm
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[int]
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_norms(data: BulkDeleteRequest, db: AsyncSession = Depends(get_db)):
+    """Удаляет выбранные нормы одним запросом.
+
+    Раньше клиент слал N отдельных DELETE: падение на середине оставляло часть
+    норм удалёнными, а часть — нет, и повторить операцию было нечем.
+    """
+    if not data.ids:
+        raise HTTPException(status_code=400, detail="Не выбрано ни одной нормы")
+
+    result = await db.execute(select(PositionPpeNorm.id).where(PositionPpeNorm.id.in_(data.ids)))
+    found = set(result.scalars().all())
+    if not found:
+        raise HTTPException(status_code=404, detail="Нормы не найдены")
+
+    try:
+        await db.execute(delete(PositionPpeNorm).where(PositionPpeNorm.id.in_(found)))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка удаления")
+
+    try:
+        await manager.broadcast_to_employee(0, {"event": "norm_updated", "id": 0})
+    except Exception:
+        pass
+
+    missing = sorted(set(data.ids) - found)
+    return {
+        "message": f"Удалено норм: {len(found)}",
+        "deleted": len(found),
+        "missing": missing,
+    }
 
 
 @router.delete("/{norm_id}", status_code=status.HTTP_204_NO_CONTENT)

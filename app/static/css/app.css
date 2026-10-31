@@ -319,7 +319,8 @@ a {
     background-color: var(--brand-tint);
 }
 
-.data-table tbody tr.is-selected td {
+.data-table tbody tr.is-selected td,
+.data-table tbody tr.is-selected:hover td {
     background-color: var(--brand-light);
     color: var(--brand);
 }
