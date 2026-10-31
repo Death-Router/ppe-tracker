@@ -214,7 +214,7 @@
         </select>
       </td>
       <td>${sizeInputHtml}</td>
-      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-size-btn">✕</button></td>
+      <td class="text-center"><button type="button" class="btn btn-icon btn-icon--danger remove-size-btn">✕</button></td>
     `;
     
     const catSelect = tr.querySelector('.size-group-select');
@@ -315,7 +315,7 @@
   // --- Нормы ---
   async function loadNorms(positionId) {
     if (!positionId) {
-      normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">У сотрудника не указана должность</td></tr>`;
+      normsTableBody.innerHTML = `<tr><td colspan="5" class="state">У сотрудника не указана должность</td></tr>`;
       return;
     }
     try {
@@ -329,7 +329,7 @@
 
   function renderNormsTable() {
     if (!currentNorms.length) {
-      normsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Для этой должности нормы не заданы</td></tr>`;
+      normsTableBody.innerHTML = `<tr><td colspan="5" class="state">Для этой должности нормы не заданы</td></tr>`;
       return;
     }
     normsTableBody.innerHTML = currentNorms.map(norm => {
@@ -352,7 +352,7 @@
           <td>${issued}</td>
           <td class="${statusClass}">${statusText}</td>
           <td class="text-center">
-            ${remaining > 0 ? `<button class="btn btn-sm btn-outline-success py-0 px-1" onclick="openIssueModalForNorm(${norm.ppe_item_id})" title="Выдать"><i class="bi bi-box-arrow-up"></i></button>` : ''}
+            ${remaining > 0 ? `<button class="btn btn-icon" onclick="openIssueModalForNorm(${norm.ppe_item_id})" title="Выдать"><i class="bi bi-box-arrow-up"></i></button>` : ''}
           </td>
         </tr>
       `;
@@ -372,7 +372,7 @@
 
   function renderIssuesTable() {
     if (!currentIssues || !currentIssues.length) {
-      issuesTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Нет выданных СИЗ</td></tr>`;
+      issuesTableBody.innerHTML = `<tr><td colspan="5" class="state">Нет выданных СИЗ</td></tr>`;
       return;
     }
     issuesTableBody.innerHTML = currentIssues.map(issue => {
@@ -388,7 +388,7 @@
           <td>${new Date(issue.issue_date).toLocaleDateString('ru-RU')}</td>
           <td>${expiryStr}</td>
           <td>${formattedQuantity}</td>
-          <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteIssue(${issue.id})">✕</button></td>
+          <td class="text-center"><button type="button" class="btn btn-icon btn-icon--danger" onclick="deleteIssue(${issue.id})">✕</button></td>
         </tr>
       `;
     }).join('');

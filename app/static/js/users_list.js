@@ -32,27 +32,27 @@
           sortedDepts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
       }
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
   function renderTable(users) {
     if (!users.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Пользователей пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="state">Пользователей пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = users.map(u => {
       const deptName = allDepartments.find(d => d.id === u.department_id)?.name || '—';
       const roleName = u.role === 'admin' ? 'Администратор' : 'Специалист ОТ';
       return `
-      <tr data-user-id="${u.id}" style="height: 40px;">
-        <td class="py-1"><strong>${escapeHtml(u.username)}</strong></td>
-        <td class="py-1"><span class="badge bg-purple">${roleName}</span></td>
-        <td class="py-1">${escapeHtml(deptName)}</td>
-        <td class="py-1">${u.is_active ? '<span class="badge bg-purple">Да</span>' : '<span class="badge bg-brand-orange">Нет</span>'}</td>
-        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editUser(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteUser(${u.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+      <tr data-user-id="${u.id}">
+        <td><strong>${escapeHtml(u.username)}</strong></td>
+        <td><span class="badge-soft badge-purple">${roleName}</span></td>
+        <td>${escapeHtml(deptName)}</td>
+        <td>${u.is_active ? '<span class="badge-soft badge-success">Да</span>' : '<span class="badge-soft badge-danger">Нет</span>'}</td>
+        <td class="col-actions">
+          <button class="btn btn-icon" onclick="editUser(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-icon btn-icon--danger" onclick="deleteUser(${u.id})" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');

@@ -24,18 +24,25 @@
       allDepartments = await API.get('/api/v1/departments');
       const hierarchy = buildHierarchy(allDepartments);
       renderTable(hierarchy);
-      
+
       // Заполняем выпадающий список для создания (тоже иерархически)
       if (createParentSelect) {
-        createParentSelect.innerHTML = '<option value="">Нет (корневое)</option>' + 
+        createParentSelect.innerHTML = '<option value="">Нет (корневое)</option>' +
           hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');
       }
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
-  function escapeHtml(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'); }
+  function escapeHtml(s) {
+    return String(s ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
 
   function truncate(str, maxLength) {
     if (!str) return '';
@@ -45,7 +52,7 @@
 
   function renderTable(hierarchy) {
     if (!hierarchy.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Подразделений пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state">Подразделений пока нет</td></tr>`;
       return;
     }
 
@@ -58,24 +65,31 @@
       const fullName = escapeHtml(d.name);
       const shortName = escapeHtml(truncate(d.name, 50));
       const indent = '↳ '.repeat(d.level);
-      
+
       return `
-      <tr data-dept-id="${d.id}" style="height: 40px;">
-        <td class="py-1" title="${fullName}">${indent}${shortName}</td>
-        <td class="py-1">${escapeHtml(parentName)}</td>
-        <td class="py-1 text-end">
-          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/departments/${d.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteDept(${d.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
+      <tr data-dept-id="${d.id}">
+        <td title="${fullName}">${indent}${shortName}</td>
+        <td class="cell-muted">${escapeHtml(parentName)}</td>
+        <td class="col-actions">
+          <a class="btn btn-icon" href="/departments/${d.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon btn-icon--danger js-delete-dept" data-id="${d.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
   }
 
+  // Имя передаём через data-атрибут: в onclick оно ломалось на кавычках
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('.js-delete-dept');
+    if (!btn) return;
+    window.deleteDept(Number(btn.dataset.id), btn.dataset.name);
+  });
+
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
     payload.parent_id = payload.parent_id ? Number(payload.parent_id) : null;
-    
+
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {

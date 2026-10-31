@@ -19,7 +19,7 @@
       const groups = await API.get('/api/v1/ppe_size_groups');
       renderTable(groups);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -27,16 +27,16 @@
 
   function renderTable(groups) {
     if (!groups.length) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Групп пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="state">Групп пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = groups.map(g => `
-      <tr data-id="${g.id}" style="height: 40px;">
-        <td class="py-1"><strong>${escapeHtml(g.name)}</strong></td>
+      <tr data-id="${g.id}">
+        <td><strong>${escapeHtml(g.name)}</strong></td>
         <td class="py-1 text-end text-nowrap">
-          <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
-          <button class="btn btn-sm btn-outline-primary py-0 px-1 me-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-icon me-1" onclick="openSizesModal(${g.id}, '${escapeHtml(g.name)}')" title="Размеры"><i class="bi bi-rulers"></i></button>
+          <button class="btn btn-icon me-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-icon btn-icon--danger" onclick="deleteGroup(${g.id}, '${escapeHtml(g.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -131,7 +131,7 @@
       return `
       <li class="list-group-item d-flex justify-content-between align-items-center py-1">
         ${escapeHtml(s.size_value)}${genderLabel}
-        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteSize(${s.id})">✕</button>
+        <button type="button" class="btn btn-icon btn-icon--danger" onclick="deleteSize(${s.id})">✕</button>
       </li>
     `}).join('');
   }

@@ -1,37 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-6">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h1 class="h4 mb-0">Редактирование подразделения</h1>
-            <a href="/departments" class="btn btn-brand-orange">← К списку</a>
-        </div>
+<div class="page-head">
+    <a href="/departments" class="btn btn-icon" title="К списку"><i class="bi bi-arrow-left"></i></a>
+    <h1 class="page-title">Редактирование подразделения</h1>
+</div>
 
-        <div id="conflict-alert" class="alert alert-warning d-none" role="alert">
-            Данные устарели, обновите страницу.
-            <button type="button" class="btn btn-sm btn-warning ms-2" onclick="location.reload()">Обновить</button>
-        </div>
+<div id="conflict-alert" class="alert alert-warning d-none" role="alert">
+    Данные устарели, обновите страницу.
+    <button type="button" class="btn btn-sm btn-brand-orange ms-2" onclick="location.reload()">Обновить</button>
+</div>
 
-        <form data-validate="true" id="dept-form" class="card shadow-sm p-4" novalidate>
-            <input type="hidden" name="version" id="version" value="">
-            <div class="row g-3">
-                <div class="col-12">
-                    <label class="form-label" for="name">Название <span class="text-danger">*</span></label>
-                    <input class="form-control" id="name" name="name" required maxlength="100">
-                </div>
-                <div class="col-12">
-                    <label class="form-label" for="parent_id">Вышестоящее подразделение</label>
-                    <select class="form-select" id="parent_id" name="parent_id">
-                        <option value="">Нет (корневое)</option>
-                    </select>
-                </div>
+<div class="panel">
+    <form data-validate="true" id="dept-form" class="panel__body" novalidate>
+        <input type="hidden" name="version" id="version" value="">
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label" for="name">Название <span class="req">*</span></label>
+                <input class="form-control" id="name" name="name" required maxlength="100">
             </div>
-            <div class="d-flex justify-content-end gap-2 mt-4">
-                <a href="/departments" class="btn btn-brand-orange">Отмена</a>
-                <button type="submit" class="btn btn-brand-purple" id="btn-submit">Сохранить</button>
+            <div class="col-12">
+                <label class="form-label" for="parent_id">Вышестоящее подразделение</label>
+                <select class="form-select" id="parent_id" name="parent_id">
+                    <option value="">Нет (корневое)</option>
+                </select>
             </div>
-        </form>
-    </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <a href="/departments" class="btn btn-brand-orange">Отмена</a>
+            <button type="submit" class="btn btn-brand" id="btn-submit">Сохранить</button>
+        </div>
+    </form>
 </div>
 {% endblock %}
 

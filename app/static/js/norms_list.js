@@ -127,7 +127,7 @@
 
       filterAndRender();
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -155,7 +155,7 @@
 
   function renderTable(norms) {
     if (!norms.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Норм пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="state">Норм пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = norms.map(n => {
@@ -168,17 +168,17 @@
       const periodStr = formatPeriod(n.wear_period_value, n.wear_period_unit);
       const qtyStr = formatUnit(n.quantity, n.ppe_item?.unit?.short_name);
       return `
-      <tr data-norm-id="${n.id}" class="${rowClass}" style="height: 40px;">
-        <td class="py-1">
+      <tr data-norm-id="${n.id}" class="${rowClass}">
+        <td>
           <input type="checkbox" class="item-checkbox" value="${n.id}" ${isChecked} onchange="toggleSelection(${n.id}, this.checked)">
         </td>
-        <td class="py-1"><strong>${escapeHtml(posStr)}</strong></td>
-        <td class="py-1">${escapeHtml(itemName)}</td>
-        <td class="py-1">${periodStr}</td>
-        <td class="py-1">${qtyStr}</td>
-        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+        <td><strong>${escapeHtml(posStr)}</strong></td>
+        <td>${escapeHtml(itemName)}</td>
+        <td>${periodStr}</td>
+        <td>${qtyStr}</td>
+        <td class="col-actions">
+          <button class="btn btn-icon" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-icon btn-icon--danger" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');

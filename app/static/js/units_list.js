@@ -12,7 +12,7 @@
       const units = await API.get('/api/v1/units');
       renderTable(units);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -20,16 +20,16 @@
 
   function renderTable(units) {
     if (!units.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Единиц измерения пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state">Единиц измерения пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = units.map(u => `
-      <tr data-unit-id="${u.id}" style="height: 40px;">
-        <td class="py-1"><strong>${escapeHtml(u.name)}</strong></td>
-        <td class="py-1">${escapeHtml(u.short_name)}</td>
-        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editUnit(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteUnit(${u.id}, '${escapeHtml(u.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+      <tr data-unit-id="${u.id}">
+        <td><strong>${escapeHtml(u.name)}</strong></td>
+        <td>${escapeHtml(u.short_name)}</td>
+        <td class="col-actions">
+          <button class="btn btn-icon" onclick="editUnit(${u.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-icon btn-icon--danger" onclick="deleteUnit(${u.id}, '${escapeHtml(u.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');

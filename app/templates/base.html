@@ -22,59 +22,61 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
     {% block head %}{% endblock %}
 </head>
-<body class="bg-light">
+<body class="{% if request.query_params.get('embedded') %}is-embedded{% endif %}">
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-purple mb-4 shadow-sm navbar-bottom-line">
-    <div class="container-fluid">
-        <a class="navbar-brand text-brand-orange" href="/settings" title="Настройки" style="font-size: 3rem;">
+{% block nav %}
+<nav class="navbar navbar-expand-lg navbar-dark app-nav">
+    <div class="container-fluid px-3">
+        <a class="app-nav__brand" href="/settings" title="Настройки">
             <i class="bi bi-gear-fill"></i>
         </a>
-        
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#mainNav">
+
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"
+                data-bs-target="#mainNav" aria-label="Меню">
             <span class="navbar-toggler-icon"></span>
         </button>
-        
+
         <div class="collapse navbar-collapse" id="mainNav">
-            <ul class="navbar-nav mx-auto">
-                <li class="nav-item text-center">
-                    <a class="nav-link {% if '/employees' in request.url.path %}active{% endif %}" href="/employees">
-                        <i class="bi bi-people d-block" style="font-size: 1.8rem;"></i>
-                        <span style="font-size: 0.85rem;">Сотрудники</span>
+            <ul class="navbar-nav mx-auto flex-row">
+                <li class="nav-item">
+                    <a class="app-nav__link {% if '/employees' in request.url.path %}is-active{% endif %}" href="/employees">
+                        <i class="bi bi-people"></i>
+                        <span>Сотрудники</span>
                     </a>
                 </li>
-                <li class="nav-item text-center">
-                    <a class="nav-link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}active{% endif %}" href="/ppe">
-                        <i class="bi bi-shield-check d-block nav-icon" style="font-size: 1.8rem;"></i>
-                        <span style="font-size: 0.85rem;">СИЗ</span>
+                <li class="nav-item">
+                    <a class="app-nav__link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path %}is-active{% endif %}" href="/ppe">
+                        <i class="bi bi-shield-check"></i>
+                        <span>СИЗ</span>
                     </a>
                 </li>
-                <li class="nav-item text-center">
-                    <a class="nav-link {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}active{% endif %}" href="/structure">
-                        <i class="bi bi-diagram-3 d-block" style="font-size: 1.8rem;"></i>
-                        <span style="font-size: 0.85rem;">Структура</span>
+                <li class="nav-item">
+                    <a class="app-nav__link {% if '/structure' in request.url.path or '/departments' in request.url.path or '/positions' in request.url.path %}is-active{% endif %}" href="/structure">
+                        <i class="bi bi-diagram-3"></i>
+                        <span>Структура</span>
                     </a>
                 </li>
             </ul>
-            <ul class="navbar-nav">
-                <li class="nav-item text-center">
-                    <a class="nav-link" href="#" onclick="event.preventDefault(); fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => window.location.href='/login');">
-                        <i class="bi bi-box-arrow-right d-block" style="font-size: 1.8rem;"></i>
-                        <span style="font-size: 0.85rem;">Выйти</span>
+            <ul class="navbar-nav flex-row">
+                <li class="nav-item">
+                    <a class="app-nav__link app-nav__link--logout" href="#"
+                       onclick="event.preventDefault(); fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => window.location.href='/login');">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span>Выйти</span>
                     </a>
                 </li>
             </ul>
         </div>
     </div>
 </nav>
+{% endblock %}
 
-<main class="container pb-5">
+<main class="app-main">
     {% block content %}{% endblock %}
 </main>
 
 <!-- Контейнер для toast-уведомлений -->
-<div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"
-     style="z-index: 1100;"></div>
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"></div>
 
 <!-- Bootstrap 5 Bundle (включает Popper) -->
 <script
@@ -109,23 +111,6 @@
 
 <!-- Блок для скриптов конкретной страницы -->
 {% block scripts %}{% endblock %}
-
-
-
-
-
-<script>
-  // Если страница загружена в iframe, скрываем навбар
-  if (window.self !== window.top) {
-    const nav = document.querySelector('nav.navbar');
-    if (nav) nav.style.display = 'none';
-    const main = document.querySelector('main');
-    if (main) {
-      main.classList.remove('pb-5');
-      main.classList.add('pt-3');
-    }
-  }
-</script>
 
 </body>
 </html>

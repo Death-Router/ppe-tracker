@@ -1,26 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex align-items-center gap-2 mb-3">
-    <button class="btn btn-add-purple" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить">
+<div class="page-head">
+    <button class="btn btn-add" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить">
         <i class="bi bi-plus-lg"></i>
     </button>
-    <h1 class="h3 mb-0">Пользователи</h1>
+    <h1 class="page-title">Пользователи</h1>
 </div>
 
-<div class="card shadow-sm">
+<div class="panel">
     <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0" id="users-table">
-            <thead class="bg-brand-purple">
+        <table class="data-table" id="users-table">
+            <thead>
             <tr>
                 <th>Логин</th>
                 <th>Роль</th>
                 <th>Подразделение</th>
                 <th>Активен</th>
-                <th class="text-end" style="width: 120px;">Действия</th>
+                <th class="col-actions">Действия</th>
             </tr>
             </thead>
             <tbody>
-            <tr><td colspan="5" class="text-center text-muted py-4">Загрузка…</td></tr>
+            <tr><td colspan="5" class="state">Загрузка…</td></tr>
             </tbody>
         </table>
     </div>
@@ -28,59 +28,59 @@
 
 <!-- Модалка создания/редактирования -->
 <div class="modal fade" id="createModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="user-form" data-validate="true">
-        <input type="hidden" name="user_id" id="user-id" value="">
-        <div class="modal-header">
-          <h5 class="modal-title" id="modal-title">Новый пользователь</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="user-form" data-validate="true">
+                <input type="hidden" name="user_id" id="user-id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-title">Новый пользователь</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Логин <span class="req">*</span></label>
+                        <input type="text" class="form-control" name="username" required maxlength="50">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Пароль <span class="req">*</span></label>
+                        <input type="password" class="form-control" name="password" id="password" required minlength="6">
+                        <div class="form-text" id="password-hint" hidden>Оставьте пустым, чтобы не менять.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Роль <span class="req">*</span></label>
+                        <select class="form-select" name="role" id="role-select" required>
+                            <option value="safety_officer">Специалист ОТ</option>
+                            <option value="admin">Администратор</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="department-group">
+                        <label class="form-label">Подразделение</label>
+                        <select class="form-select" name="department_id" id="department-select">
+                            <option value="">Не указано</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="subdep-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="include_subdepartments" id="include-subdep">
+                            <label class="form-check-label" for="include-subdep">
+                                Включать дочерние подразделения
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_active" id="is-active" checked>
+                            <label class="form-check-label" for="is-active">Активен</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-brand-orange" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-brand">Сохранить</button>
+                </div>
+            </form>
         </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">Логин <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" name="username" required maxlength="50">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Пароль <span class="text-danger">*</span></label>
-            <input type="password" class="form-control" name="password" id="password" required minlength="6">
-            <div class="form-text" id="password-hint" style="display: none;">Оставьте пустым, чтобы не менять.</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Роль <span class="text-danger">*</span></label>
-            <select class="form-select" name="role" id="role-select" required>
-                <option value="safety_officer">Специалист ОТ</option>
-                <option value="admin">Администратор</option>
-            </select>
-          </div>
-          <div class="mb-3" id="department-group">
-            <label class="form-label">Подразделение</label>
-            <select class="form-select" name="department_id" id="department-select">
-                <option value="">Не указано</option>
-            </select>
-          </div>
-          <div class="mb-3" id="subdep-group">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="include_subdepartments" id="include-subdep">
-              <label class="form-check-label" for="include-subdep">
-                Включать дочерние подразделения
-              </label>
-            </div>
-          </div>
-          <div class="mb-3">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="is_active" id="is-active" checked>
-              <label class="form-check-label" for="is-active">Активен</label>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-brand-orange" data-bs-dismiss="modal">Отмена</button>
-          <button type="submit" class="btn btn-brand-purple">Сохранить</button>
-        </div>
-      </form>
     </div>
-  </div>
 </div>
 {% endblock %}
 

@@ -9,7 +9,7 @@
       const employees = await API.get('/api/v1/employees');
       renderTable(employees);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
@@ -24,20 +24,20 @@
 
   function renderTable(employees) {
     if (!employees.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Сотрудников пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="state">Сотрудников пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = employees.map(e => {
       const fio = `${e.last_name} ${e.first_name} ${e.middle_name ?? ''}`.trim();
       return `
-      <tr data-employee-id="${e.id}" style="height: 40px;">
-        <td class="py-1">${escapeHtml(fio)}</td>
-        <td class="py-1" style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-variant-numeric: tabular-nums; font-weight: bold; text-align: left; width: 120px; vertical-align: middle;">${escapeHtml(e.personnel_number)}</td>
-        <td class="py-1">${escapeHtml(e.department_rel?.name ?? '—')}</td>
-        <td class="py-1">${escapeHtml(e.position_rel?.name ?? '—')}</td>
-        <td class="py-1 text-end">
-          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1 js-delete-employee" data-id="${e.id}" data-fio="${escapeHtml(fio)}" title="Удалить"><i class="bi bi-trash"></i></button>
+      <tr data-employee-id="${e.id}">
+        <td>${escapeHtml(fio)}</td>
+        <td class="cell-mono">${escapeHtml(e.personnel_number)}</td>
+        <td>${escapeHtml(e.department_rel?.name ?? '—')}</td>
+        <td>${escapeHtml(e.position_rel?.name ?? '—')}</td>
+        <td class="col-actions">
+          <a class="btn btn-icon" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon btn-icon--danger js-delete-employee" data-id="${e.id}" data-fio="${escapeHtml(fio)}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');

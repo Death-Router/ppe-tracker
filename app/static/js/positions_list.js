@@ -29,7 +29,7 @@
       
       renderTable(allPositions);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -50,7 +50,7 @@
 
   function renderTable(positions) {
     if (!positions.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Должностей пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state">Должностей пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = positions.map(p => {
@@ -61,14 +61,14 @@
       const shortDeptPath = escapeHtml(truncateStart(deptPath, 80));
       
       return `
-      <tr data-pos-id="${p.id}" style="height: 40px;">
+      <tr data-pos-id="${p.id}">
         <td class="py-1" title="${fullName}">${shortName}</td>
         <td class="py-1" title="${escapeHtml(deptPath)}">
-          <span class="badge bg-purple">${shortDeptPath || '—'}</span>
+          <span class="badge-soft badge-purple">${shortDeptPath || '—'}</span>
         </td>
-        <td class="py-1 text-end">
-          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deletePos(${p.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
+        <td class="col-actions">
+          <a class="btn btn-icon" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon btn-icon--danger" onclick="deletePos(${p.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');

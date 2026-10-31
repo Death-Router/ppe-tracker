@@ -28,7 +28,7 @@
       allItems = await API.get('/api/v1/ppe_items');
       filterItems();
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -100,7 +100,7 @@
 
   function renderTable(items) {
     if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">Ничего не найдено</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="state">Ничего не найдено</td></tr>`;
       return;
     }
     tbody.innerHTML = items.map(i => {
@@ -109,18 +109,18 @@
       const isChecked = selectedIds.has(i.id) ? 'checked' : '';
       const rowClass = selectedIds.has(i.id) ? 'selected-row' : '';
       return `
-      <tr data-item-id="${i.id}" class="${rowClass}" style="height: 40px;">
-        <td class="py-1">
+      <tr data-item-id="${i.id}" class="${rowClass}">
+        <td>
           <input type="checkbox" class="item-checkbox" value="${i.id}" ${isChecked} onchange="toggleSelection(${i.id}, this.checked)">
         </td>
         <td class="py-1" title="${fullName}">${shortName}</td>
-        <td class="py-1">
-          ${i.function?.name ? `<span class="badge bg-purple me-1">${escapeHtml(i.function.name)}</span>` : ''}
-          ${i.size_group?.name ? `<span class="badge bg-brand-orange">${escapeHtml(i.size_group.name)}</span>` : ''}
+        <td>
+          ${i.function?.name ? `<span class="badge-soft badge-purple me-1">${escapeHtml(i.function.name)}</span>` : ''}
+          ${i.size_group?.name ? `<span class="badge-soft badge-orange">${escapeHtml(i.size_group.name)}</span>` : ''}
         </td>
-        <td class="py-1 text-end">
-          <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteItem(${i.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
+        <td class="col-actions">
+          <a class="btn btn-icon" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon btn-icon--danger" onclick="deleteItem(${i.id}, '${fullName}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');

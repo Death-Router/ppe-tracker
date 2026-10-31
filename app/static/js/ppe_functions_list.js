@@ -12,7 +12,7 @@
       const funcs = await API.get('/api/v1/ppe_functions');
       renderTable(funcs);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
@@ -20,15 +20,15 @@
 
   function renderTable(funcs) {
     if (!funcs.length) {
-      tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Функций пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2" class="state">Функций пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = funcs.map(f => `
-      <tr data-id="${f.id}" style="height: 40px;">
-        <td class="py-1"><strong>${escapeHtml(f.name)}</strong></td>
-        <td class="py-1 text-end">
-          <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="editFunction(${f.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteFunction(${f.id}, '${escapeHtml(f.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+      <tr data-id="${f.id}">
+        <td><strong>${escapeHtml(f.name)}</strong></td>
+        <td class="col-actions">
+          <button class="btn btn-icon" onclick="editFunction(${f.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-icon btn-icon--danger" onclick="deleteFunction(${f.id}, '${escapeHtml(f.name)}')" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `).join('');
