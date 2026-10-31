@@ -363,6 +363,73 @@ a {
     font-size: 0.95rem;
 }
 
+/* --------------------------------------------------------------------------
+   6a. Постраничная навигация
+   -------------------------------------------------------------------------- */
+.pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--line);
+}
+
+.pager:empty {
+    display: none;
+}
+
+.pager__info {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.pager__buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.pager__btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 var(--space-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface);
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.pager__btn:hover:not(:disabled) {
+    border-color: var(--brand);
+    color: var(--brand);
+    background-color: var(--brand-tint);
+}
+
+.pager__btn.is-current {
+    background-color: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+    font-weight: 600;
+}
+
+.pager__btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.pager__gap {
+    color: var(--muted);
+    padding: 0 var(--space-1);
+}
+
 .state--error {
     color: var(--danger);
 }

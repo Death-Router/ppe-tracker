@@ -3,20 +3,56 @@
   const createForm = document.getElementById('create-form');
   const createDeptSelect = document.getElementById('create-dept');
   const createPosSelect = document.getElementById('create-pos');
+  const searchInput = document.getElementById('search-input');
+  const pagerEl = document.getElementById('pager');
 
-  async function loadEmployees() {
+  const PAGE_SIZE = 50;
+  let currentPage = 1;
+  let searchTerm = '';
+  let searchTimer = null;
+
+  async function loadEmployees(page = currentPage) {
+    currentPage = page;
     try {
-      const employees = await API.get('/api/v1/employees');
-      renderTable(employees);
+      const params = new URLSearchParams({
+        paginated: 'true',
+        page: String(currentPage),
+        page_size: String(PAGE_SIZE),
+      });
+      if (searchTerm) params.set('search', searchTerm);
+
+      const data = await API.get(`/api/v1/employees/?${params.toString()}`);
+
+      // Если страница опустела после удаления — уходим на предыдущую
+      if (!data.items.length && data.total > 0 && currentPage > 1) {
+        return loadEmployees(currentPage - 1);
+      }
+
+      renderTable(data.items);
+      Pager.render(pagerEl, data, loadEmployees);
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      if (pagerEl) pagerEl.innerHTML = '';
     }
   }
 
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      // Пауза после ввода: иначе на каждую букву уходит запрос в БД
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        searchTerm = e.target.value.trim();
+        loadEmployees(1);
+      }, 300);
+    });
+  }
 
   function renderTable(employees) {
     if (!employees.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="state">Сотрудников пока нет</td></tr>`;
+      const text = searchTerm
+        ? `По запросу «${escapeHtml(searchTerm)}» ничего не найдено`
+        : 'Сотрудников пока нет';
+      tbody.innerHTML = `<tr><td colspan="5" class="state">${text}</td></tr>`;
       return;
     }
     tbody.innerHTML = employees.map(e => {

@@ -7,6 +7,14 @@
     <h1 class="page-title">Сотрудники</h1>
 </div>
 
+<div class="filter-bar">
+    <div class="input-group filter-bar__search">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input"
+               placeholder="Поиск по ФИО или табельному номеру...">
+    </div>
+</div>
+
 <div class="panel">
     <div class="table-responsive">
         <table class="data-table" id="employees-table">
@@ -24,6 +32,7 @@
             </tbody>
         </table>
     </div>
+    <div class="pager" id="pager"></div>
 </div>
 
 <!-- Модалка создания -->

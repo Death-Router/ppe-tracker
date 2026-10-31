@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.api import pagination
 from app.api.v1.endpoints.ws import manager
 from app.db.session import get_db
 from app.models.employee import Employee
@@ -103,19 +104,66 @@ async def create_employee(
     return employee
 
 
-@router.get("/", response_model=list[EmployeeRead])
+@router.get("/", response_model=None)
 async def get_employees(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(
+        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
+    ),
+    search: str | None = Query(None, description="Поиск по ФИО или табельному"),
+    paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
 ):
-    query = select(Employee).options(*employee_options())
-    
+    """Список сотрудников.
+
+    Без `paginated=true` отдаётся обычный массив — так работают выпадающие
+    списки, которым нужны все значения сразу. С `paginated=true` приходит
+    конверт со счётчиками и учитывается `search`.
+    """
+    conditions = []
+
     allowed = await get_allowed_department_ids(db, current_user)
     if allowed:
-        query = query.where(Employee.department_id.in_(allowed))
+        conditions.append(Employee.department_id.in_(allowed))
 
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        conditions.append(
+            or_(
+                func.lower(Employee.last_name).like(pattern),
+                func.lower(Employee.first_name).like(pattern),
+                func.lower(func.coalesce(Employee.middle_name, "")).like(pattern),
+                func.lower(Employee.personnel_number).like(pattern),
+            )
+        )
+
+    base = select(Employee).where(*conditions) if conditions else select(Employee)
+
+    if not paginated:
+        result = await db.execute(base.options(*employee_options()))
+        return result.scalars().all()
+
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+
+    params = pagination.normalize(page, page_size)
+    query = (
+        base.options(*employee_options())
+        .order_by(Employee.last_name, Employee.first_name, Employee.id)
+        .offset(params.offset)
+        .limit(params.page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all()
+    items = result.scalars().all()
+
+    return pagination.Page.build(
+        [EmployeeRead.model_validate(item) for item in items],
+        total=total,
+        page=params.page,
+        page_size=params.page_size,
+    )
 
 
 @router.get("/{employee_id}", response_model=EmployeeRead)
