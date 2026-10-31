@@ -253,6 +253,9 @@ a {
 
 .filter-bar__select {
     flex: 0 1 230px;
+    /* Без min-width: 0 flex-элемент не даёт себя сжать уже содержимого,
+       и длинное название раздувает панель фильтров */
+    min-width: 0;
 }
 
 @media (max-width: 768px) {
@@ -589,6 +592,17 @@ a {
     font-size: 0.92rem;
     color: var(--ink);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Длинное название не должно выезжать за поле и наезжать на стрелку:
+   справа резервируем место под неё, лишний текст обрезаем многоточием.
+   Правило для .form-select по умолчанию не задаёт padding-right, а наш
+   общий padding его перекрывал. */
+.form-select {
+    padding-right: 2.25rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .form-control:focus,
