@@ -1,5 +1,6 @@
 from pathlib import Path
-from fastapi import FastAPI, Request
+
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -10,11 +11,20 @@ from app.api.v1.endpoints import (
     position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
     ppe_functions, ppe_size_groups, users
 )
+from app.core.config import settings
+from app.core.deps import get_current_active_user
 
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="PPE Tracker API")
-app.add_middleware(SessionMiddleware, secret_key="super-secret-key-change-in-production")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    session_cookie="ppe_session",
+    max_age=settings.SESSION_MAX_AGE,
+    same_site="lax",
+    https_only=settings.SESSION_COOKIE_SECURE,
+)
 
 # --- Шаблоны ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -32,20 +42,33 @@ app.mount(
 )
 
 # --- HTTP-роутеры ---
-app.include_router(employees.router, prefix="/api/v1")
-app.include_router(ppe_items.router, prefix="/api/v1")
-app.include_router(departments.router, prefix="/api/v1")
-app.include_router(positions.router, prefix="/api/v1")
-app.include_router(position_ppe_norms.router, prefix="/api/v1")
-app.include_router(employee_ppe_issues.router, prefix="/api/v1")
-app.include_router(ppe_sizes.router, prefix="/api/v1")
-app.include_router(export.router, prefix="/api/v1")
-app.include_router(import_data.router, prefix="/api/v1")
+# Авторизация включается централизованно, на уровне роутера: так новый эндпоинт
+# нельзя случайно оставить открытым, забыв добавить Depends в обработчик.
+PROTECTED_ROUTERS = (
+    employees.router,
+    ppe_items.router,
+    departments.router,
+    positions.router,
+    position_ppe_norms.router,
+    employee_ppe_issues.router,
+    ppe_sizes.router,
+    export.router,
+    import_data.router,
+    units.router,
+    ppe_functions.router,
+    ppe_size_groups.router,
+    users.router,
+)
+
+for _router in PROTECTED_ROUTERS:
+    app.include_router(
+        _router,
+        prefix="/api/v1",
+        dependencies=[Depends(get_current_active_user)],
+    )
+
+# Вход и выход должны оставаться доступными без сессии
 app.include_router(auth.router, prefix="/api/v1")
-app.include_router(units.router, prefix="/api/v1")
-app.include_router(ppe_functions.router, prefix="/api/v1")
-app.include_router(ppe_size_groups.router, prefix="/api/v1")
-app.include_router(users.router, prefix="/api/v1")
 
 # --- WebSocket-роутер ---
 app.include_router(ws.router)

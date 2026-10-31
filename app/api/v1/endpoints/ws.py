@@ -46,6 +46,12 @@ manager = ConnectionManager()
 
 @router.websocket("/ws/employees/{employee_id}")
 async def websocket_endpoint(websocket: WebSocket, employee_id: int):
+    # WebSocket-соединение закрываем до accept, если нет сессии:
+    # иначе любой клиент может слушать события без авторизации.
+    if not websocket.session.get("user_id"):
+        await websocket.close(code=1008)  # Policy Violation
+        return
+
     await manager.connect(websocket, employee_id)
     try:
         while True:

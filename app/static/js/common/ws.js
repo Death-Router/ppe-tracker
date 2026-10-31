@@ -16,7 +16,11 @@ window.WS = (() => {
       listeners.forEach(cb => cb(data));
     };
 
-    ws.onclose = () => setTimeout(connect, 3000);
+    ws.onclose = (event) => {
+      // 1008 — сервер отклонил соединение (нет авторизации): переподключаться бессмысленно
+      if (event.code === 1008) return;
+      setTimeout(connect, 3000);
+    };
   }
 
   // Возвращаем объект с методом подписки
