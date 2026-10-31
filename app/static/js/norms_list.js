@@ -83,9 +83,14 @@
     return result;
   }
 
-  async function loadData() {
+  const PAGE_SIZE = 50;
+  let currentPage = 1;
+  let searchTimer = null;
+
+  async function loadData(page = currentPage) {
+    currentPage = page;
     try {
-      allNorms = await API.get('/api/v1/position_ppe_norms');
+      // Справочники нужны целиком — для выпадающих списков и datalist
       allPositions = await API.get('/api/v1/positions');
       allPpeItems = await API.get('/api/v1/ppe_items');
       const allDepartments = await API.get('/api/v1/departments');
@@ -124,32 +129,36 @@
           }).join('');
       }
 
-      filterAndRender();
+      await loadPage(currentPage);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" class="state state--error">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
-  // Фильтрация и отрисовка
-  function filterAndRender() {
-    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-    const posFilter = filterPosition ? Number(filterPosition.value) : null;
+  // Нормы грузятся страницами: фильтры и поиск считает сервер
+  async function loadPage(page = currentPage) {
+    currentPage = page;
+    const params = new URLSearchParams({
+      paginated: 'true',
+      page: String(currentPage),
+      page_size: String(PAGE_SIZE),
+    });
 
-    let filtered = allNorms;
+    const term = searchInput ? searchInput.value.trim() : '';
+    if (term) params.set('search', term);
 
-    if (searchTerm) {
-      filtered = filtered.filter(n => {
-        const posName = n.position?.name ?? '';
-        const itemName = n.ppe_item?.name ?? '';
-        return posName.toLowerCase().includes(searchTerm) || itemName.toLowerCase().includes(searchTerm);
-      });
+    const posId = filterPosition ? filterPosition.value : '';
+    if (posId) params.set('position_id', posId);
+
+    const data = await API.get(`/api/v1/position_ppe_norms/?${params.toString()}`);
+    allNorms = data.items;
+
+    if (!data.items.length && data.total > 0 && currentPage > 1) {
+      return loadPage(currentPage - 1);
     }
 
-    if (posFilter) {
-      filtered = filtered.filter(n => n.position_id === posFilter);
-    }
-
-    renderTable(filtered);
+    renderTable(data.items);
+    Pager.render(document.getElementById('pager'), data, loadPage);
   }
 
   function renderTable(norms) {
@@ -374,8 +383,13 @@
   }
 
   // Фильтры
-  if (searchInput) searchInput.addEventListener('input', filterAndRender);
-  if (filterPosition) filterPosition.addEventListener('change', filterAndRender);
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadPage(1), 300);
+    });
+  }
+  if (filterPosition) filterPosition.addEventListener('change', () => loadPage(1));
 
   // Кнопка "Добавить" открывает модалку в режиме создания
   document.querySelector('button[data-bs-target="#createNormModal"]')?.addEventListener('click', openCreateModal);

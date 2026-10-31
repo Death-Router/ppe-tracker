@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, exists, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from app.api import pagination
 from app.api.v1.endpoints.ws import manager
 from app.db.session import get_db
 from app.models.ppe_item import PpeItem
@@ -31,10 +32,73 @@ async def create_item(item_in: PpeItemCreate, db: AsyncSession = Depends(get_db)
     result = await db.execute(select(PpeItem).where(PpeItem.id == db_item.id).options(*item_options()))
     return result.scalar_one()
 
-@router.get("/", response_model=list[PpeItemRead])
-async def get_items(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PpeItem).options(*item_options()))
-    return result.scalars().all()
+@router.get("/", response_model=None)
+async def get_items(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(
+        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
+    ),
+    search: str | None = Query(None, description="Поиск по наименованию"),
+    function_id: int | None = Query(None, description="Фильтр по функции СИЗ"),
+    size_group_id: int | None = Query(None, description="Фильтр по размерной группе"),
+    paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
+):
+    """Список наименований СИЗ.
+
+    Без `paginated=true` — полный массив (нужен справочникам и автодополнению),
+    с ним — страница со счётчиками и серверными фильтрами.
+    """
+    conditions = []
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        # Ищем и по названию, и по функции с размерной группой: браузерная
+        # версия фильтра работала именно так, поведение сохраняем
+        conditions.append(
+            or_(
+                func.lower(PpeItem.name).like(pattern),
+                func.lower(func.coalesce(PpeFunction.name, "")).like(pattern),
+                func.lower(func.coalesce(PpeSizeGroup.name, "")).like(pattern),
+            )
+        )
+    if function_id is not None:
+        conditions.append(PpeItem.function_id == function_id)
+    if size_group_id is not None:
+        conditions.append(PpeItem.size_group_id == size_group_id)
+
+    # outerjoin: у СИЗ функция и группа необязательны, при обычном join
+    # подходящие записи без них выпали бы из выдачи
+    base = (
+        select(PpeItem)
+        .outerjoin(PpeFunction, PpeItem.function_id == PpeFunction.id)
+        .outerjoin(PpeSizeGroup, PpeItem.size_group_id == PpeSizeGroup.id)
+        .where(*conditions)
+    )
+
+    if not paginated:
+        result = await db.execute(base.options(*item_options()).order_by(PpeItem.name))
+        return result.scalars().all()
+
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+
+    params = pagination.normalize(page, page_size)
+    query = (
+        base.options(*item_options())
+        .order_by(PpeItem.name, PpeItem.id)
+        .offset(params.offset)
+        .limit(params.page_size)
+    )
+    result = await db.execute(query)
+    items = result.scalars().all()
+
+    return pagination.Page.build(
+        [PpeItemRead.model_validate(item) for item in items],
+        total=total,
+        page=params.page,
+        page_size=params.page_size,
+    )
 
 @router.get("/{item_id}", response_model=PpeItemRead)
 async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):

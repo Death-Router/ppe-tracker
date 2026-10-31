@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
+from app.api import pagination
 from app.api.v1.endpoints.ws import manager
 from app.db.session import get_db
 from app.models.position_ppe_norm import PositionPpeNorm
@@ -61,10 +62,71 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
     return norm
 
 
-@router.get("/", response_model=list[PositionPpeNormRead])
-async def get_norms(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PositionPpeNorm).options(*norm_options()))
-    return result.scalars().all()
+@router.get("/", response_model=None)
+async def get_norms(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(
+        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
+    ),
+    search: str | None = Query(None, description="Поиск по должности или СИЗ"),
+    position_id: int | None = Query(None, description="Фильтр по должности"),
+    department_id: int | None = Query(None, description="Фильтр по подразделению"),
+    paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
+):
+    """Нормы выдачи.
+
+    Поиск идёт по названию должности и по наименованию СИЗ — это требует
+    соединения с таблицами positions и ppe_items, поэтому фильтрация
+    перенесена из браузера в SQL.
+    """
+    query = select(PositionPpeNorm)
+
+    if position_id is not None:
+        query = query.where(PositionPpeNorm.position_id == position_id)
+
+    if department_id is not None:
+        query = query.join(Position, PositionPpeNorm.position_id == Position.id).where(
+            Position.department_id == department_id
+        )
+
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        query = query.join(
+            Position, PositionPpeNorm.position_id == Position.id
+        ).join(
+            PpeItem, PositionPpeNorm.ppe_item_id == PpeItem.id
+        ).where(
+            or_(
+                func.lower(Position.name).like(pattern),
+                func.lower(PpeItem.name).like(pattern),
+            )
+        )
+
+    if not paginated:
+        result = await db.execute(query.options(*norm_options()))
+        return result.scalars().all()
+
+    total = (
+        await db.execute(select(func.count()).select_from(query.subquery()))
+    ).scalar_one()
+
+    params = pagination.normalize(page, page_size)
+    stmt = (
+        query.options(*norm_options())
+        .order_by(PositionPpeNorm.id)
+        .offset(params.offset)
+        .limit(params.page_size)
+    )
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+
+    return pagination.Page.build(
+        [PositionPpeNormRead.model_validate(item) for item in items],
+        total=total,
+        page=params.page,
+        page_size=params.page_size,
+    )
 
 
 @router.get("/{norm_id}", response_model=PositionPpeNormRead)

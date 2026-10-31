@@ -33,14 +33,52 @@
   });
   let selectedIds = new Set();
 
-  async function loadItems() {
+  const PAGE_SIZE = 50;
+  let currentPage = 1;
+  let searchTimer = null;
+
+  async function loadItems(page = currentPage) {
+    currentPage = page;
     try {
-      allItems = await API.get('/api/v1/ppe_items');
-      filterItems();
+      const params = new URLSearchParams({
+        paginated: 'true',
+        page: String(currentPage),
+        page_size: String(PAGE_SIZE),
+      });
+
+      const term = searchInput ? searchInput.value.trim() : '';
+      if (term) params.set('search', term);
+
+      const funcId = filterFunction ? filterFunction.value : '';
+      if (funcId) params.set('function_id', funcId);
+
+      const groupId = filterSizeGroup ? filterSizeGroup.value : '';
+      if (groupId) params.set('size_group_id', groupId);
+
+      const data = await API.get(`/api/v1/ppe_items/?${params.toString()}`);
+      allItems = data.items;
+
+      if (!data.items.length && data.total > 0 && currentPage > 1) {
+        return loadItems(currentPage - 1);
+      }
+
+      renderTable(data.items);
+      Pager.render(document.getElementById('pager'), data, loadItems);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="state state--error">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
+
+  // Фильтры теперь серверные: запрос уходит только после паузы ввода
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadItems(1), 300);
+    });
+  }
+  [filterFunction, filterSizeGroup].forEach((el) => {
+    if (el) el.addEventListener('change', () => loadItems(1));
+  });
 
   async function loadSelects() {
     try {
@@ -83,27 +121,6 @@
     if (!str) return '';
     if (str.length <= maxLength) return str;
     return str.substring(0, maxLength) + '...';
-  }
-
-  function filterItems() {
-    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-    const funcId = filterFunction ? Number(filterFunction.value) : null;
-    const groupId = filterSizeGroup ? Number(filterSizeGroup.value) : null;
-
-    let filtered = allItems;
-
-    if (searchTerm) {
-      filtered = filtered.filter(item => 
-        item.name.toLowerCase().includes(searchTerm) || 
-        (item.function?.name || '').toLowerCase().includes(searchTerm) ||
-        (item.size_group?.name || '').toLowerCase().includes(searchTerm)
-      );
-    }
-    if (funcId) filtered = filtered.filter(item => item.function_id === funcId);
-    if (groupId) filtered = filtered.filter(item => item.size_group_id === groupId);
-
-    filtered.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    renderTable(filtered);
   }
 
   function renderTable(items) {
@@ -231,9 +248,6 @@
     });
   }
 
-  if (searchInput) searchInput.addEventListener('input', filterItems);
-  if (filterFunction) filterFunction.addEventListener('change', filterItems);
-  if (filterSizeGroup) filterSizeGroup.addEventListener('change', filterItems);
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
