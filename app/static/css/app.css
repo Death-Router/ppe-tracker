@@ -256,10 +256,11 @@ a {
    инженер» ещё до того, как у них оставался шанс поместиться.
    max-width в процентах — это ширина таблицы под фильтрами. */
 .filter-bar__select {
-    flex: 1 1 auto;
-    width: auto;
+    /* flex-grow = 0: ширину выставляет fitSelectWidth по самому длинному
+       пункту. С grow список растягивался на всю панель, игнорируя её */
+    flex: 0 1 auto;
     min-width: 160px;
-    max-width: min(420px, 100%);
+    max-width: 100%;
 }
 
 @media (max-width: 768px) {

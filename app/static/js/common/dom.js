@@ -37,11 +37,19 @@ window.fitSelectWidth = function (select) {
     parseFloat(style.borderRightWidth);
   const arrow = 24;
 
-  const available = select.parentElement
-    ? select.parentElement.clientWidth
-    : window.innerWidth;
+  // Ограничение — ширина панели фильтров, а не окна. clientWidth у только
+  // что вставленного элемента бывает 0, поэтому берём ширину ближайшего
+  // контейнера с ненулевой шириной.
+  let available = 0;
+  let node = select.parentElement;
+  while (node && available === 0) {
+    available = node.clientWidth;
+    node = node.parentElement;
+  }
+  if (!available) available = document.documentElement.clientWidth;
 
-  select.style.width = `${Math.min(Math.ceil(longest + padding + arrow), available)}px`;
+  const wanted = Math.ceil(longest + padding + arrow);
+  select.style.width = `${Math.min(wanted, available)}px`;
 };
 
 // Подгоняем все помеченные списки и при изменении их содержимого

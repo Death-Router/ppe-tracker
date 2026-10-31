@@ -282,6 +282,10 @@
     itemIdInput.value = '';
     modalDepartment.value = '';
     modalPosition.innerHTML = '<option value="">Сначала выберите подразделение</option>';
+    // Раньше модалку открывал data-bs-toggle на кнопке, скрипт только
+    // заполнял поля. Атрибут убран из-за двойного backdrop — теперь
+    // показывать обязан скрипт.
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
   };
 
   // Редактирование нормы
