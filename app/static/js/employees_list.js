@@ -6,7 +6,7 @@
   const searchInput = document.getElementById('search-input');
   const pagerEl = document.getElementById('pager');
 
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 20;
   let currentPage = 1;
   let searchTerm = '';
   let searchTimer = null;

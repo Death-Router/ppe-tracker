@@ -123,6 +123,30 @@
         const target = window.location.pathname + window.location.search;
         window.top.location.replace(target);
     }
+
+    // Сообщаем родителю фактическую высоту содержимого: тогда во вкладке нет
+    // второй полосы прокрутки и список виден целиком, а не обрезан
+    if (window.isEmbedded) {
+        const reportHeight = () => {
+            const height = Math.max(
+                document.body.scrollHeight,
+                document.documentElement.scrollHeight
+            );
+            try {
+                window.parent.postMessage({ type: 'embed-height', height }, '*');
+            } catch (e) {
+                // родитель недоступен — не критично
+            }
+        };
+
+        window.addEventListener('load', reportHeight);
+        // Высота меняется после загрузки данных, пагинации и поиска
+        if (window.ResizeObserver) {
+            new ResizeObserver(reportHeight).observe(document.body);
+        }
+        document.addEventListener('click', () => setTimeout(reportHeight, 100));
+        document.addEventListener('input', () => setTimeout(reportHeight, 400));
+    }
 </script>
 
 <!-- Блок для скриптов конкретной страницы -->

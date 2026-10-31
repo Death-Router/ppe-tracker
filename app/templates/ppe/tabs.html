@@ -45,3 +45,19 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+    // Растягиваем рамку по высоте содержимого: иначе у списка появляется
+    // собственная полоса прокрутки внутри общей
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'embed-height') {
+            document.querySelectorAll('.embed-frame').forEach((frame) => {
+                if (frame.contentWindow === event.source) {
+                    frame.style.height = `${event.data.height + 8}px`;
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -303,6 +303,23 @@ a {
     background-color: var(--surface);
 }
 
+/* Плотный режим для длинных списков: строки ниже, но остаётся воздух
+   между текстом и границей, чтобы таблица не выглядела сжатой */
+.data-table--dense thead th {
+    padding: var(--space-2) var(--space-3);
+}
+
+.data-table--dense tbody td {
+    padding: 6px var(--space-3);
+    line-height: 1.35;
+}
+
+.data-table--dense .btn-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 0.85rem;
+}
+
 .data-table tbody tr:last-child td {
     border-bottom: none;
 }
@@ -713,8 +730,10 @@ input[type="radio"] {
 /* Встроенные страницы (вкладки на iframe) */
 .embed-frame {
     width: 100%;
-    height: calc(100vh - 210px);
-    min-height: 460px;
+    /* Высоту выставляет скрипт по содержимому: фиксированная 100vh давала
+       вторую полосу прокрутки внутри рамки */
+    height: 520px;
+    min-height: 320px;
     border: 0;
     display: block;
 }

@@ -83,7 +83,7 @@
     return result;
   }
 
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 20;
   let currentPage = 1;
   let searchTimer = null;
 

@@ -24,3 +24,18 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+    // Рамка тянется по высоте содержимого — без второй полосы прокрутки
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'embed-height') {
+            document.querySelectorAll('.embed-frame').forEach((frame) => {
+                if (frame.contentWindow === event.source) {
+                    frame.style.height = `${event.data.height + 8}px`;
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
