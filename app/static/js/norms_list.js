@@ -161,9 +161,26 @@
     Pager.render(document.getElementById('pager'), data, loadPage);
   }
 
+  // Обрезаем с начала: в пути «Подразделение / Должность» важнее конец
+  function truncateStart(str, maxLength) {
+    if (!str) return '';
+    if (str.length <= maxLength) return str;
+    return '…' + str.slice(-maxLength);
+  }
+
+  // Кнопки строк: id через data-атрибут (в onclick кавычки в названии ломали
+  // разметку), обработчик один на всю таблицу
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    if (btn.dataset.action === 'edit') window.editNorm(id);
+    if (btn.dataset.action === 'delete') window.deleteNorm(id);
+  });
+
   function renderTable(norms) {
     if (!norms.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="state">Норм пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="state">Норм пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = norms.map(n => {
@@ -172,21 +189,19 @@
       const posName = n.position?.name ?? '—';
       const deptName = n.position?.department?.name ?? '';
       const posStr = deptName ? `${deptName} / ${posName}` : posName;
+      // Длинный путь обрезаем спереди: важнее конец — сама должность
+      const posShort = truncateStart(posStr, 60);
       const itemName = n.ppe_item?.name ?? '—';
-      const periodStr = formatPeriod(n.wear_period_value, n.wear_period_unit);
-      const qtyStr = formatUnit(n.quantity, n.ppe_item?.unit?.short_name);
       return `
       <tr data-norm-id="${n.id}" class="${rowClass}">
         <td>
           <input type="checkbox" class="item-checkbox" value="${n.id}" ${isChecked} onchange="toggleSelection(${n.id}, this.checked)">
         </td>
-        <td><strong>${escapeHtml(posStr)}</strong></td>
-        <td>${escapeHtml(itemName)}</td>
-        <td>${periodStr}</td>
-        <td>${qtyStr}</td>
+        <td title="${escapeHtml(posStr)}"><strong>${escapeHtml(posShort)}</strong></td>
+        <td title="${escapeHtml(itemName)}">${escapeHtml(itemName)}</td>
         <td class="col-actions">
-          <button class="btn btn-icon" onclick="editNorm(${n.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-icon btn-icon--danger" onclick="deleteNorm(${n.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-icon" data-action="edit" data-id="${n.id}" title="Редактировать"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${n.id}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
