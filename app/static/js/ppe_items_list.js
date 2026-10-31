@@ -127,7 +127,7 @@
           ${i.size_group?.name ? `<span class="badge-soft badge-orange">${escapeHtml(i.size_group.name)}</span>` : ''}
         </td>
         <td class="col-actions">
-          <a class="btn btn-icon" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon" onclick="goTo('/ppe-items/${i.id}/edit')" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${i.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>

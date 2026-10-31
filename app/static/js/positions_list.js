@@ -75,7 +75,7 @@
           <span class="badge-soft badge-purple">${shortDeptPath || '—'}</span>
         </td>
         <td class="col-actions">
-          <a class="btn btn-icon" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon" onclick="goTo('/positions/${p.id}/edit')" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${p.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>

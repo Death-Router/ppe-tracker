@@ -28,7 +28,7 @@
         <td>${escapeHtml(e.department_rel?.name ?? '—')}</td>
         <td>${escapeHtml(e.position_rel?.name ?? '—')}</td>
         <td class="col-actions">
-          <a class="btn btn-icon" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon" onclick="goTo('/employees/${e.id}/edit')" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger js-delete-employee" data-id="${e.id}" data-fio="${escapeHtml(fio)}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>

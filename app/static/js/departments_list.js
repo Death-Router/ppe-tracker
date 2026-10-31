@@ -63,7 +63,7 @@
         <td title="${fullName}">${indent}${shortName}</td>
         <td class="cell-muted">${escapeHtml(parentName)}</td>
         <td class="col-actions">
-          <a class="btn btn-icon" href="/departments/${d.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon" onclick="goTo('/departments/${d.id}/edit')" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger js-delete-dept" data-id="${d.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>

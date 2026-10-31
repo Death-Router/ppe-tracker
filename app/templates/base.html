@@ -114,6 +114,16 @@
 <script src="{{ url_for('static', path='js/common/form.js') }}"></script>
 <script src="{{ url_for('static', path='js/common/validation.js') }}"></script>
 
+<script>
+    // Во вкладках (iframe) живут только списки. Если во фрейме открылась
+    // другая страница — например, карточка редактирования по старой ссылке —
+    // вытаскиваем её в основное окно, иначе навбар дублируется.
+    if (window.isEmbedded && !window.location.pathname.match(/\/(employees|departments|positions|ppe-items|norms|ppe-functions|ppe-size-groups|units|users)$/)) {
+        const target = window.location.pathname + window.location.search;
+        window.top.location.replace(target);
+    }
+</script>
+
 <!-- Блок для скриптов конкретной страницы -->
 {% block scripts %}{% endblock %}
 

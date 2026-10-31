@@ -10,3 +10,23 @@ window.escapeHtml = function (value) {
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 };
+
+// true, если страница открыта внутри вкладки (iframe), а не как отдельный документ
+window.isEmbedded = (() => {
+  try {
+    return window.self !== window.top;
+  } catch {
+    // Доступ к top закрыт — значит точно во фрейме
+    return true;
+  }
+})();
+
+// Переход на другую страницу из вкладки должен менять адрес всего приложения,
+// иначе страница откроется внутри рамки и навбар продублируется.
+window.goTo = function (url) {
+  if (window.isEmbedded) {
+    window.top.location.href = url;
+  } else {
+    window.location.href = url;
+  }
+};
