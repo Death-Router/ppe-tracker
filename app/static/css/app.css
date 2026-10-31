@@ -19,6 +19,10 @@
     --accent-dark: #e05a00;
     --accent-light: #fff2e8;
 
+    /* Границы цветных иконок-кнопок */
+    --brand-border: rgba(91, 44, 138, 0.22);
+    --accent-border: rgba(255, 102, 0, 0.28);
+
     /* Текст и поверхности */
     --ink: #243244;
     --ink-soft: #5a6a7d;
@@ -461,7 +465,8 @@ a {
     color: #fff;
 }
 
-/* Компактные кнопки-иконки в таблице */
+/* Компактные кнопки-иконки в таблице.
+   Правило цвета: «удалить» — оранжевая, все остальные действия — фиолетовые. */
 .btn-icon {
     width: 30px;
     height: 30px;
@@ -470,17 +475,22 @@ a {
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--line);
+    border: 1px solid var(--brand-border);
     background-color: transparent;
-    color: var(--ink-soft);
+    color: var(--brand);
     font-size: 0.95rem;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .btn-icon:hover {
-    background-color: var(--brand-tint);
+    background-color: var(--brand-light);
     border-color: var(--brand);
     color: var(--brand);
+}
+
+.btn-icon--danger {
+    border-color: var(--accent-border);
+    color: var(--accent);
 }
 
 .btn-icon--danger:hover {
