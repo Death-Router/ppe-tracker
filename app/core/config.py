@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = ""
 
+    # Импорт из Excel: защита от «файла на 200 МБ» и от простыни на 100k строк
+    MAX_IMPORT_FILE_MB: int = 10
+    MAX_IMPORT_ROWS: int = 5000
+
     # Собираем URL для подключения
     @property
     def database_url(self) -> str:

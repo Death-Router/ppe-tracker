@@ -20,7 +20,8 @@ class Department(Base):
 
     # Связи
     parent: Mapped[Optional["Department"]] = relationship(remote_side=[id], back_populates="children")
-    children: Mapped[list["Department"]] = relationship(back_populates="parent", cascade="all, delete-orphan")
+    # Без delete-orphan: удаление подразделения не должно молча уносить поддерево
+    children: Mapped[list["Department"]] = relationship(back_populates="parent")
     
-    positions: Mapped[list["Position"]] = relationship(back_populates="department", cascade="all, delete-orphan")
+    positions: Mapped[list["Position"]] = relationship(back_populates="department")
     employees: Mapped[list["Employee"]] = relationship(back_populates="department_rel")

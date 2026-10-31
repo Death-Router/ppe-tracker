@@ -5,6 +5,8 @@ from sqlalchemy.orm import selectinload
 from app.api.v1.endpoints.ws import manager
 from app.db.session import get_db
 from app.models.department import Department
+from app.models.position import Position
+from app.models.employee import Employee
 from app.schemas.department import DepartmentCreate, DepartmentRead, DepartmentUpdate
 
 router = APIRouter(prefix="/departments", tags=["Справочник: Подразделения"])
@@ -69,6 +71,36 @@ async def delete_department(dept_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.id == dept_id))
     db_dept = result.scalar_one_or_none()
     if not db_dept: raise HTTPException(status_code=404, detail="Не найдено")
+
+    # Раньше здесь стоял каскад на уровне ORM: одно удаление уносило дочерние
+    # подразделения и все должности, не спрашивая. Проверяем явно.
+    children = await db.execute(
+        select(Department.id).where(Department.parent_id == dept_id).limit(1)
+    )
+    if children.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="Сначала перенесите или удалите дочерние подразделения",
+        )
+
+    positions = await db.execute(
+        select(Position.id).where(Position.department_id == dept_id).limit(1)
+    )
+    if positions.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="В подразделении есть должности — сначала перенесите или удалите их",
+        )
+
+    employees = await db.execute(
+        select(Employee.id).where(Employee.department_id == dept_id).limit(1)
+    )
+    if employees.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="В подразделении есть сотрудники — сначала переведите их",
+        )
+
     try:
         await db.delete(db_dept)
         await db.commit()

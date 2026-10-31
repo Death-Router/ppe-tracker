@@ -45,10 +45,10 @@
                 <h5 class="panel__title"><i class="bi bi-upload"></i> Импорт сотрудников</h5>
             </div>
             <div class="panel__body">
-                <p class="form-text mb-3">Загрузите Excel-файл с сотрудниками.</p>
+                <p class="form-text mb-3">Загрузите Excel-файл (.xlsx, до 10 МБ) с сотрудниками.</p>
                 <form id="import-form" enctype="multipart/form-data" data-validate="true">
                     <div class="input-group">
-                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls" required>
+                        <input type="file" class="form-control" name="file" accept=".xlsx" required>
                         <button type="submit" class="btn btn-brand" id="import-btn">Загрузить</button>
                     </div>
                     <div id="import-result" class="mt-3"></div>
@@ -64,7 +64,7 @@
                 <p class="form-text mb-3">Загрузите Excel-файл с колонками: «Наименование», «Функция», «Размерная группа».</p>
                 <form id="import-items-form" enctype="multipart/form-data">
                     <div class="input-group">
-                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls" required>
+                        <input type="file" class="form-control" name="file" accept=".xlsx" required>
                         <button type="submit" class="btn btn-brand">Загрузить</button>
                     </div>
                     <div id="import-items-result" class="mt-3"></div>
@@ -80,7 +80,7 @@
                 <p class="form-text mb-3">Загрузите Excel-файл с колонками: «Подразделение», «Должность», «СИЗ», «Срок», «Количество».</p>
                 <form id="import-norms-form" enctype="multipart/form-data">
                     <div class="input-group">
-                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls" required>
+                        <input type="file" class="form-control" name="file" accept=".xlsx" required>
                         <button type="submit" class="btn btn-brand">Загрузить</button>
                     </div>
                     <div id="import-norms-result" class="mt-3"></div>
