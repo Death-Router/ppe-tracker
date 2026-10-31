@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from app.models.employee import Employee
 from app.models.ppe_item import PpeItem
 from app.models.position_ppe_norm import PositionPpeNorm
 from app.schemas.employee_ppe_issue import EmployeePpeIssueCreate, EmployeePpeIssueRead
+from app.utils.dates import add_wear_period
 
 router = APIRouter(prefix="/employee_ppe_issues", tags=["Выдача СИЗ"])
 
@@ -27,25 +28,20 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
     if not item_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
 
-    # 3. Рассчитываем срок годности на основе нормы
+    # 3. Рассчитываем срок годности на основе нормы для должности сотрудника
     expiry_date = None
     if employee.position_id:
         norm_res = await db.execute(
             select(PositionPpeNorm).where(
                 PositionPpeNorm.position_id == employee.position_id,
-                PositionPpeNorm.ppe_item_id == issue_in.ppe_item_id
+                PositionPpeNorm.ppe_item_id == issue_in.ppe_item_id,
             )
         )
         norm = norm_res.scalar_one_or_none()
-        if norm and norm.wear_period_unit in ('год', 'месяц'):
-            try:
-                val = int(norm.wear_period_value)
-                if norm.wear_period_unit == 'год':
-                    expiry_date = issue_in.issue_date + timedelta(days=365 * val)
-                elif norm.wear_period_unit == 'месяц':
-                    expiry_date = issue_in.issue_date + timedelta(days=30 * val)
-            except ValueError:
-                pass
+        if norm:
+            expiry_date = add_wear_period(
+                issue_in.issue_date, norm.wear_period_value, norm.wear_period_unit
+            )
 
     # 4. Создаем запись
     db_issue = EmployeePpeIssue(
