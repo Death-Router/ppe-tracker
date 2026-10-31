@@ -30,6 +30,7 @@
     const id = Number(btn.dataset.id);
     const name = btn.dataset.name || '';
     if (btn.dataset.action === 'delete') window.deleteItem(id, name);
+    if (btn.dataset.action === 'edit') window.openEditModal(id);
   });
   let selectedIds = new Set();
 
@@ -144,7 +145,7 @@
           ${i.size_group?.name ? `<span class="badge-soft badge-orange">${escapeHtml(i.size_group.name)}</span>` : ''}
         </td>
         <td class="col-actions">
-          <a class="btn btn-icon" href="/ppe-items/${i.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon" data-action="edit" data-id="${i.id}" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${i.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
@@ -249,6 +250,43 @@
   }
 
 
+  const modalEl = document.getElementById('createModal');
+  const modalTitle = modalEl.querySelector('.modal-title');
+  const submitBtn = modalEl.querySelector('button[type="submit"]');
+  const versionInput = document.getElementById('item-version');
+
+  let editingId = null;
+
+  function openCreateModal() {
+    editingId = null;
+    modalTitle.textContent = 'Новое наименование СИЗ';
+    submitBtn.textContent = 'Создать';
+    createForm.reset();
+    if (versionInput) versionInput.value = '';
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  window.openEditModal = async (id) => {
+    try {
+      const item = await API.get(`/api/v1/ppe_items/${id}`);
+      editingId = id;
+      modalTitle.textContent = 'Редактирование наименования';
+      submitBtn.textContent = 'Сохранить';
+
+      createForm.elements['name'].value = item.name ?? '';
+      createForm.elements['function_id'].value = item.function_id ?? '';
+      createForm.elements['size_group_id'].value = item.size_group_id ?? '';
+      createForm.elements['unit_id'].value = item.unit_id ?? '';
+      if (versionInput) versionInput.value = item.version ?? '';
+
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
+
+  document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
+
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
@@ -259,9 +297,15 @@
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {
-      await API.post('/api/v1/ppe_items/', payload);
-      window.showToast('Наименование создано', 'success');
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
+      if (editingId) {
+        payload.version = Number(versionInput.value);
+        await API.put(`/api/v1/ppe_items/${editingId}`, payload);
+        window.showToast('Наименование сохранено', 'success');
+      } else {
+        await API.post('/api/v1/ppe_items/', payload);
+        window.showToast('Наименование создано', 'success');
+      }
+      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
       createForm.reset();
       loadItems();
     } catch (err) {

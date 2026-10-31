@@ -5,7 +5,7 @@
 {{ ppe_tabs('items') }}
 
 <div class="page-head">
-    <button class="btn btn-add" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить">
+    <button class="btn btn-add" id="btn-create" title="Добавить">
         <i class="bi bi-plus-lg"></i>
     </button>
     <h1 class="page-title">СИЗ</h1>
@@ -61,6 +61,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form data-validate="true" id="create-form">
+                <input type="hidden" name="version" id="item-version" value="">
                 <div class="modal-header">
                     <h5 class="modal-title">Новое наименование СИЗ</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

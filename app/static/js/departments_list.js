@@ -97,19 +97,81 @@
         <td title="${fullName}">${indent}${shortName}</td>
         <td class="cell-muted">${escapeHtml(parentName)}</td>
         <td class="col-actions">
-          <a class="btn btn-icon" href="/departments/${d.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon js-edit-dept" data-id="${d.id}" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger js-delete-dept" data-id="${d.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
   }
 
-  // Имя передаём через data-атрибут: в onclick оно ломалось на кавычках
+  // Имя передаём через data-атрибут: в onclick оно ломалась на кавычках
   tbody.addEventListener('click', (event) => {
-    const btn = event.target.closest('.js-delete-dept');
-    if (!btn) return;
-    window.deleteDept(Number(btn.dataset.id), btn.dataset.name);
+    const del = event.target.closest('.js-delete-dept');
+    if (del) {
+      window.deleteDept(Number(del.dataset.id), del.dataset.name);
+      return;
+    }
+    const edit = event.target.closest('.js-edit-dept');
+    if (edit) window.openEditModal(Number(edit.dataset.id));
   });
+
+  const modalEl = document.getElementById('createModal');
+  const modalTitle = modalEl.querySelector('.modal-title');
+  const submitBtn = modalEl.querySelector('button[type="submit"]');
+  const versionInput = document.getElementById('dept-version');
+
+  let editingId = null;
+
+  // Открытие модалки в режиме создания
+  function openCreateModal() {
+    editingId = null;
+    modalTitle.textContent = 'Новое подразделение';
+    submitBtn.textContent = 'Создать';
+    createForm.reset();
+    if (versionInput) versionInput.value = '';
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  // Открытие модалки в режиме редактирования: данные берём из уже
+  // загруженного дерева, лишний запрос не нужен
+  window.openEditModal = (id) => {
+    const dept = allDepartments.find((d) => d.id === id);
+    if (!dept) {
+      window.showToast('Подразделение не найдено', 'danger');
+      return;
+    }
+
+    editingId = id;
+    modalTitle.textContent = 'Редактирование подразделения';
+    submitBtn.textContent = 'Сохранить';
+
+    createForm.elements['name'].value = dept.name ?? '';
+    createForm.elements['parent_id'].value = dept.parent_id ?? '';
+    if (versionInput) versionInput.value = dept.version ?? '';
+
+    // Себя и потомков нельзя выбрать родителем — иначе получится цикл
+    const forbidden = new Set([id, ...collectDescendantIds(id)]);
+    Array.from(createForm.elements['parent_id'].options).forEach((opt) => {
+      opt.disabled = opt.value !== '' && forbidden.has(Number(opt.value));
+    });
+
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  };
+
+  function collectDescendantIds(rootId) {
+    const result = [];
+    const stack = [rootId];
+    while (stack.length) {
+      const current = stack.pop();
+      allDepartments
+        .filter((d) => d.parent_id === current)
+        .forEach((child) => {
+          result.push(child.id);
+          stack.push(child.id);
+        });
+    }
+    return result;
+  }
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -119,9 +181,15 @@
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {
-      await API.post('/api/v1/departments/', payload);
-      window.showToast('Подразделение создано', 'success');
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
+      if (editingId) {
+        payload.version = Number(versionInput.value);
+        await API.put(`/api/v1/departments/${editingId}`, payload);
+        window.showToast('Подразделение сохранено', 'success');
+      } else {
+        await API.post('/api/v1/departments/', payload);
+        window.showToast('Подразделение создано', 'success');
+      }
+      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
       createForm.reset();
       loadDepartments();
     } catch (err) {
@@ -145,6 +213,8 @@
   WS.subscribe((data) => {
     if (data.event === 'department_updated') loadDepartments();
   });
+
+  document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
   loadDepartments();
 })();

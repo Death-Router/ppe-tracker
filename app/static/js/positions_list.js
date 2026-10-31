@@ -12,6 +12,7 @@
     const id = Number(btn.dataset.id);
     const name = btn.dataset.name || '';
     if (btn.dataset.action === 'delete') window.deletePos(id, name);
+    if (btn.dataset.action === 'edit') window.openEditModal(id);
   });
 
   let allPositions = [];
@@ -107,24 +108,66 @@
           <span class="badge-soft badge-purple">${shortDeptPath || '—'}</span>
         </td>
         <td class="col-actions">
-          <a class="btn btn-icon" href="/positions/${p.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
+          <button class="btn btn-icon" data-action="edit" data-id="${p.id}" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${p.id}" data-name="${fullName}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
   }
 
+  const modalEl = document.getElementById('createModal');
+  const modalTitle = modalEl.querySelector('.modal-title');
+  const submitBtn = modalEl.querySelector('button[type="submit"]');
+  const versionInput = document.getElementById('pos-version');
+
+  let editingId = null;
+
+  function openCreateModal() {
+    editingId = null;
+    modalTitle.textContent = 'Новая должность';
+    submitBtn.textContent = 'Создать';
+    createForm.reset();
+    if (versionInput) versionInput.value = '';
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  window.openEditModal = async (id) => {
+    try {
+      // Значения и версию берём из API: строка может быть не на текущей странице
+      const pos = await API.get(`/api/v1/positions/${id}`);
+      editingId = id;
+      modalTitle.textContent = 'Редактирование должности';
+      submitBtn.textContent = 'Сохранить';
+
+      createForm.elements['name'].value = pos.name ?? '';
+      createForm.elements['department_id'].value = pos.department_id ?? '';
+      if (versionInput) versionInput.value = pos.version ?? '';
+
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  };
+
+  document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
+
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = FormHelper.serialize(createForm);
     payload.department_id = Number(payload.department_id);
-    
+
     const btn = createForm.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {
-      await API.post('/api/v1/positions/', payload);
-      window.showToast('Должность создана', 'success');
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
+      if (editingId) {
+        payload.version = Number(versionInput.value);
+        await API.put(`/api/v1/positions/${editingId}`, payload);
+        window.showToast('Должность сохранена', 'success');
+      } else {
+        await API.post('/api/v1/positions/', payload);
+        window.showToast('Должность создана', 'success');
+      }
+      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
       createForm.reset();
       loadData();
     } catch (err) {
