@@ -122,16 +122,13 @@ async def employees_page(request: Request):
         context={"title": "Сотрудники"},
     )
 
-@app.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
+@app.get("/employees/{employee_id}/edit")
 async def employee_edit_page(request: Request, employee_id: int):
+    """Старый адрес карточки: сотрудник теперь правится в модалке на списке."""
     redirect = check_auth(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse(
-        request=request,
-        name="employees/edit.html",
-        context={"title": "Редактирование", "employee_id": employee_id},
-    )
+    return RedirectResponse(url="/employees", status_code=303)
 
 @app.get("/ppe")
 async def ppe_tabs_page(request: Request):

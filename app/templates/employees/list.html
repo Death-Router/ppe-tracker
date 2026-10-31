@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-head">
-    <button class="btn btn-add" data-bs-toggle="modal" data-bs-target="#createModal" title="Добавить">
+    <button class="btn btn-add" id="btn-add-employee" title="Добавить">
         <i class="bi bi-plus-lg"></i>
     </button>
     <h1 class="page-title">Сотрудники</h1>
@@ -35,71 +35,165 @@
     <div class="pager" id="pager"></div>
 </div>
 
-<!-- Модалка создания -->
-<div class="modal fade" id="createModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<!-- Модалка сотрудника: создание и редактирование.
+     Вкладки появились из-за объёма данных: в одну простыню они не влезают.
+     При создании показываем две вкладки, при правке — все четыре, потому что
+     нормы и выдачи нельзя привязать к ещё не сохранённому сотруднику. -->
+<div class="modal fade" id="employeeModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <form id="create-form" data-validate="true">
-                <div class="modal-header">
-                    <h5 class="modal-title">Новый сотрудник</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Фамилия <span class="req">*</span></label>
-                            <input class="form-control" name="last_name" required maxlength="100">
+            <div class="modal-header">
+                <h5 class="modal-title" id="employee-modal-title">Новый сотрудник</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+
+            <div class="modal-body">
+                <ul class="nav nav-tabs tabs" id="employeeModalTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#emp-tab-main" type="button" role="tab">
+                            Основные данные
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#emp-tab-sizes" type="button" role="tab">
+                            Размеры СИЗ
+                        </button>
+                    </li>
+                    <li class="nav-item d-none" role="presentation" id="emp-tab-norms-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#emp-tab-norms" type="button" role="tab">
+                            Нормы выдачи
+                        </button>
+                    </li>
+                    <li class="nav-item d-none" role="presentation" id="emp-tab-issues-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#emp-tab-issues" type="button" role="tab">
+                            СИЗ сотрудника
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content pt-3" id="employeeModalContent">
+                    <!-- Вкладка: основные данные -->
+                    <div class="tab-pane fade show active" id="emp-tab-main" role="tabpanel">
+                        <form data-validate="true" id="employee-form" novalidate>
+                            <input type="hidden" name="version" id="emp-version" value="">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label" for="emp-last-name">Фамилия <span class="req">*</span></label>
+                                    <input class="form-control" id="emp-last-name" name="last_name" required maxlength="100">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="emp-first-name">Имя <span class="req">*</span></label>
+                                    <input class="form-control" id="emp-first-name" name="first_name" required maxlength="100">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="emp-middle-name">Отчество</label>
+                                    <input class="form-control" id="emp-middle-name" name="middle_name" maxlength="100">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="emp-personnel">Табельный номер <span class="req">*</span></label>
+                                    <input class="form-control" id="emp-personnel" name="personnel_number" required maxlength="20">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="create-dept">Подразделение <span class="req">*</span></label>
+                                    <select class="form-select" id="create-dept" name="department_id" required>
+                                        <option value="">Загрузка...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="create-pos">Должность <span class="req">*</span></label>
+                                    <select class="form-select" id="create-pos" name="position_id" required>
+                                        <option value="">Сначала выберите подразделение</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="emp-hire-date">Дата приема <span class="req">*</span></label>
+                                    <input type="date" class="form-control" id="emp-hire-date" name="hire_date" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="emp-change-date">Дата перевода</label>
+                                    <input type="date" class="form-control" id="emp-change-date" name="position_change_date">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="emp-gender">Пол <span class="req">*</span></label>
+                                    <select class="form-select" id="emp-gender" name="gender" required>
+                                        <option value="">Не указан</option>
+                                        <option value="М">Мужской</option>
+                                        <option value="Ж">Женский</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="emp-height">Рост <span class="req">*</span></label>
+                                    <input class="form-control" id="emp-height" name="height" placeholder="Например, 182" maxlength="10" required>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Вкладка: размеры -->
+                    <div class="tab-pane fade" id="emp-tab-sizes" role="tabpanel">
+                        <table class="data-table data-table--dense" id="emp-sizes-table">
+                            <thead>
+                            <tr>
+                                <th>Размерная группа</th>
+                                <th class="col-medium">Размер</th>
+                                <th class="col-actions">Действие</th>
+                            </tr>
+                            </thead>
+                            <tbody id="emp-sizes-body"></tbody>
+                        </table>
+                        <button type="button" class="btn btn-sm btn-brand mt-3" id="emp-add-size">
+                            <i class="bi bi-plus-lg"></i> Добавить размер
+                        </button>
+                    </div>
+
+                    <!-- Вкладка: нормы (только при редактировании) -->
+                    <div class="tab-pane fade" id="emp-tab-norms" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="data-table data-table--dense" id="emp-norms-table">
+                                <thead>
+                                <tr>
+                                    <th>Наименование СИЗ</th>
+                                    <th>Норма</th>
+                                    <th>Выдано</th>
+                                    <th>Осталось</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr><td colspan="4" class="state">Нет данных</td></tr>
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Имя <span class="req">*</span></label>
-                            <input class="form-control" name="first_name" required maxlength="100">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Отчество</label>
-                            <input class="form-control" name="middle_name" maxlength="100">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Табельный номер <span class="req">*</span></label>
-                            <input class="form-control" name="personnel_number" required maxlength="20">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Подразделение <span class="req">*</span></label>
-                            <select class="form-select" name="department_id" id="create-dept" required>
-                                <option value="">Загрузка...</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Должность <span class="req">*</span></label>
-                            <select class="form-select" name="position_id" id="create-pos" required>
-                                <option value="">Сначала выберите подразделение</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Дата приема <span class="req">*</span></label>
-                            <input type="date" class="form-control" name="hire_date" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Пол <span class="req">*</span></label>
-                            <select class="form-select" name="gender" required>
-                                <option value="">Не указан</option>
-                                <option value="М">Мужской</option>
-                                <option value="Ж">Женский</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Рост <span class="req">*</span></label>
-                            <input class="form-control" name="height" placeholder="Например, 182" maxlength="10" required>
+                    </div>
+
+                    <!-- Вкладка: выдачи (только при редактировании) -->
+                    <div class="tab-pane fade" id="emp-tab-issues" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="data-table data-table--dense" id="emp-issues-table">
+                                <thead>
+                                <tr>
+                                    <th>Наименование СИЗ</th>
+                                    <th>Размер</th>
+                                    <th>Дата выдачи</th>
+                                    <th>Списание</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr><td colspan="4" class="state">Нет данных</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-brand-orange" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-brand">Создать</button>
-                </div>
-            </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-brand" id="emp-save-btn">Создать</button>
+            </div>
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
