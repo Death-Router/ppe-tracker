@@ -7,9 +7,16 @@
     <h1 class="page-title">Должности</h1>
 </div>
 
+<div class="filter-bar">
+    <div class="input-group filter-bar__search">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input" placeholder="Поиск по названию...">
+    </div>
+</div>
+
 <div class="panel">
     <div class="table-responsive">
-        <table class="data-table" id="positions-table">
+        <table class="data-table data-table--dense" id="positions-table">
             <thead>
             <tr>
                 <th>Название</th>
@@ -22,6 +29,7 @@
             </tbody>
         </table>
     </div>
+    <div class="pager" id="pager"></div>
 </div>
 
 <!-- Модалка создания -->

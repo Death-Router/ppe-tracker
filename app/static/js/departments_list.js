@@ -19,11 +19,13 @@
     return result;
   }
 
+  const searchInput = document.getElementById('search-input');
+
   async function loadDepartments() {
     try {
       allDepartments = await API.get('/api/v1/departments');
       const hierarchy = buildHierarchy(allDepartments);
-      renderTable(hierarchy);
+      applyFilter(hierarchy);
 
       // Заполняем выпадающий список для создания (тоже иерархически)
       if (createParentSelect) {
@@ -40,6 +42,38 @@
     if (!str) return '';
     if (str.length <= maxLength) return str;
     return str.substring(0, maxLength) + '...';
+  }
+
+  // Поиск по названию оставляет найденные подразделения и их предков,
+  // иначе у найденного элемента не видно, к чему он относится
+  function filterHierarchy(hierarchy, term) {
+    if (!term) return hierarchy;
+
+    const byId = new Map(hierarchy.map((d) => [d.id, d]));
+    const keep = new Set();
+
+    hierarchy.forEach((d) => {
+      if (d.name.toLowerCase().includes(term)) {
+        let current = d;
+        while (current) {
+          keep.add(current.id);
+          current = current.parent_id ? byId.get(current.parent_id) : null;
+        }
+      }
+    });
+
+    return hierarchy.filter((d) => keep.has(d.id));
+  }
+
+  function applyFilter(hierarchy) {
+    const term = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    renderTable(filterHierarchy(hierarchy, term));
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      applyFilter(buildHierarchy(allDepartments));
+    });
   }
 
   function renderTable(hierarchy) {

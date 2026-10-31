@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -57,8 +57,23 @@ async def create_department(dept_in: DepartmentCreate, db: AsyncSession = Depend
     return db_dept
 
 @router.get("/", response_model=list[DepartmentRead])
-async def get_departments(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Department).options(selectinload(Department.children)))
+async def get_departments(
+    db: AsyncSession = Depends(get_db),
+    search: str | None = Query(None, description="Поиск по названию"),
+):
+    """Список подразделений.
+
+    Отдаётся целиком даже при поиске: клиент строит из плоского списка дерево,
+    а постраничная выдача разорвала бы иерархию — дочерний элемент мог попасть
+    на другую страницу, чем родитель.
+    """
+    query = select(Department).options(selectinload(Department.children))
+
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        query = query.where(func.lower(Department.name).like(pattern))
+
+    result = await db.execute(query.order_by(Department.name))
     return result.scalars().all()
 
 @router.get("/{dept_id}", response_model=DepartmentRead)

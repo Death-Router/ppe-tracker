@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api import pagination
 from app.db.session import get_db
 from app.models.department import Department
 from app.models.position import Position
@@ -46,10 +47,52 @@ async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get
     result = await db.execute(select(Position).where(Position.id == db_pos.id).options(selectinload(Position.department)))
     return result.scalar_one()
 
-@router.get("/", response_model=list[PositionRead])
-async def get_positions(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Position).options(selectinload(Position.department)))
-    return result.scalars().all()
+@router.get("/", response_model=None)
+async def get_positions(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(
+        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
+    ),
+    search: str | None = Query(None, description="Поиск по названию должности"),
+    department_id: int | None = Query(None, description="Фильтр по подразделению"),
+    paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
+):
+    """Должности. Без paginated — полный массив для выпадающих списков."""
+    conditions = []
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        conditions.append(func.lower(Position.name).like(pattern))
+    if department_id is not None:
+        conditions.append(Position.department_id == department_id)
+
+    base = select(Position).where(*conditions) if conditions else select(Position)
+
+    if not paginated:
+        result = await db.execute(
+            base.options(selectinload(Position.department)).order_by(Position.name)
+        )
+        return result.scalars().all()
+
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+
+    params = pagination.normalize(page, page_size)
+    result = await db.execute(
+        base.options(selectinload(Position.department))
+        .order_by(Position.name, Position.id)
+        .offset(params.offset)
+        .limit(params.page_size)
+    )
+    items = result.scalars().all()
+
+    return pagination.Page.build(
+        [PositionRead.model_validate(item) for item in items],
+        total=total,
+        page=params.page,
+        page_size=params.page_size,
+    )
 
 @router.get("/{pos_id}", response_model=PositionRead)
 async def get_position(pos_id: int, db: AsyncSession = Depends(get_db)):

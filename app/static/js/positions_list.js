@@ -2,6 +2,7 @@
   const tbody = document.querySelector('#positions-table tbody');
   const createForm = document.getElementById('create-form');
   const createDeptSelect = document.getElementById('create-dept');
+  const searchInput = document.getElementById('search-input');
 
   // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
   // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
@@ -25,22 +26,53 @@
     return parentPath ? `${parentPath} / ${dept.name}` : dept.name;
   }
 
-  async function loadData() {
+  const PAGE_SIZE = 20;
+  let currentPage = 1;
+  let searchTerm = '';
+  let searchTimer = null;
+
+  async function loadData(page = currentPage) {
+    currentPage = page;
     try {
-      allPositions = await API.get('/api/v1/positions');
+      // Подразделения нужны целиком: из них строится путь и список в модалке
       allDepartments = await API.get('/api/v1/departments');
-      
+
+      const params = new URLSearchParams({
+        paginated: 'true',
+        page: String(currentPage),
+        page_size: String(PAGE_SIZE),
+      });
+      if (searchTerm) params.set('search', searchTerm);
+
+      const data = await API.get(`/api/v1/positions/?${params.toString()}`);
+      allPositions = data.items;
+
       // Заполняем выпадающий список подразделений в модалке
       if (createDeptSelect) {
         const sortedDepts = [...allDepartments].sort((a, b) => a.name.localeCompare(b.name));
         createDeptSelect.innerHTML = '<option value="">Выберите подразделение...</option>' +
           sortedDepts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
       }
-      
-      renderTable(allPositions);
+
+      if (!data.items.length && data.total > 0 && currentPage > 1) {
+        return loadData(currentPage - 1);
+      }
+
+      renderTable(data.items);
+      Pager.render(document.getElementById('pager'), data, loadData);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
     }
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        searchTerm = e.target.value.trim();
+        loadData(1);
+      }, 300);
+    });
   }
 
   

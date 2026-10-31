@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api import pagination
 from app.core.deps import get_current_active_user
 from app.core.security import get_password_hash
 from app.db.session import get_db
@@ -17,10 +18,37 @@ async def require_admin(current_user: User = Depends(get_current_active_user)):
         raise HTTPException(status_code=403, detail="Доступ только для администратора")
     return current_user
 
-@router.get("/", response_model=list[UserRead])
-async def get_users(db: AsyncSession = Depends(get_db), _ = Depends(require_admin)):
-    result = await db.execute(select(User).order_by(User.username))
-    return result.scalars().all()
+@router.get("/", response_model=None)
+async def get_users(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_admin),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(
+        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
+    ),
+    paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
+):
+    """Пользователи. Без paginated — полный список (нужен для редактирования)."""
+    base = select(User).order_by(User.username)
+
+    if not paginated:
+        result = await db.execute(base)
+        return result.scalars().all()
+
+    total = (
+        await db.execute(select(func.count()).select_from(User))
+    ).scalar_one()
+
+    params = pagination.normalize(page, page_size)
+    result = await db.execute(base.offset(params.offset).limit(params.page_size))
+    items = result.scalars().all()
+
+    return pagination.Page.build(
+        [UserRead.model_validate(item) for item in items],
+        total=total,
+        page=params.page,
+        page_size=params.page_size,
+    )
 
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db), _ = Depends(require_admin)):
