@@ -533,13 +533,29 @@ a {
     color: var(--accent);
 }
 
+/* Чекбоксы и радио: фиолетовая заливка в выбранном состоянии.
+   accent-color работает и для .form-check-input, и для «голых» input в таблицах,
+   которые Bootstrap не стилизует (правил выше не хватало: у Bootstrap своя
+   переменная --bs-form-check-bg-image, и она перебивала цвет фона). */
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--brand);
+    cursor: pointer;
+}
+
 .form-check-input {
     border-color: #cbd3dd;
 }
 
-.form-check-input:checked {
+/* Bootstrap рисует «галочку» картинкой в --bs-form-check-bg-image и объявляет
+   её в селекторе с более высокой специфичностью (.form-check-input:checked[type=checkbox]),
+   поэтому повторяем атрибут здесь, иначе белая галочка осталась бы синей */
+.form-check-input:checked,
+.form-check-input:checked[type="checkbox"],
+.form-check-input:checked[type="radio"] {
     background-color: var(--brand);
     border-color: var(--brand);
+    --bs-form-check-bg-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/%3e%3c/svg%3e");
 }
 
 .form-check-input:focus {
