@@ -48,7 +48,15 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="app-nav__link {% if '/ppe' in request.url.path or '/norms' in request.url.path or '/units' in request.url.path or '/ppe-functions' in request.url.path or '/ppe-size-groups' in request.url.path %}is-active{% endif %}" href="/ppe-items">
+                    {# Нормы — про должность, а не про сотрудника, поэтому это
+                       отдельный раздел, а не вкладка в карточке #}
+                    <a class="app-nav__link {% if '/norms' in request.url.path %}is-active{% endif %}" href="/norms">
+                        <i class="bi bi-clipboard-check"></i>
+                        <span>Нормы выдачи</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="app-nav__link {% if '/ppe' in request.url.path or '/units' in request.url.path or '/ppe-functions' in request.url.path or '/ppe-size-groups' in request.url.path %}is-active{% endif %}" href="/ppe-items">
                         <i class="bi bi-shield-check"></i>
                         <span>СИЗ</span>
                     </a>

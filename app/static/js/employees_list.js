@@ -185,9 +185,7 @@
   const saveBtn = document.getElementById('emp-save-btn');
   const versionInput = document.getElementById('emp-version');
   const sizesBody = document.getElementById('emp-sizes-body');
-  const normsBody = document.querySelector('#emp-norms-table tbody');
   const issuesBody = document.querySelector('#emp-issues-table tbody');
-  const normsTabItem = document.getElementById('emp-tab-norms-item');
   const issuesTabItem = document.getElementById('emp-tab-issues-item');
 
   let editingId = null;
@@ -197,7 +195,6 @@
     createForm.reset();
     versionInput.value = '';
     sizesBody.innerHTML = '';
-    normsBody.innerHTML = '<tr><td colspan="4" class="state">Нет данных</td></tr>';
     issuesBody.innerHTML = '<tr><td colspan="4" class="state">Нет данных</td></tr>';
     createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
     // Возвращаемся на первую вкладку
@@ -207,10 +204,10 @@
     window.FormValidation.refresh();
   }
 
+  // Вкладка выдач появляется только при редактировании: у нового сотрудника
+  // их быть не может. Нормы переехали в отдельный раздел навбара.
   function setEditOnlyTabs(visible) {
-    [normsTabItem, issuesTabItem].forEach((el) => {
-      if (el) el.classList.toggle('d-none', !visible);
-    });
+    if (issuesTabItem) issuesTabItem.classList.toggle('d-none', !visible);
   }
 
   window.openCreateEmployee = () => {
@@ -249,7 +246,7 @@
       for (const size of emp.ppe_sizes ?? []) {
         sizesBody.appendChild(await buildSizeRow(size.size_group_id, size.size_value));
       }
-      renderNormsAndIssues(emp);
+      renderIssues(emp);
 
       bootstrap.Modal.getOrCreateInstance(modalEl).show();
     } catch (err) {
@@ -257,18 +254,8 @@
     }
   };
 
-  // Нормы и выдачи на своих вкладках: только для просмотра
-  function renderNormsAndIssues(emp) {
-    const norms = emp.position_ppe_norms ?? emp.norms ?? [];
-    normsBody.innerHTML = norms.length
-      ? norms.map((n) => `<tr>
-          <td>${escapeHtml(n.ppe_item?.name ?? '—')}</td>
-          <td>${escapeHtml(String(n.quantity ?? '—'))}</td>
-          <td>${escapeHtml(String(n.issued ?? '—'))}</td>
-          <td>${escapeHtml(String(n.remaining ?? '—'))}</td>
-        </tr>`).join('')
-      : '<tr><td colspan="4" class="state">Нормы не заданы</td></tr>';
-
+  // Выдачи на своей вкладке: только для просмотра
+  function renderIssues(emp) {
     const issues = emp.ppe_issues ?? emp.issues ?? [];
     issuesBody.innerHTML = issues.length
       ? issues.map((i) => `<tr>
