@@ -54,6 +54,6 @@ async def delete_function(func_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_func)
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить функцию, есть привязанные СИЗ")

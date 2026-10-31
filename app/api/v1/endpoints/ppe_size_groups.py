@@ -54,6 +54,6 @@ async def delete_group(group_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_group)
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить группу, есть привязанные СИЗ или размеры")

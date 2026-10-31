@@ -59,6 +59,6 @@ async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_unit)
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить единицу, есть привязанные СИЗ")

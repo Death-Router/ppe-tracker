@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.api import pagination
-from app.api.v1.endpoints.ws import manager
+from app.utils.broadcast import broadcast
 from app.db.session import get_db
 from app.models.employee import Employee
 from app.models.employee_ppe_size import EmployeePpeSize
@@ -93,10 +94,7 @@ async def create_employee(
 
     await db.commit()
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "employee_created", "employee_id": db_employee.id})
-    except Exception:
-        pass
+    await broadcast(0, {"event": "employee_created", "employee_id": db_employee.id})
 
     employee = await get_employee_with_relations(db, db_employee.id)
     if employee is None:
@@ -220,10 +218,7 @@ async def update_employee(
         await db.rollback()
         raise HTTPException(status_code=409, detail="Конфликт версий")
 
-    try:
-        await manager.broadcast_to_employee(employee_id, {"event": "employee_updated", "employee_id": employee_id})
-    except Exception:
-        pass
+    await broadcast(employee_id, {"event": "employee_updated", "employee_id": employee_id})
 
     employee = await get_employee_with_relations(db, employee_id)
     if employee is None:
@@ -249,11 +244,8 @@ async def delete_employee(
     try:
         await db.delete(db_employee)
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления")
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "employee_updated", "employee_id": employee_id})
-    except Exception:
-        pass
+    await broadcast(0, {"event": "employee_updated", "employee_id": employee_id})

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.api import pagination
-from app.api.v1.endpoints.ws import manager
+from app.utils.broadcast import broadcast
 from app.db.session import get_db
 from app.models.ppe_item import PpeItem
 from app.models.ppe_function import PpeFunction
@@ -124,10 +125,7 @@ async def update_item(item_id: int, item_in: PpeItemUpdate, db: AsyncSession = D
     db_item.version += 1
     await db.commit()
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "item_updated", "item_id": item_id})
-    except Exception:
-        pass
+    await broadcast(0, {"event": "item_updated", "item_id": item_id})
 
     result = await db.execute(select(PpeItem).where(PpeItem.id == item_id).options(*item_options()))
     return result.scalar_one()
@@ -162,7 +160,7 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_item)
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления")
 

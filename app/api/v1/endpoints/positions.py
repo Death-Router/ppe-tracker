@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.api.v1.endpoints.ws import manager
+from app.utils.broadcast import broadcast
 from app.db.session import get_db
 from app.models.position import Position
 from app.models.department import Department
@@ -95,8 +95,7 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
             status_code=400,
             detail="В этом подразделении уже есть должность с таким названием",
         )
-    try: await manager.broadcast_to_employee(0, {"event": "position_updated", "id": pos_id})
-    except Exception: pass
+    await broadcast(0, {"event": "position_updated", "id": pos_id})
     result = await db.execute(select(Position).where(Position.id == pos_id).options(selectinload(Position.department)))
     return result.scalar_one()
 

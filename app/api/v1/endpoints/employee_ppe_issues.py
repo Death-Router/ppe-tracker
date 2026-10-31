@@ -1,9 +1,10 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocketDisconnect
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.api.v1.endpoints.ws import manager
+from app.utils.broadcast import broadcast
 from app.db.session import get_db
 from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.employee import Employee
@@ -85,10 +86,8 @@ async def delete_issue(issue_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_issue)
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления")
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "issue_updated", "employee_id": db_issue.employee_id})
-    except: pass
+    await broadcast(0, {"event": "issue_updated", "employee_id": db_issue.employee_id})

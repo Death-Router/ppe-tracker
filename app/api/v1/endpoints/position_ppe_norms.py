@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from app.api import pagination
-from app.api.v1.endpoints.ws import manager
+from app.utils.broadcast import broadcast
 from app.db.session import get_db
 from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.position import Position
@@ -158,9 +158,7 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
         await db.rollback()
         raise HTTPException(status_code=400, detail="Такая норма уже существует")
     
-    try:
-        await manager.broadcast_to_employee(0, {"event": "norm_updated", "id": norm_id})
-    except: pass
+    await broadcast(0, {"event": "norm_updated", "id": norm_id})
 
     norm = await get_norm_with_relations(db, norm_id)
     if norm is None:
@@ -190,14 +188,11 @@ async def bulk_delete_norms(data: BulkDeleteRequest, db: AsyncSession = Depends(
     try:
         await db.execute(delete(PositionPpeNorm).where(PositionPpeNorm.id.in_(found)))
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления")
 
-    try:
-        await manager.broadcast_to_employee(0, {"event": "norm_updated", "id": 0})
-    except Exception:
-        pass
+    await broadcast(0, {"event": "norm_updated", "id": 0})
 
     missing = sorted(set(data.ids) - found)
     return {
@@ -216,6 +211,6 @@ async def delete_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_norm)
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления")
