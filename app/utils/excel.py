@@ -1,10 +1,12 @@
 from io import BytesIO
-import pandas as pd
-from typing import List, Dict, Any
+from typing import Any
 
-def generate_excel(data: List[Dict[str, Any]], filename: str) -> BytesIO:
+import pandas as pd
+
+
+def generate_excel(data: list[dict[str, Any]], filename: str) -> BytesIO:
     """Генерирует Excel-файл из списка словарей."""
-    if not data:
+    if not data:  # noqa: SIM108 — с тернарником теряется комментарий о причине
         # Если данных нет, создаем пустой файл с заголовками
         df = pd.DataFrame(columns=["Нет данных"])
     else:

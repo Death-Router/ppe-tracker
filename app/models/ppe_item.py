@@ -1,13 +1,16 @@
 from typing import TYPE_CHECKING
+
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.employee_ppe_issue import EmployeePpeIssue
+    from app.models.position_ppe_norm import PositionPpeNorm
     from app.models.ppe_function import PpeFunction
     from app.models.ppe_size_group import PpeSizeGroup
-    from app.models.position_ppe_norm import PositionPpeNorm
+    from app.models.unit import Unit
 
 class PpeItem(Base):
     __tablename__ = "ppe_items"

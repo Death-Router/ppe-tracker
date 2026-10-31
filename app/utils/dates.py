@@ -5,7 +5,6 @@
 периодах ошибка накапливалась заметно.
 """
 from datetime import date
-from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 
@@ -14,7 +13,7 @@ YEAR_UNITS = {"год", "года", "лет"}
 MONTH_UNITS = {"месяц", "месяца", "месяцев"}
 
 
-def parse_wear_period(value, unit: Optional[str]) -> Optional[relativedelta]:
+def parse_wear_period(value, unit: str | None) -> relativedelta | None:
     """Превращает норму («12», «месяц») в relativedelta.
 
     Возвращает None, если срок не выражается в календарных единицах
@@ -39,7 +38,7 @@ def parse_wear_period(value, unit: Optional[str]) -> Optional[relativedelta]:
     return None
 
 
-def add_wear_period(issue_date: Optional[date], value, unit: Optional[str]) -> Optional[date]:
+def add_wear_period(issue_date: date | None, value, unit: str | None) -> date | None:
     """Дата окончания носки: календарные год/месяц, а не 365/30 дней.
 
     31 января + 1 месяц = 28/29 февраля (relativedelta сам приводит конец месяца),

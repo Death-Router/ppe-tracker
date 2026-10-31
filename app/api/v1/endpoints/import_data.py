@@ -1,20 +1,20 @@
-import pandas as pd
 from io import BytesIO
 
+import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.employee import Employee
 from app.models.department import Department
+from app.models.employee import Employee
 from app.models.position import Position
-from app.models.ppe_item import PpeItem
+from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.ppe_function import PpeFunction
+from app.models.ppe_item import PpeItem
 from app.models.ppe_size_group import PpeSizeGroup
 from app.models.unit import Unit
-from app.models.position_ppe_norm import PositionPpeNorm
 
 router = APIRouter(prefix="/import", tags=["Импорт данных"])
 
@@ -65,8 +65,8 @@ async def read_table(file: UploadFile) -> pd.DataFrame:
 
     try:
         df = pd.read_excel(BytesIO(b"".join(chunks)))
-    except Exception as exc:  # noqa: BLE001 — текст ошибки уходит пользователю
-        raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Ошибка чтения файла: {exc}") from exc
 
     if len(df) > settings.MAX_IMPORT_ROWS:
         raise HTTPException(

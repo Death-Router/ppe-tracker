@@ -1,3 +1,42 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+# Исторические миграции не трогаем: их стиль уже зафиксирован, а правки
+# ради линтера рискованны и ничего не улучшают
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle
+    "F",     # pyflakes
+    "W",     # предупреждения pycodestyle
+    "I",     # порядок импортов
+    "UP",    # устаревшие конструкции Python
+    "B",     # flake8-bugbear: частые логические ошибки
+    "BLE",   # слепой except
+    "S",     # flake8-bandit: небезопасные конструкции
+    "SIM",   # лишние упрощения
+    "RUF",   # правила самого ruff
+]
+ignore = [
+    "S101",    # assert в тестах — нормально
+    "E501",    # длину строк держит форматтер, а не линтер
+    "RUF001",  # кириллица в строках — это русский интерфейс, а не опечатка
+    "RUF002",  # то же для docstring
+    "RUF003",  # то же для комментариев
+    "W291",    # хвостовые пробелы: снимает форматтер
+    "W293",    # пробелы в пустых строках: снимает форматтер
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Скрипты-утилиты запускаются вручную, им можно печатать в stdout
+"create_admin.py" = ["T201"]
+# Миграциям нужен «сырой» SQL и широкие исключения от alembic
+"alembic/**" = ["S", "BLE"]
+# env.py обязан импортировать модели после config = context.config — это
+# требование Alembic, а не беспорядок в импортах
+"alembic/env.py" = ["E402"]
+
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
     "fastapi.Depends",

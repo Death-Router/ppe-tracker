@@ -1,6 +1,9 @@
 from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field
+
 from app.schemas.ppe_item import PpeItemRead
+
 
 class EmployeePpeIssueBase(BaseModel):
     employee_id: int

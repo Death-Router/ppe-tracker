@@ -1,18 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel
 from sqlalchemy import delete, exists, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
 from app.api import pagination
-from app.utils.broadcast import broadcast
 from app.db.session import get_db
-from app.models.ppe_item import PpeItem
-from app.models.ppe_function import PpeFunction
-from app.models.ppe_size_group import PpeSizeGroup
-from app.models.unit import Unit
-from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.employee_ppe_issue import EmployeePpeIssue
+from app.models.position_ppe_norm import PositionPpeNorm
+from app.models.ppe_function import PpeFunction
+from app.models.ppe_item import PpeItem
+from app.models.ppe_size_group import PpeSizeGroup
 from app.schemas.ppe_item import PpeItemCreate, PpeItemRead, PpeItemUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/ppe_items", tags=["Справочник: Наименования СИЗ"])
 
@@ -160,17 +161,16 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_item)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+        raise HTTPException(status_code=400, detail="Ошибка удаления") from exc
 
 
 # --- Массовые операции ---
-from pydantic import BaseModel
-from typing import List
+
 
 class BulkUpdateRequest(BaseModel):
-    ids: List[int]
+    ids: list[int]
     function_id: int | None = None
     size_group_id: int | None = None
     unit_id: int | None = None
@@ -204,7 +204,7 @@ async def bulk_update_items(
 
 
 class BulkDeleteRequest(BaseModel):
-    ids: List[int]
+    ids: list[int]
 
 @router.post("/bulk-delete")
 async def bulk_delete_items(

@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
 from app.db.session import get_db
 from app.models.employee import Employee
 from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.ppe_item import PpeItem
-from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.position import Position
-from app.models.department import Department
+from app.models.position_ppe_norm import PositionPpeNorm
+from app.models.ppe_item import PpeItem
 from app.utils.excel import generate_excel
 
 router = APIRouter(prefix="/export", tags=["Экспорт данных"])

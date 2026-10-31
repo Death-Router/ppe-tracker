@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.utils.broadcast import broadcast
+
 from app.db.session import get_db
 from app.models.department import Department
-from app.models.position import Position
 from app.models.employee import Employee
+from app.models.position import Position
 from app.schemas.department import DepartmentCreate, DepartmentRead, DepartmentUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/departments", tags=["Справочник: Подразделения"])
 
@@ -64,15 +65,18 @@ async def get_departments(db: AsyncSession = Depends(get_db)):
 async def get_department(dept_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.id == dept_id))
     dept = result.scalar_one_or_none()
-    if not dept: raise HTTPException(status_code=404, detail="Не найдено")
+    if not dept:
+        raise HTTPException(status_code=404, detail="Не найдено")
     return dept
 
 @router.put("/{dept_id}", response_model=DepartmentRead)
 async def update_department(dept_id: int, dept_in: DepartmentUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.id == dept_id))
     db_dept = result.scalar_one_or_none()
-    if not db_dept: raise HTTPException(status_code=404, detail="Не найдено")
-    if db_dept.version != dept_in.version: raise HTTPException(status_code=409, detail="Данные устарели")
+    if not db_dept:
+        raise HTTPException(status_code=404, detail="Не найдено")
+    if db_dept.version != dept_in.version:
+        raise HTTPException(status_code=409, detail="Данные устарели")
     
     if dept_in.parent_id:
         if dept_in.parent_id == dept_id:
@@ -102,7 +106,8 @@ async def update_department(dept_id: int, dept_in: DepartmentUpdate, db: AsyncSe
 async def delete_department(dept_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.id == dept_id))
     db_dept = result.scalar_one_or_none()
-    if not db_dept: raise HTTPException(status_code=404, detail="Не найдено")
+    if not db_dept:
+        raise HTTPException(status_code=404, detail="Не найдено")
 
     # Раньше здесь стоял каскад на уровне ORM: одно удаление уносило дочерние
     # подразделения и все должности, не спрашивая. Проверяем явно.
@@ -136,6 +141,6 @@ async def delete_department(dept_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_dept)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить, есть привязанные данные")
+        raise HTTPException(status_code=400, detail="Нельзя удалить, есть привязанные данные") from exc

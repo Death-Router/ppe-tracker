@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+
 class PpeFunctionBase(BaseModel):
     name: str = Field(..., max_length=100)
 

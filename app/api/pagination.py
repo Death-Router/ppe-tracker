@@ -8,8 +8,9 @@
 
     {"items": [...], "total": 1234, "page": 1, "page_size": 50, "pages": 25}
 """
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, Sequence, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 

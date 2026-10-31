@@ -1,13 +1,15 @@
 from datetime import date
 from typing import TYPE_CHECKING
-from sqlalchemy import String, Date, ForeignKey
+
+from sqlalchemy import Date, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
 
 if TYPE_CHECKING:
-    from app.models.employee_ppe_size import EmployeePpeSize
-    from app.models.employee_ppe_issue import EmployeePpeIssue
     from app.models.department import Department
+    from app.models.employee_ppe_issue import EmployeePpeIssue
+    from app.models.employee_ppe_size import EmployeePpeSize
     from app.models.position import Position
 
 class Employee(Base):

@@ -1,7 +1,9 @@
 from pydantic import BaseModel, ConfigDict, Field
+
 from app.schemas.ppe_function import PpeFunctionRead
 from app.schemas.ppe_size_group import PpeSizeGroupRead
 from app.schemas.unit import UnitRead
+
 
 class PpeItemBase(BaseModel):
     name: str = Field(..., max_length=255, description="Наименование СИЗ")

@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.deps import get_current_active_user
+from app.core.security import get_password_hash
 from app.db.session import get_db
 from app.models.user import User
-from app.core.security import get_password_hash
 from app.schemas.user import UserCreate, UserRead, UserUpdate
-from app.core.deps import get_current_active_user
 
 router = APIRouter(prefix="/users", tags=["Пользователи"])
 
@@ -38,9 +39,9 @@ async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db), _
     db.add(db_user)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка при создании пользователя")
+        raise HTTPException(status_code=400, detail="Ошибка при создании пользователя") from exc
     
     await db.refresh(db_user)
     return db_user
@@ -53,7 +54,7 @@ async def update_user(user_id: int, user_in: UserUpdate, db: AsyncSession = Depe
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     
     update_data = user_in.model_dump(exclude_unset=True)
-    if 'password' in update_data and update_data['password']:
+    if update_data.get('password'):
         db_user.hashed_password = get_password_hash(update_data['password'])
         del update_data['password']
     

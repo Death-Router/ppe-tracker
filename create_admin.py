@@ -2,6 +2,10 @@ import asyncio
 
 from sqlalchemy import select
 
+from app.core.config import settings
+from app.core.security import get_password_hash
+from app.db.session import async_session_maker
+
 # Импортируем модели, чтобы SQLAlchemy знал обо всех связях между таблицами
 from app.models.department import Department  # noqa: F401
 from app.models.employee import Employee  # noqa: F401
@@ -15,10 +19,6 @@ from app.models.ppe_size import PpeSize  # noqa: F401
 from app.models.ppe_size_group import PpeSizeGroup  # noqa: F401
 from app.models.unit import Unit  # noqa: F401
 from app.models.user import User
-
-from app.core.config import settings
-from app.core.security import get_password_hash
-from app.db.session import async_session_maker
 
 
 async def create_admin():

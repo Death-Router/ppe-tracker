@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
-from app.models.user import User
+
 from app.core.csrf import require_csrf
 from app.core.security import verify_password
+from app.db.session import get_db
+from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Аутентификация"])
 

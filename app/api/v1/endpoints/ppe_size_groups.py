@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db.session import get_db
 from app.models.ppe_size_group import PpeSizeGroup
 from app.schemas.ppe_size_group import PpeSizeGroupCreate, PpeSizeGroupRead, PpeSizeGroupUpdate
@@ -17,9 +18,9 @@ async def create_group(group_in: PpeSizeGroupCreate, db: AsyncSession = Depends(
     db.add(db_group)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая группа уже существует")
+        raise HTTPException(status_code=400, detail="Такая группа уже существует") from exc
     await db.refresh(db_group)
     return db_group
 
@@ -54,6 +55,6 @@ async def delete_group(group_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_group)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить группу, есть привязанные СИЗ или размеры")
+        raise HTTPException(status_code=400, detail="Нельзя удалить группу, есть привязанные СИЗ или размеры") from exc

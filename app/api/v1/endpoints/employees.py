@@ -1,23 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.api import pagination
-from app.utils.broadcast import broadcast
-from app.db.session import get_db
-from app.models.employee import Employee
-from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.employee_ppe_issue import EmployeePpeIssue
-from app.models.ppe_item import PpeItem
-from app.models.ppe_function import PpeFunction
-from app.models.ppe_size_group import PpeSizeGroup
-from app.models.department import Department
-from app.models.user import User
 from app.core.deps import get_current_active_user
+from app.db.session import get_db
+from app.models.department import Department
+from app.models.employee import Employee
+from app.models.employee_ppe_issue import EmployeePpeIssue
+from app.models.employee_ppe_size import EmployeePpeSize
+from app.models.ppe_item import PpeItem
+from app.models.ppe_size_group import PpeSizeGroup
+from app.models.user import User
 from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
@@ -214,9 +213,9 @@ async def update_employee(
 
     try:
         await db.commit()
-    except StaleDataError:
+    except StaleDataError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Конфликт версий")
+        raise HTTPException(status_code=409, detail="Конфликт версий") from exc
 
     await broadcast(employee_id, {"event": "employee_updated", "employee_id": employee_id})
 
@@ -244,8 +243,8 @@ async def delete_employee(
     try:
         await db.delete(db_employee)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+        raise HTTPException(status_code=400, detail="Ошибка удаления") from exc
 
     await broadcast(0, {"event": "employee_updated", "employee_id": employee_id})

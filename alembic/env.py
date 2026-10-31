@@ -13,38 +13,24 @@ config = context.config
 from app.core.config import settings
 from app.db.base import Base
 
-# Импортируем модели, чтобы Alembic знал о них (noqa говорит ruff не удалять их)
-from app.models import *
-
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Указываем target_metadata для автогенерации
-
-from app.models.department import Department
-from app.models.position import Position
-from app.models.employee import Employee
-from app.models.ppe_function import PpeFunction
-from app.models.ppe_size_group import PpeSizeGroup
-from app.models.unit import Unit
-from app.models.user import User
-from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.ppe_item import PpeItem
-from app.models.ppe_size import PpeSize
-
-
-from app.models.department import Department
-from app.models.position import Position
-from app.models.employee import Employee
-from app.models.ppe_function import PpeFunction
-from app.models.ppe_size_group import PpeSizeGroup
-from app.models.unit import Unit
-from app.models.user import User
-from app.models.employee_ppe_size import EmployeePpeSize
-from app.models.ppe_item import PpeItem
-from app.models.ppe_size import PpeSize
-from app.models.position_ppe_norm import PositionPpeNorm
-from app.models.employee_ppe_issue import EmployeePpeIssue
+# Модели импортируются ради регистрации в Base.metadata: без этого
+# автогенерация видит пустую схему. Список явный — `from app.models import *`
+# ничего не давал, потому что пакет пустой.
+from app.models.department import Department  # noqa: F401
+from app.models.employee import Employee  # noqa: F401
+from app.models.employee_ppe_issue import EmployeePpeIssue  # noqa: F401
+from app.models.employee_ppe_size import EmployeePpeSize  # noqa: F401
+from app.models.position import Position  # noqa: F401
+from app.models.position_ppe_norm import PositionPpeNorm  # noqa: F401
+from app.models.ppe_function import PpeFunction  # noqa: F401
+from app.models.ppe_item import PpeItem  # noqa: F401
+from app.models.ppe_size import PpeSize  # noqa: F401
+from app.models.ppe_size_group import PpeSizeGroup  # noqa: F401
+from app.models.unit import Unit  # noqa: F401
+from app.models.user import User  # noqa: F401
 
 target_metadata = Base.metadata
 

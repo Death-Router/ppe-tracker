@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db.session import get_db
 from app.models.ppe_function import PpeFunction
 from app.schemas.ppe_function import PpeFunctionCreate, PpeFunctionRead, PpeFunctionUpdate
@@ -17,9 +18,9 @@ async def create_function(func_in: PpeFunctionCreate, db: AsyncSession = Depends
     db.add(db_func)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая функция уже существует")
+        raise HTTPException(status_code=400, detail="Такая функция уже существует") from exc
     await db.refresh(db_func)
     return db_func
 
@@ -54,6 +55,6 @@ async def delete_function(func_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_func)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить функцию, есть привязанные СИЗ")
+        raise HTTPException(status_code=400, detail="Нельзя удалить функцию, есть привязанные СИЗ") from exc

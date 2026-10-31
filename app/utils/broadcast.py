@@ -16,7 +16,7 @@ async def broadcast(employee_id: int, message: dict) -> None:
     """Отправляет событие подписчикам, не ломая основной запрос при сбое."""
     try:
         await manager.broadcast_to_employee(employee_id, message)
-    except Exception:  # noqa: BLE001 — сбой рассылки не должен ронять запрос
+    except Exception:
         logger.warning(
             "Не удалось разослать событие %s (employee_id=%s)",
             message.get("event"),

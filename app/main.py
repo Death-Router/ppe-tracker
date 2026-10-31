@@ -7,9 +7,21 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.v1.endpoints import (
-    employees, ppe_items, ws, departments, positions,
-    position_ppe_norms, employee_ppe_issues, ppe_sizes, export, import_data, auth, units,
-    ppe_functions, ppe_size_groups, users
+    auth,
+    departments,
+    employee_ppe_issues,
+    employees,
+    export,
+    import_data,
+    position_ppe_norms,
+    positions,
+    ppe_functions,
+    ppe_items,
+    ppe_size_groups,
+    ppe_sizes,
+    units,
+    users,
+    ws,
 )
 from app.core.config import settings
 from app.core.csrf import csrf_token_for, require_csrf
@@ -102,7 +114,8 @@ async def login_page(request: Request):
 @app.get("/employees", response_class=HTMLResponse)
 async def employees_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="employees/list.html",
@@ -112,7 +125,8 @@ async def employees_page(request: Request):
 @app.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
 async def employee_edit_page(request: Request, employee_id: int):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="employees/edit.html",
@@ -122,7 +136,8 @@ async def employee_edit_page(request: Request, employee_id: int):
 @app.get("/ppe", response_class=HTMLResponse)
 async def ppe_tabs_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="ppe/tabs.html",
@@ -132,7 +147,8 @@ async def ppe_tabs_page(request: Request):
 @app.get("/structure", response_class=HTMLResponse)
 async def structure_tabs_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="structure/tabs.html",
@@ -142,7 +158,8 @@ async def structure_tabs_page(request: Request):
 @app.get("/ppe-items", response_class=HTMLResponse)
 async def ppe_items_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="ppe_items/list.html",
@@ -152,7 +169,8 @@ async def ppe_items_page(request: Request):
 @app.get("/ppe-items/{item_id}/edit", response_class=HTMLResponse)
 async def ppe_item_edit_page(request: Request, item_id: int):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="ppe_items/edit.html",
@@ -162,7 +180,8 @@ async def ppe_item_edit_page(request: Request, item_id: int):
 @app.get("/departments", response_class=HTMLResponse)
 async def departments_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="departments/list.html",
@@ -172,7 +191,8 @@ async def departments_page(request: Request):
 @app.get("/departments/{dept_id}/edit", response_class=HTMLResponse)
 async def department_edit_page(request: Request, dept_id: int):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="departments/edit.html",
@@ -182,7 +202,8 @@ async def department_edit_page(request: Request, dept_id: int):
 @app.get("/positions", response_class=HTMLResponse)
 async def positions_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="positions/list.html",
@@ -192,7 +213,8 @@ async def positions_page(request: Request):
 @app.get("/positions/{pos_id}/edit", response_class=HTMLResponse)
 async def position_edit_page(request: Request, pos_id: int):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="positions/edit.html",
@@ -202,7 +224,8 @@ async def position_edit_page(request: Request, pos_id: int):
 @app.get("/norms", response_class=HTMLResponse)
 async def norms_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="norms/list.html",
@@ -212,7 +235,8 @@ async def norms_page(request: Request):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
@@ -222,7 +246,8 @@ async def settings_page(request: Request):
 @app.get("/units", response_class=HTMLResponse)
 async def units_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="units/list.html",
@@ -232,7 +257,8 @@ async def units_page(request: Request):
 @app.get("/users", response_class=HTMLResponse)
 async def users_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="users/list.html",
@@ -246,7 +272,8 @@ async def root():
 @app.get("/ppe-functions", response_class=HTMLResponse)
 async def ppe_functions_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="ppe_functions/list.html",
@@ -256,7 +283,8 @@ async def ppe_functions_page(request: Request):
 @app.get("/ppe-size-groups", response_class=HTMLResponse)
 async def ppe_size_groups_page(request: Request):
     redirect = check_auth(request)
-    if redirect: return redirect
+    if redirect:
+        return redirect
     return templates.TemplateResponse(
         request=request,
         name="ppe_size_groups/list.html",

@@ -1,16 +1,16 @@
-from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocketDisconnect
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.utils.broadcast import broadcast
+
 from app.db.session import get_db
-from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.employee import Employee
-from app.models.ppe_item import PpeItem
+from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.position_ppe_norm import PositionPpeNorm
+from app.models.ppe_item import PpeItem
 from app.schemas.employee_ppe_issue import EmployeePpeIssueCreate, EmployeePpeIssueRead
+from app.utils.broadcast import broadcast
 from app.utils.dates import add_wear_period
 
 router = APIRouter(prefix="/employee_ppe_issues", tags=["Выдача СИЗ"])
@@ -86,8 +86,8 @@ async def delete_issue(issue_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_issue)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+        raise HTTPException(status_code=400, detail="Ошибка удаления") from exc
 
     await broadcast(0, {"event": "issue_updated", "employee_id": db_issue.employee_id})

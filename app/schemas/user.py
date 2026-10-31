@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+
 class UserBase(BaseModel):
     username: str = Field(..., max_length=50)
     role: str = Field(..., description="admin или safety_officer")

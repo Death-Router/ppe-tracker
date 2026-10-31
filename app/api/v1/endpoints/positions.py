@@ -3,18 +3,20 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.utils.broadcast import broadcast
+
 from app.db.session import get_db
-from app.models.position import Position
 from app.models.department import Department
+from app.models.position import Position
 from app.schemas.position import PositionCreate, PositionRead, PositionUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/positions", tags=["Справочник: Должности"])
 
 @router.post("/", response_model=PositionRead, status_code=status.HTTP_201_CREATED)
 async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get_db)):
     cat_result = await db.execute(select(Department).where(Department.id == pos_in.department_id))
-    if not cat_result.scalar_one_or_none(): raise HTTPException(status_code=404, detail="Подразделение не найдено")
+    if not cat_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Подразделение не найдено")
 
     # Две одинаковые должности в одном подразделении — это ошибка ввода,
     # а не две разные сущности: нормы на них пришлось бы задавать дважды.
@@ -34,12 +36,12 @@ async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get
     db.add(db_pos)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=400,
             detail="В этом подразделении уже есть должность с таким названием",
-        )
+        ) from exc
     await db.refresh(db_pos)
     result = await db.execute(select(Position).where(Position.id == db_pos.id).options(selectinload(Position.department)))
     return result.scalar_one()
@@ -53,15 +55,18 @@ async def get_positions(db: AsyncSession = Depends(get_db)):
 async def get_position(pos_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Position).where(Position.id == pos_id).options(selectinload(Position.department)))
     pos = result.scalar_one_or_none()
-    if not pos: raise HTTPException(status_code=404, detail="Не найдено")
+    if not pos:
+        raise HTTPException(status_code=404, detail="Не найдено")
     return pos
 
 @router.put("/{pos_id}", response_model=PositionRead)
 async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Position).where(Position.id == pos_id))
     db_pos = result.scalar_one_or_none()
-    if not db_pos: raise HTTPException(status_code=404, detail="Не найдено")
-    if db_pos.version != pos_in.version: raise HTTPException(status_code=409, detail="Данные устарели")
+    if not db_pos:
+        raise HTTPException(status_code=404, detail="Не найдено")
+    if db_pos.version != pos_in.version:
+        raise HTTPException(status_code=409, detail="Данные устарели")
     # Без проверки несуществующий department_id ронял бы commit в 500 (FK)
     if pos_in.department_id is not None:
         dept_res = await db.execute(select(Department).where(Department.id == pos_in.department_id))
@@ -89,12 +94,12 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
     db_pos.version += 1
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=400,
             detail="В этом подразделении уже есть должность с таким названием",
-        )
+        ) from exc
     await broadcast(0, {"event": "position_updated", "id": pos_id})
     result = await db.execute(select(Position).where(Position.id == pos_id).options(selectinload(Position.department)))
     return result.scalar_one()
@@ -103,10 +108,11 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
 async def delete_position(pos_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Position).where(Position.id == pos_id))
     db_pos = result.scalar_one_or_none()
-    if not db_pos: raise HTTPException(status_code=404, detail="Не найдено")
+    if not db_pos:
+        raise HTTPException(status_code=404, detail="Не найдено")
     try:
         await db.delete(db_pos)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить, есть привязанные сотрудники")
+        raise HTTPException(status_code=400, detail="Нельзя удалить, есть привязанные сотрудники") from exc

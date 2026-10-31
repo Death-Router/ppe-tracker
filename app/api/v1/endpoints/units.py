@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db.session import get_db
 from app.models.unit import Unit
 from app.schemas.unit import UnitCreate, UnitRead, UnitUpdate
@@ -18,9 +19,9 @@ async def create_unit(unit_in: UnitCreate, db: AsyncSession = Depends(get_db)):
     db.add(db_unit)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка при создании единицы")
+        raise HTTPException(status_code=400, detail="Ошибка при создании единицы") from exc
     
     await db.refresh(db_unit)
     return db_unit
@@ -43,9 +44,9 @@ async def update_unit(unit_id: int, unit_in: UnitUpdate, db: AsyncSession = Depe
     
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая единица уже существует")
+        raise HTTPException(status_code=400, detail="Такая единица уже существует") from exc
     
     await db.refresh(db_unit)
     return db_unit
@@ -59,6 +60,6 @@ async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_unit)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Нельзя удалить единицу, есть привязанные СИЗ")
+        raise HTTPException(status_code=400, detail="Нельзя удалить единицу, есть привязанные СИЗ") from exc

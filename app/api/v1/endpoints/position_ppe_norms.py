@@ -1,18 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError
+
 from app.api import pagination
-from app.utils.broadcast import broadcast
 from app.db.session import get_db
-from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.position import Position
+from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.ppe_item import PpeItem
-from app.models.ppe_function import PpeFunction
-from app.models.ppe_size_group import PpeSizeGroup
-from app.schemas.position_ppe_norm import PositionPpeNormCreate, PositionPpeNormRead, PositionPpeNormUpdate
+from app.schemas.position_ppe_norm import (
+    PositionPpeNormCreate,
+    PositionPpeNormRead,
+    PositionPpeNormUpdate,
+)
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/position_ppe_norms", tags=["Нормы выдачи СИЗ"])
 
@@ -49,12 +52,12 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
     
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=400, 
             detail="Для этой должности норма на данное СИЗ уже существует."
-        )
+        ) from exc
         
     norm = await get_norm_with_relations(db, db_norm.id)
     if norm is None:
@@ -154,9 +157,9 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
     
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая норма уже существует")
+        raise HTTPException(status_code=400, detail="Такая норма уже существует") from exc
     
     await broadcast(0, {"event": "norm_updated", "id": norm_id})
 
@@ -188,9 +191,9 @@ async def bulk_delete_norms(data: BulkDeleteRequest, db: AsyncSession = Depends(
     try:
         await db.execute(delete(PositionPpeNorm).where(PositionPpeNorm.id.in_(found)))
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+        raise HTTPException(status_code=400, detail="Ошибка удаления") from exc
 
     await broadcast(0, {"event": "norm_updated", "id": 0})
 
@@ -211,6 +214,6 @@ async def delete_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await db.delete(db_norm)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка удаления")
+        raise HTTPException(status_code=400, detail="Ошибка удаления") from exc

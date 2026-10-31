@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
+
 from app.schemas.department import DepartmentRead
+
 
 class PositionBase(BaseModel):
     name: str = Field(..., max_length=100)

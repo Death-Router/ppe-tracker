@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Значение-заглушка, с которым приложение работало раньше.
 # Такое значение нельзя использовать: оно лежит в открытом репозитории.
-INSECURE_DEFAULT_SECRET = "super-secret-key-change-in-production"
+INSECURE_DEFAULT_SECRET = "super-secret-key-change-in-production"  # noqa: S105 — маркер, а не секрет
 
 
 class Settings(BaseSettings):
@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Настройки БД (будут браться из .env)
     POSTGRES_USER: str = "ppe_user"
-    POSTGRES_PASSWORD: str = "ppe_password"
+    POSTGRES_PASSWORD: str = "ppe_password"  # noqa: S105 — дефолт для локальной разработки
     POSTGRES_DB: str = "ppe_db"
     POSTGRES_HOST: str = "db"
     POSTGRES_PORT: int = 5432
