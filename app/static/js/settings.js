@@ -20,7 +20,11 @@
     resultDiv.innerHTML = '';
 
     try {
-      const resp = await fetch('/api/v1/import/employees', { method: 'POST', body: formData });
+      const resp = await fetch('/api/v1/import/employees', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-Token': API.csrfToken() },
+      });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || 'Ошибка импорта');
 
@@ -61,7 +65,11 @@
     resultDiv.innerHTML = '';
 
     try {
-      const resp = await fetch('/api/v1/import/ppe-items', { method: 'POST', body: formData });
+      const resp = await fetch('/api/v1/import/ppe-items', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-Token': API.csrfToken() },
+      });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || 'Ошибка импорта');
 
@@ -102,7 +110,11 @@
     resultDiv.innerHTML = '';
 
     try {
-      const resp = await fetch('/api/v1/import/norms', { method: 'POST', body: formData });
+      const resp = await fetch('/api/v1/import/norms', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-Token': API.csrfToken() },
+      });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || 'Ошибка импорта');
 

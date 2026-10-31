@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     ppe_functions, ppe_size_groups, users
 )
 from app.core.config import settings
+from app.core.csrf import csrf_token_for, require_csrf
 from app.core.deps import get_current_active_user
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,6 +34,9 @@ def format_date(value):
     return value.strftime("%d.%m.%Y") if value else ""
 
 templates.env.filters["ru_date"] = format_date
+
+# Токен CSRF доступен шаблонам как {{ csrf_token(request) }}
+templates.env.globals["csrf_token"] = csrf_token_for
 
 # --- Статика ---
 app.mount(
@@ -64,10 +68,16 @@ for _router in PROTECTED_ROUTERS:
     app.include_router(
         _router,
         prefix="/api/v1",
-        dependencies=[Depends(get_current_active_user)],
+        dependencies=[
+            # CSRF проверяется до похода в базу: чужой запрос отсекаем
+            # без лишнего соединения
+            Depends(require_csrf),
+            Depends(get_current_active_user),
+        ],
     )
 
-# Вход и выход должны оставаться доступными без сессии
+# Вход и выход доступны без сессии. CSRF для logout проверяется внутри
+# обработчика, а для login не нужен: до первого входа токена ещё нет.
 app.include_router(auth.router, prefix="/api/v1")
 
 # --- WebSocket-роутер ---
