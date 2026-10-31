@@ -9,12 +9,17 @@
       const employees = await API.get('/api/v1/employees');
       renderTable(employees);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
   function escapeHtml(s) {
-    return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    return String(s ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
   }
 
   function renderTable(employees) {
@@ -32,11 +37,19 @@
         <td class="py-1">${escapeHtml(e.position_rel?.name ?? '—')}</td>
         <td class="py-1 text-end">
           <a class="btn btn-sm btn-outline-primary py-0 px-1" href="/employees/${e.id}/edit" title="Редактировать"><i class="bi bi-pencil"></i></a>
-          <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteEmployee(${e.id}, '${escapeHtml(fio)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1 js-delete-employee" data-id="${e.id}" data-fio="${escapeHtml(fio)}" title="Удалить"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
     `}).join('');
   }
+
+  // ФИО передаём через data-атрибут, а не в onclick: подстановка строки в JS-код
+  // ломалась на именах с кавычками (и позволяла внедрить код).
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('.js-delete-employee');
+    if (!btn) return;
+    window.deleteEmployee(Number(btn.dataset.id), btn.dataset.fio);
+  });
 
   async function loadDepartmentsForSelect() {
     try {

@@ -54,9 +54,14 @@ class EmployeeRead(EmployeeBase):
 
 
 class EmployeeUpdate(EmployeeBase):
-    personnel_number: str | None = None
-    last_name: str | None = None
-    first_name: str | None = None
+    # Ограничения длины сохраняем те же, что в EmployeeBase:
+    # иначе слишком длинное значение уходило в БД и давало 500 вместо 422.
+    personnel_number: str | None = Field(None, max_length=20)
+    last_name: str | None = Field(None, max_length=100)
+    first_name: str | None = Field(None, max_length=100)
+    middle_name: str | None = Field(None, max_length=100)
+    gender: str | None = Field(None, pattern="^[МЖ]$")
+    height: str | None = Field(None, max_length=10)
     department_id: int | None = None
     position_id: int | None = None
     version: int = Field(..., description="Текущая версия записи")

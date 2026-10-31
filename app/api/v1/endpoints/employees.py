@@ -30,11 +30,12 @@ def employee_options():
     ]
 
 
-async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Employee:
+async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Employee | None:
     result = await db.execute(
         select(Employee).where(Employee.id == employee_id).options(*employee_options())
     )
-    return result.scalar_one()
+    # scalar_one() падал с NoResultFound (500) вместо 404 на несуществующем id
+    return result.scalar_one_or_none()
 
 
 async def get_allowed_department_ids(db: AsyncSession, user: User) -> list[int]:
@@ -96,7 +97,10 @@ async def create_employee(
     except Exception:
         pass
 
-    return await get_employee_with_relations(db, db_employee.id)
+    employee = await get_employee_with_relations(db, db_employee.id)
+    if employee is None:
+        raise HTTPException(status_code=500, detail="Не удалось прочитать созданного сотрудника")
+    return employee
 
 
 @router.get("/", response_model=list[EmployeeRead])
@@ -154,6 +158,9 @@ async def update_employee(
     for field, value in update_data.items():
         setattr(db_employee, field, value)
 
+    # Без инкремента проверка версии выше пропускала бы любые параллельные правки
+    db_employee.version += 1
+
     if employee_in.ppe_sizes is not None:
         await db.execute(delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id))
         for size_data in employee_in.ppe_sizes:
@@ -170,7 +177,10 @@ async def update_employee(
     except Exception:
         pass
 
-    return await get_employee_with_relations(db, employee_id)
+    employee = await get_employee_with_relations(db, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    return employee
 
 
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
