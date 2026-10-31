@@ -1,6 +1,6 @@
 (() => {
   const tbody = document.querySelector('#employees-table tbody');
-  const createForm = document.getElementById('create-form');
+  const createForm = document.getElementById('employee-form');
   const createDeptSelect = document.getElementById('create-dept');
   const createPosSelect = document.getElementById('create-pos');
   const searchInput = document.getElementById('search-input');
@@ -188,7 +188,7 @@
   const normsBody = document.querySelector('#emp-norms-table tbody');
   const issuesBody = document.querySelector('#emp-issues-table tbody');
   const normsTabItem = document.getElementById('emp-tab-norms-item');
-  const issuesTabItem = document.getElementById('emp-issues-item');
+  const issuesTabItem = document.getElementById('emp-tab-issues-item');
 
   let editingId = null;
   let currentEmployee = null;

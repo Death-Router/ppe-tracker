@@ -1,7 +1,7 @@
 (() => {
   const tbody = document.querySelector('#users-table tbody');
   const form = document.getElementById('user-form');
-  const modalTitle = document.getElementById('user-modal-title');
+  const modalTitle = document.querySelector('#createModal .modal-title');
   const userIdInput = document.getElementById('user-id');
   const passwordInput = document.getElementById('password');
   const passwordHint = document.getElementById('password-hint');
@@ -65,7 +65,7 @@
     passwordInput.required = true;
     passwordHint.classList.add('d-none');
     window.FormValidation.refresh(form);
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('createUserModal')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).show();
   };
 
   window.editUser = async (id) => {
@@ -88,7 +88,7 @@
       window.FormValidation.refresh(form);
       form.elements['is_active'].checked = user.is_active;
       
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('createUserModal')).show();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).show();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -119,7 +119,7 @@
         await API.post('/api/v1/users/', payload);
         window.showToast('Пользователь создан', 'success');
       }
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('createUserModal')).hide();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
       loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
