@@ -303,15 +303,36 @@
 
     const ppeSizes = [];
     let sizeError = false;
+    // Одна размерная группа — один размер. Проверяем сразу, не дожидаясь
+    // ответа сервера: раньше дубликат давал голое «HTTP 500»
+    const usedGroups = new Map();
+
     sizesBody.querySelectorAll('tr').forEach((tr) => {
       const group = tr.querySelector('.size-group-select');
       const value = tr.querySelector('.size-value-input');
       const groupId = Number(group?.value);
       const sizeVal = value?.value.trim() ?? '';
+
+      group?.classList.remove('is-invalid');
+
       if (!groupId || !sizeVal) {
         sizeError = true;
         return;
       }
+
+      if (usedGroups.has(groupId)) {
+        group.classList.add('is-invalid');
+        const groupName = group.selectedOptions?.[0]?.textContent?.trim() ?? 'этой группы';
+        window.showToast(
+          `В карточке сотрудника уже есть размер для группы «${groupName}». ` +
+          'Для каждой размерной группы допускается только один размер.',
+          'danger'
+        );
+        sizeError = true;
+        return;
+      }
+
+      usedGroups.set(groupId, true);
       ppeSizes.push({ size_group_id: groupId, size_value: sizeVal });
     });
 
@@ -319,10 +340,6 @@
       bootstrap.Tab.getOrCreateInstance(
         document.querySelector('#employeeModalTabs [data-bs-target="#emp-tab-sizes"]')
       ).show();
-      window.showToast(
-        'Выберите размерную группу и размер из списка. Если в группе нет размеров — сначала добавьте их в справочнике.',
-        'danger'
-      );
       return;
     }
 

@@ -88,10 +88,33 @@ async def create_employee(
         if set(cat_ids) - set(groups_result.scalars().all()):
             await db.rollback()
             raise HTTPException(status_code=404, detail="Размерные группы не найдены")
+
+        # Одна группа — один размер: две строки с одной группой не пройдут
+        # уникальное ограничение, поэтому объясняем это до записи
+        duplicates = {cid for cid in cat_ids if cat_ids.count(cid) > 1}
+        if duplicates:
+            group = await db.get(PpeSizeGroup, next(iter(duplicates)))
+            group_name = group.name if group else "этой группы"
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Размер для группы «{group_name}» указан дважды. "
+                    "Для каждой размерной группы допускается только один размер."
+                ),
+            )
+
         for size_data in employee_in.ppe_sizes:
             db.add(EmployeePpeSize(employee_id=db_employee.id, size_group_id=size_data.size_group_id, size_value=size_data.size_value))
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Для одной из размерных групп у сотрудника уже есть размер",
+        ) from exc
 
     await broadcast(0, {"event": "employee_created", "employee_id": db_employee.id})
 
@@ -207,6 +230,25 @@ async def update_employee(
     db_employee.version += 1
 
     if employee_in.ppe_sizes is not None:
+        # Одна размерная группа — один размер на сотрудника. Проверяем до
+        # записи, иначе commit падал на уникальном ограничении и клиент видел
+        # голое «HTTP 500» вместо объяснения.
+        seen_groups: dict[int, int] = {}
+        for index, size_data in enumerate(employee_in.ppe_sizes, start=1):
+            previous = seen_groups.get(size_data.size_group_id)
+            if previous is not None:
+                group = await db.get(PpeSizeGroup, size_data.size_group_id)
+                group_name = group.name if group else "этой группы"
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Размер для группы «{group_name}» уже указан в строках "
+                        f"{previous} и {index}. Для каждой размерной группы "
+                        "допускается только один размер."
+                    ),
+                )
+            seen_groups[size_data.size_group_id] = index
+
         await db.execute(delete(EmployeePpeSize).where(EmployeePpeSize.employee_id == employee_id))
         for size_data in employee_in.ppe_sizes:
             db.add(EmployeePpeSize(employee_id=db_employee.id, size_group_id=size_data.size_group_id, size_value=size_data.size_value))
@@ -216,6 +258,14 @@ async def update_employee(
     except StaleDataError as exc:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Конфликт версий") from exc
+    except IntegrityError as exc:
+        # Страховка на случай гонки: параллельный запрос успел вставить тот же
+        # размер между проверкой и commit
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Для одной из размерных групп у сотрудника уже есть размер",
+        ) from exc
 
     await broadcast(employee_id, {"event": "employee_updated", "employee_id": employee_id})
 
