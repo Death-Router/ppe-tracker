@@ -39,10 +39,24 @@ async def update_group(group_id: int, group_in: PpeSizeGroupUpdate, db: AsyncSes
         raise HTTPException(status_code=409, detail="Данные устарели")
     
     update_data = group_in.model_dump(exclude_unset=True, exclude={"version"})
+
+    # Переименование в существующее имя ловилось только на commit
+    new_name = update_data.get("name")
+    if new_name and new_name != db_group.name:
+        clash = await db.execute(
+            select(PpeSizeGroup).where(PpeSizeGroup.name == new_name, PpeSizeGroup.id != group_id)
+        )
+        if clash.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Такая группа уже существует")
+
     for field, value in update_data.items():
         setattr(db_group, field, value)
     db_group.version += 1
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Такая группа уже существует") from exc
     await db.refresh(db_group)
     return db_group
 

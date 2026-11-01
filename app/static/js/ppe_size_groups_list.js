@@ -32,18 +32,19 @@
       const groups = await API.get('/api/v1/ppe_size_groups');
       renderTable(groups);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="2" class="state state--error">Ошибка: ${err.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${err.message}</td></tr>`;
     }
   }
 
   function renderTable(groups) {
     if (!groups.length) {
-      tbody.innerHTML = `<tr><td colspan="2" class="state">Групп пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="state">Групп пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = groups.map(g => `
       <tr data-id="${g.id}">
         <td><strong>${escapeHtml(g.name)}</strong></td>
+        <td class="cell-muted">${g.description ? escapeHtml(g.description) : '—'}</td>
         <td class="py-1 text-end text-nowrap">
           <button class="btn btn-icon me-1" data-action="sizes" data-id="${g.id}" data-name="${escapeHtml(g.name)}" title="Размеры"><i class="bi bi-rulers"></i></button>
           <button class="btn btn-icon me-1" onclick="editGroup(${g.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>
@@ -74,6 +75,7 @@
       modalTitle.textContent = 'Редактирование группы';
       submitBtn.textContent = 'Сохранить';
       createForm.elements['name'].value = group.name;
+      createForm.elements['description'].value = group.description ?? '';
       
       bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (err) {

@@ -17,11 +17,12 @@
             <thead>
             <tr>
                 <th>Название</th>
+                <th>Описание</th>
                 <th class="col-actions">Действия</th>
             </tr>
             </thead>
             <tbody>
-            <tr><td colspan="2" class="state">Загрузка…</td></tr>
+            <tr><td colspan="3" class="state">Загрузка…</td></tr>
             </tbody>
         </table>
     </div>
@@ -40,6 +41,11 @@
                     <div class="mb-3">
                         <label class="form-label">Название <span class="req">*</span></label>
                         <input type="text" class="form-control" name="name" required maxlength="100" placeholder="Например, Обувь">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" rows="2" maxlength="1000"
+                                  placeholder="Что именно указывается: например, обхват груди или размер по ГОСТ"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
