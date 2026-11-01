@@ -129,24 +129,39 @@
       .join('');
 
     const gender = createForm.elements['gender']?.value || null;
-    let sizeCell = `<input type="text" class="form-control form-control-sm size-value-input" value="${escapeHtml(sizeValue)}" placeholder="Размер" maxlength="50">`;
+
+    // Размер выбирается только из справочника: ручной ввод давал значения
+    // вроде «58 размер» мимо таблицы размеров, и потом они не совпадали при
+    // выдаче СИЗ. Если для группы размеров нет — предлагаем их задать, а не
+    // вводить наугад.
+    let sizeCell = `<select class="form-select form-select-sm size-value-input" disabled>
+        <option value="">Сначала выберите группу</option>
+      </select>`;
 
     if (groupId) {
       try {
-        const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${groupId}`);
+        const sizes = await API.get(
+          `/api/v1/ppe_sizes/?size_group_id=${groupId}${gender ? `&gender=${encodeURIComponent(gender)}` : ''}`
+        );
+        // В справочнике размер может быть без указания пола — он подходит обоим
         const filtered = gender ? sizes.filter((s) => !s.gender || s.gender === gender) : sizes;
-        if (filtered.length) {
-          sizeCell = `<select class="form-select form-select-sm size-value-input">
-            <option value="">Размер...</option>
-            ${filtered.map((s) => {
-              const label = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
-              const sel = s.size_value === sizeValue ? 'selected' : '';
-              return `<option value="${escapeHtml(s.size_value)}" ${sel}>${escapeHtml(s.size_value)}${label}</option>`;
-            }).join('')}
-          </select>`;
-        }
+
+        sizeCell = filtered.length
+          ? `<select class="form-select form-select-sm size-value-input">
+              <option value="">Размер...</option>
+              ${filtered.map((s) => {
+                const label = s.gender === 'М' ? ' (М)' : s.gender === 'Ж' ? ' (Ж)' : '';
+                const sel = s.size_value === sizeValue ? 'selected' : '';
+                return `<option value="${escapeHtml(s.size_value)}" ${sel}>${escapeHtml(s.size_value)}${label}</option>`;
+              }).join('')}
+            </select>`
+          : `<select class="form-select form-select-sm size-value-input is-invalid" disabled>
+              <option value="">В группе нет размеров</option>
+            </select>`;
       } catch (err) {
-        // останется поле ввода — это допустимый вариант
+        sizeCell = `<select class="form-select form-select-sm size-value-input is-invalid" disabled>
+            <option value="">Не удалось загрузить размеры</option>
+          </select>`;
       }
     }
 
@@ -304,7 +319,10 @@
       bootstrap.Tab.getOrCreateInstance(
         document.querySelector('#employeeModalTabs [data-bs-target="#emp-tab-sizes"]')
       ).show();
-      window.showToast('Заполните все поля в таблице размеров', 'danger');
+      window.showToast(
+        'Выберите размерную группу и размер из списка. Если в группе нет размеров — сначала добавьте их в справочнике.',
+        'danger'
+      );
       return;
     }
 
