@@ -1,3 +1,4 @@
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -34,6 +35,21 @@ async def get_sizes(size_group_id: int | None = None, gender: str | None = None,
         query = query.where(PpeSize.size_group_id == size_group_id)
     if gender:
         query = query.where(PpeSize.gender == gender)
+
+    # Порядок: сначала пол (М, Ж, затем унисекс), внутри — по числу.
+    # Обычная сортировка строк ставила «44» перед «34» и «300» перед «40»:
+    # размеры — это числа, а не текст. Диапазоны вроде «40-42» приводим к
+    # первому числу, чтобы они вставали на своё место.
+    numeric = sa.cast(
+        sa.func.nullif(sa.func.regexp_replace(PpeSize.size_value, r"[^0-9].*$", "", "g"), ""),
+        sa.Integer,
+    )
+    query = query.order_by(
+        sa.case((PpeSize.gender == "М", 0), (PpeSize.gender == "Ж", 1), else_=2),
+        numeric.nulls_last(),
+        PpeSize.size_value,
+    )
+
     result = await db.execute(query)
     return result.scalars().all()
 
