@@ -309,7 +309,7 @@ Manager не переносится, запись `git:https://github.com` (по
 | Имя | Путь | Роль |
 |---|---|---|
 | **home** | `C:\projects\ppe-tracker` | правки кода, git, commit, push |
-| **work** | `C:\projects\ppe-tracker` | то же плюс запуск: Docker в WSL, `.env`, БД, браузер |
+| **work** | `C:\projects\ppe-tracker` + клон внутри WSL | то же плюс запуск: Docker в WSL, `.env`, БД, браузер |
 
 **Клон лежит по одному и тому же пути на обеих машинах**, поэтому все
 пути в этом документе к машине не привязаны. Правки можно делать на
@@ -326,12 +326,33 @@ Manager не переносится, запись `git:https://github.com` (по
   `alembic upgrade head`, проверка в браузере. Docker берётся из
   Docker Desktop в WSL, с ним работают вручную через VS Code.
 
+### Две копии проекта на work
+
+На work проект существует дважды, и это не одно и то же:
+
+| Копия | Где | Что в ней |
+|---|---|---|
+| Windows-клон | `C:\projects\ppe-tracker` | рабочее дерево для правок и git; `.env`, `.venv`, `.vscode` отсутствуют |
+| WSL-клон | внутри Ubuntu, открыт в VS Code как `ppe-tracker [WSL: Ubuntu]` | `.env`, `.venv`, `.vscode`, `.ruff_cache`; отсюда запускают `docker compose` |
+
+Копии независимы: у каждой свой `.git` и свои неотслеживаемые файлы.
+Сходятся они только через GitHub. Отсюда ловушка: **правка в
+Windows-клоне не видна приложению, пока не сделан `git pull` в
+WSL-клоне** — приложение работает на том коде, который лежит рядом с
+`docker-compose.yml`, а не на том, который правили.
+
+Из Windows-сессии ассистент до WSL не достаёт: `\\wsl.localhost\Ubuntu`
+отвечает «Отказано в доступе». Поэтому `git pull`, `docker compose` и
+`alembic` в WSL-клоне выполняет человек через VS Code.
+
 **Цикл работы:**
 
 1. Правки на той машине, где удобно, затем из `C:\projects` —
    `.\push-ppe.ps1` (или двойной клик по `push-ppe.cmd`).
 2. На второй машине: `git pull`, а на work при необходимости
    `docker compose restart api` и `alembic upgrade head`.
+3. На work — ещё один `git pull` **в WSL-клоне**, иначе браузер покажет
+   старую версию.
 
 ### Скрипт push живёт вне репозитория
 
