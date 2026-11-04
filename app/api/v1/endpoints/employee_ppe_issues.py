@@ -13,6 +13,21 @@ from app.schemas.employee_ppe_issue import EmployeePpeIssueCreate, EmployeePpeIs
 from app.utils.broadcast import broadcast
 from app.utils.dates import add_wear_period
 
+
+def issue_item_options():
+    """Жадно грузим СИЗ со всеми связями схемы PpeItemRead.
+
+    Без unit сериализация уходила в ленивую загрузку, а в async-SQLAlchemy
+    это MissingGreenlet и 500 — так падал список выдач и карточка сотрудника.
+    """
+    item = selectinload(EmployeePpeIssue.ppe_item)
+    return [
+        item.selectinload(PpeItem.function),
+        item.selectinload(PpeItem.size_group),
+        item.selectinload(PpeItem.unit),
+    ]
+
+
 router = APIRouter(prefix="/employee_ppe_issues", tags=["Выдача СИЗ"])
 
 
@@ -60,8 +75,7 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
     # 5. Загружаем связи для ответа
     result = await db.execute(
         select(EmployeePpeIssue).where(EmployeePpeIssue.id == db_issue.id)
-        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
-                 selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group))
+        .options(*issue_item_options())
     )
     return result.scalar_one()
 
@@ -70,8 +84,7 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
 async def get_issues(employee_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(EmployeePpeIssue).where(EmployeePpeIssue.employee_id == employee_id)
-        .options(selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
-                 selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group))
+        .options(*issue_item_options())
     )
     return result.scalars().all()
 

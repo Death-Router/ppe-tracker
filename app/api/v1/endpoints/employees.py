@@ -22,12 +22,22 @@ router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
 
 def employee_options():
+    """Жадно загружаем всё, что попадает в ответ.
+
+    Pydantic при сериализации обходит всю схему, и любой незагруженный
+    relationship уходит в ленивую загрузку. В async-SQLAlchemy это
+    невозможно и даёт MissingGreenlet — так падал список сотрудников,
+    когда в схему добавилось ppe_issues с полем unit у СИЗ.
+    """
+    issue_item = selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item)
     return [
         selectinload(Employee.ppe_sizes).selectinload(EmployeePpeSize.size_group),
-        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.function),
-        selectinload(Employee.ppe_issues).selectinload(EmployeePpeIssue.ppe_item).selectinload(PpeItem.size_group),
+        # Схема PpeItemRead включает function, size_group и unit — грузим все три
+        issue_item.selectinload(PpeItem.function),
+        issue_item.selectinload(PpeItem.size_group),
+        issue_item.selectinload(PpeItem.unit),
         selectinload(Employee.department_rel),
-        selectinload(Employee.position_rel)
+        selectinload(Employee.position_rel),
     ]
 
 
