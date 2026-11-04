@@ -219,11 +219,28 @@
     window.FormValidation.refresh();
   }
 
-  // Вкладка выдач появляется только при редактировании: у нового сотрудника
-  // их быть не может. Нормы переехали в отдельный раздел навбара.
-  function setEditOnlyTabs(visible) {
-    if (issuesTabItem) issuesTabItem.classList.toggle('d-none', !visible);
+  // Вкладка выдач нужна только когда есть должность: нормы выдачи заданы
+  // должности, и без неё выдавать нечего. У нового сотрудника её тоже нет.
+  function setEditOnlyTabs(isEditing) {
+    if (!issuesTabItem) return;
+    const hasPosition = Boolean(createForm.elements['position_id']?.value);
+    issuesTabItem.classList.toggle('d-none', !(isEditing && hasPosition));
   }
+
+  // Должность меняется прямо в модалке — вкладку показываем или скрываем сразу
+  createForm.elements['position_id']?.addEventListener('change', () => {
+    if (!editingId) return;
+    setEditOnlyTabs(true);
+    // Если вкладку скрыли, а она была открыта, вернёмся на основные данные
+    if (issuesTabItem?.classList.contains('d-none')) {
+      const activePane = document.querySelector('#employeeModalContent .tab-pane.active');
+      if (activePane?.id === 'emp-tab-issues') {
+        bootstrap.Tab.getOrCreateInstance(
+          document.querySelector('#employeeModalTabs [data-bs-target="#emp-tab-main"]')
+        ).show();
+      }
+    }
+  });
 
   window.openCreateEmployee = () => {
     editingId = null;
@@ -243,7 +260,6 @@
 
       modalTitle.textContent = `Редактирование: ${[emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ')}`;
       saveBtn.textContent = 'Сохранить';
-      setEditOnlyTabs(true);
       resetModal();
 
       const FIELDS = ['personnel_number', 'last_name', 'first_name', 'middle_name', 'hire_date', 'position_change_date', 'gender', 'height'];
@@ -255,6 +271,9 @@
 
       createDeptSelect.value = emp.department_id ?? '';
       await loadPositionsForSelect(emp.department_id, emp.position_id);
+
+      // Только теперь известна должность: вкладка выдач зависит от неё
+      setEditOnlyTabs(true);
 
       versionInput.value = emp.version ?? '';
 
