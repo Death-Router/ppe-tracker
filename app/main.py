@@ -1,7 +1,8 @@
+import logging
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -29,7 +30,26 @@ from app.core.deps import get_current_active_user
 
 BASE_DIR = Path(__file__).resolve().parent
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="PPE Tracker API")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Отдаём причину ошибки, а не пустой 500.
+
+    По умолчанию FastAPI на необработанном исключении возвращает пустое тело,
+    и клиент показывает голое «HTTP 500» — по такому сообщению причину не
+    найти ни в интерфейсе, ни в логе, если трассировка не попала в вывод.
+    """
+    logger.exception("Необработанная ошибка на %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Внутренняя ошибка сервера: {type(exc).__name__}: {exc}"},
+    )
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
