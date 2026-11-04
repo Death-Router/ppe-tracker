@@ -339,6 +339,12 @@
     return size?.size_value ?? null;
   }
 
+  // Сколько раз эта СИЗ уже выдана сотруднику — для пометки в списке
+  function issuedCount(itemId) {
+    const issues = currentEmployee?.ppe_issues ?? [];
+    return issues.filter((i) => i.ppe_item_id === itemId).length;
+  }
+
   async function openIssueModal() {
     if (!editingId) return;
 
@@ -351,8 +357,37 @@
       }
     }
 
+    // Выдавать можно только то, что положено по нормам должности.
+    // Список всех СИЗ позволял выдать что угодно мимо нормы.
+    const normItems = [...normByItem.values()]
+      .map((n) => {
+        const item = allPpeItems.find((i) => i.id === n.ppe_item_id);
+        return item ? { item, norm: n } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.item.name.localeCompare(b.item.name, 'ru'));
+
+    if (!normItems.length) {
+      const reason = currentEmployee?.position_id
+        ? 'для должности не заданы нормы выдачи'
+        : 'у сотрудника не указана должность';
+      issueItemSelect.innerHTML = `<option value="">Нет норм: ${escapeHtml(reason)}</option>`;
+      issueItemSelect.disabled = true;
+      document.getElementById('issue-submit').disabled = true;
+      bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
+      return;
+    }
+
+    issueItemSelect.disabled = false;
+    document.getElementById('issue-submit').disabled = false;
+
     issueItemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' +
-      allPpeItems.map((i) => `<option value="${i.id}">${escapeHtml(i.name)}</option>`).join('');
+      normItems.map(({ item, norm }) => {
+        const issued = issuedCount(item.id);
+        const total = norm.quantity ?? '1';
+        const mark = issued ? ` — выдано ${issued} из ${total}` : '';
+        return `<option value="${item.id}">${escapeHtml(item.name)}${escapeHtml(mark)}</option>`;
+      }).join('');
 
     issueForm.reset();
     issueForm.elements['quantity'].value = '1';
