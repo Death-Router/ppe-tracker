@@ -177,11 +177,6 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', path='js/employees_list.js') }}"></script>
-
 <!-- Модалка выдачи СИЗ -->
 <div class="modal fade" id="issueModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -223,5 +218,10 @@
         </div>
     </div>
 </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/employees_list.js') }}"></script>
 
 {% endblock %}
