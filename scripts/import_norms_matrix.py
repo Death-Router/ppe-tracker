@@ -198,7 +198,7 @@ def main() -> int:
         print(f"Файл не найден: {args.file}")
         return 1
 
-    rows, report = read_rows(args.file)
+    _rows, report = read_rows(args.file)
 
     print(f"Файл: {args.file.name}")
     print(f"Лист: {SHEET}")
