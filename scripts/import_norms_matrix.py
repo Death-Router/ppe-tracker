@@ -108,7 +108,7 @@ def parse_norm(raw: str) -> tuple[str, str, str]:
     return text, "1", "до износа"
 
 
-def read_rows(path: Path) -> tuple[list[NormRow], Report]:
+def read_rows(path: Path, with_alternatives: bool = False) -> tuple[list[NormRow], Report]:
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     if SHEET not in wb.sheetnames:
         raise SystemExit(f"Лист «{SHEET}» не найден. Есть: {', '.join(wb.sheetnames)}")
@@ -153,7 +153,12 @@ def read_rows(path: Path) -> tuple[list[NormRow], Report]:
                 )
             )
 
-        # Альтернативы: та же должность, другое наименование СИЗ
+        # Альтернативы: по умолчанию пропускаем. Они означают «можно выдать
+        # любое из перечисленных», и импорт всех вариантов раздувает нормы
+        # втрое, ничего не добавляя к самой выдаче
+        if not with_alternatives:
+            continue
+
         for name_idx, norm_idx in COL_ALTERNATIVES:
             alt_name = " ".join(str(row[name_idx] or "").split())
             if not alt_name:
@@ -187,18 +192,118 @@ def read_rows(path: Path) -> tuple[list[NormRow], Report]:
     return rows, report
 
 
+def apply_rows(rows: list[NormRow], department_id: int) -> int:
+    """Пишет нормы в базу. Существующие записи не трогает.
+
+    Логика:
+      - должность ищется по названию в указанном подразделении, при
+        отсутствии создаётся;
+      - наименование СИЗ ищется по названию, при отсутствии создаётся;
+      - норма добавляется, только если пары «должность + СИЗ» ещё нет:
+        повторный запуск не создаёт дублей.
+    """
+    import asyncio
+
+    from sqlalchemy import select
+
+    from app.db.session import async_session_maker
+    from app.models.department import Department
+    from app.models.position import Position
+    from app.models.position_ppe_norm import PositionPpeNorm
+    from app.models.ppe_item import PpeItem
+
+    async def run() -> int:
+        async with async_session_maker() as db:
+            dept = await db.get(Department, department_id)
+            if dept is None:
+                print(f"Подразделение id={department_id} не найдено")
+                return 1
+
+            print(f"Подразделение: {dept.name} (id={dept.id})")
+            print()
+
+            # Кэши: названия уникальны в пределах своих справочников
+            positions: dict[str, Position] = {
+                p.name: p for p in (await db.execute(select(Position))).scalars()
+            }
+            items: dict[str, PpeItem] = {
+                i.name: i for i in (await db.execute(select(PpeItem))).scalars()
+            }
+
+            existing = {
+                (norm.position_id, norm.ppe_item_id)
+                for norm in (await db.execute(select(PositionPpeNorm))).scalars()
+            }
+
+            created_positions = created_items = created_norms = skipped = 0
+
+            for row in rows:
+                position = positions.get(row.position)
+                if position is None:
+                    position = Position(name=row.position, department_id=department_id)
+                    db.add(position)
+                    await db.flush()
+                    positions[row.position] = position
+                    created_positions += 1
+
+                item = items.get(row.item_name)
+                if item is None:
+                    item = PpeItem(name=row.item_name)
+                    db.add(item)
+                    await db.flush()
+                    items[row.item_name] = item
+                    created_items += 1
+
+                key = (position.id, item.id)
+                if key in existing:
+                    skipped += 1
+                    continue
+
+                db.add(
+                    PositionPpeNorm(
+                        position_id=position.id,
+                        ppe_item_id=item.id,
+                        wear_period_value=row.period_value,
+                        wear_period_unit=row.period_unit,
+                        quantity=row.quantity,
+                    )
+                )
+                existing.add(key)
+                created_norms += 1
+
+            await db.commit()
+
+            print(f"Создано должностей:      {created_positions}")
+            print(f"Создано наименований СИЗ: {created_items}")
+            print(f"Добавлено норм:          {created_norms}")
+            print(f"Пропущено (уже были):    {skipped}")
+            return 0
+
+    return asyncio.run(run())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Импорт матрицы норм выдачи СИЗ")
     parser.add_argument("file", type=Path, help="путь к xlsx")
     parser.add_argument("--report", action="store_true", help="только отчёт, без записи")
     parser.add_argument("--apply", action="store_true", help="записать в базу")
+    parser.add_argument(
+        "--with-alternatives",
+        action="store_true",
+        help="включить альтернативы (по умолчанию только основные нормы)",
+    )
+    parser.add_argument(
+        "--department-id",
+        type=int,
+        help="подразделение, к которому привязать создаваемые должности",
+    )
     args = parser.parse_args()
 
     if not args.file.exists():
         print(f"Файл не найден: {args.file}")
         return 1
 
-    _rows, report = read_rows(args.file)
+    _rows, report = read_rows(args.file, with_alternatives=args.with_alternatives)
 
     print(f"Файл: {args.file.name}")
     print(f"Лист: {SHEET}")
@@ -210,8 +315,13 @@ def main() -> int:
         print("Запись в базу не выполнялась (укажите --apply).")
         return 0
 
-    print("Режим записи пока не реализован — сначала проверьте отчёт.")
-    return 1
+    if not args.department_id:
+        print("Для записи укажите подразделение: --department-id N")
+        print("  1. Вы уже видели отчёт выше.")
+        print("  2. При повторном запуске используйте --report, чтобы не писать.")
+        return 1
+
+    return apply_rows(_rows, args.department_id)
 
 
 if __name__ == "__main__":
