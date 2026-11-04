@@ -45,28 +45,37 @@ def upgrade() -> None:
         group_id = conn.execute(
             sa.text(
                 "INSERT INTO ppe_size_groups (name, description, version) "
-                "VALUES (:name, :description, 1) RETURNING id"
+                "VALUES (CAST(:name AS varchar(100)), CAST(:description AS text), 1) "
+                "RETURNING id"
             ),
             {"name": GROUP_NAME, "description": GROUP_DESCRIPTION},
         ).scalar()
 
-    # Повторный запуск не должен плодить дубли: INSERT ... WHERE NOT EXISTS
+    # Проверяем и вставляем раздельно: когда один параметр встречался и в
+    # SELECT, и в WHERE, asyncpg не мог определить его тип (text против
+    # varchar) и падал с «inconsistent types deduced». Повторный запуск
+    # миграции при этом не плодит дубли
+    exists = sa.text(
+        "SELECT 1 FROM ppe_sizes "
+        "WHERE size_group_id = :group_id "
+        "  AND size_value = CAST(:size_value AS varchar(50)) "
+        "  AND gender = CAST(:gender AS varchar(1))"
+    )
     insert = sa.text(
         "INSERT INTO ppe_sizes (size_group_id, size_value, gender) "
-        "SELECT :group_id, :size_value, :gender "
-        "WHERE NOT EXISTS ("
-        "  SELECT 1 FROM ppe_sizes "
-        "  WHERE size_group_id = :group_id "
-        "    AND size_value = :size_value "
-        "    AND gender = :gender"
-        ")"
+        "VALUES (:group_id, CAST(:size_value AS varchar(50)), CAST(:gender AS varchar(1)))"
     )
 
+    def add_size(size_value: str, gender: str) -> None:
+        params = {"group_id": group_id, "size_value": size_value, "gender": gender}
+        if conn.execute(exists, params).scalar() is None:
+            conn.execute(insert, params)
+
     for size_value in SIZES_MEN:
-        conn.execute(insert, {"group_id": group_id, "size_value": size_value, "gender": "М"})
+        add_size(size_value, "М")
 
     for size_value in SIZES_WOMEN:
-        conn.execute(insert, {"group_id": group_id, "size_value": size_value, "gender": "Ж"})
+        add_size(size_value, "Ж")
 
 
 def downgrade() -> None:
@@ -75,8 +84,10 @@ def downgrade() -> None:
     conn.execute(
         sa.text(
             "DELETE FROM ppe_sizes "
-            "WHERE size_group_id IN (SELECT id FROM ppe_size_groups WHERE name = :name) "
-            "AND size_value IN (:values)"
-        ).bindparams(sa.bindparam("values", expanding=True)),
+            "WHERE size_group_id IN ("
+            "  SELECT id FROM ppe_size_groups WHERE name = CAST(:name AS varchar(100))"
+            ") "
+            "AND size_value = ANY(CAST(:values AS varchar(50)[]))"
+        ),
         {"name": GROUP_NAME, "values": SIZES_MEN},
     )
