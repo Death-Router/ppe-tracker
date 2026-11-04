@@ -333,7 +333,10 @@ Manager не переносится, запись `git:https://github.com` (по
 | Копия | Где | Что в ней |
 |---|---|---|
 | Windows-клон | `C:\projects\ppe-tracker` | рабочее дерево для правок и git; `.env`, `.venv`, `.vscode` отсутствуют |
-| WSL-клон | внутри Ubuntu, открыт в VS Code как `ppe-tracker [WSL: Ubuntu]` | `.env`, `.venv`, `.vscode`, `.ruff_cache`; отсюда запускают `docker compose` |
+| WSL-клон | `/home/vagur/projects/ppe-tracker`, открыт в VS Code как `ppe-tracker [WSL: Ubuntu]` | `.env`, `.venv`, `.vscode`, `.ruff_cache`; отсюда запускают `docker compose` |
+
+В приглашении WSL-терминала видно `(ppe-tracker)` — это активированное
+окружение `.venv` из клона, а не отдельная копия проекта.
 
 Копии независимы: у каждой свой `.git` и свои неотслеживаемые файлы.
 Сходятся они только через GitHub. Отсюда ловушка: **правка в
