@@ -276,11 +276,30 @@ Remote: `https://github.com/Death-Router/ppe-tracker` (ветка `main`).
 
 ---
 
-## Рабочая среда
+## Рабочая среда: home и work
 
-- Проект в Windows, папка в OneDrive; Docker в WSL.
-- VSCode на Windows подключается к Docker в WSL.
-- **`git pull` перед началом работы** — клон в OneDrive может отставать.
-- Не работать с двух машин одновременно: OneDrive синхронизирует файлы,
-  но не координирует git. При ошибке `index.lock`:
-  `del .git\index.lock`.
+Две машины, роли разделены. В переписке и документах называются так:
+
+| Имя | Путь | Роль |
+|---|---|---|
+| **home** | `C:\projects\ppe-tracker` | правки кода, git, commit, push |
+| **work** | Docker в WSL | запуск проекта, `.env`, БД, проверки в браузере |
+
+**Где что выполняется:**
+
+- **home** — только код и git. Ни `docker compose`, ни `alembic`: на этой
+  машине нет ни Docker, ни `.env`, ни базы. Сюда `.env` и не нужен — он
+  в `.gitignore` и живёт только на work.
+- **work** — всё, что связано с запуском: `docker compose up`,
+  `alembic upgrade head`, проверка в браузере.
+
+**Цикл работы:**
+
+1. home: правки, `.\push-ppe.ps1`.
+2. work: `git pull`, при необходимости `docker compose restart api`
+   и `alembic upgrade head`.
+
+**Репозиторий вне OneDrive — намеренно.** Раньше он лежал в синхронизируемой
+папке, и `.git` мог попасть в момент записи: это даёт битые объекты и
+конфликтные копии вроде `index (1).lock`. Резервная копия и синхронизация —
+на GitHub, OneDrive для этого не нужен.
