@@ -269,18 +269,194 @@
     }
   };
 
-  // Выдачи на своей вкладке: только для просмотра
+  // В модели поле называется expiry_date; write_off_date не существует
+  function formatDate(raw) {
+    if (!raw) return '—';
+    const [y, m, d] = String(raw).split('T')[0].split('-');
+    return d ? `${d}.${m}.${y}` : String(raw);
+  }
+
+  // Срок носки истёк — подсвечиваем, чтобы выдача была видна сразу
+  function expiryCell(raw) {
+    if (!raw) return '<span class="cell-muted">—</span>';
+    const date = new Date(String(raw).split('T')[0]);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expired = date < today;
+    const cls = expired ? 'badge-soft badge-orange' : 'badge-soft badge-purple';
+    const label = expired ? `истёк ${formatDate(raw)}` : formatDate(raw);
+    return `<span class="${cls}">${escapeHtml(label)}</span>`;
+  }
+
   function renderIssues(emp) {
     const issues = emp.ppe_issues ?? emp.issues ?? [];
     issuesBody.innerHTML = issues.length
       ? issues.map((i) => `<tr>
           <td>${escapeHtml(i.ppe_item?.name ?? '—')}</td>
           <td>${escapeHtml(i.size_value ?? '—')}</td>
-          <td>${escapeHtml((i.issue_date ?? '').split('T')[0] || '—')}</td>
-          <td>${escapeHtml((i.write_off_date ?? '').split('T')[0] || '—')}</td>
+          <td>${escapeHtml(String(i.quantity ?? '—'))}</td>
+          <td>${escapeHtml(formatDate(i.issue_date))}</td>
+          <td>${expiryCell(i.expiry_date)}</td>
+          <td class="col-actions">
+            <button class="btn btn-icon btn-icon--danger" data-action="delete-issue"
+                    data-id="${i.id}" title="Убрать выдачу">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
         </tr>`).join('')
-      : '<tr><td colspan="4" class="state">Выдач пока нет</td></tr>';
+      : '<tr><td colspan="6" class="state">Выдач пока нет</td></tr>';
   }
+
+  // --- Выдача СИЗ -------------------------------------------------------
+  const issueModalEl = document.getElementById('issueModal');
+  const issueForm = document.getElementById('issue-form');
+  const issueItemSelect = document.getElementById('issue-item');
+  const issueSizeInput = document.getElementById('issue-size');
+  const issueSizeHint = document.getElementById('issue-size-hint');
+  const issueNormHint = document.getElementById('issue-norm-hint');
+  const issueDateInput = document.getElementById('issue-date');
+
+  let allPpeItems = null;
+  let normByItem = new Map();
+
+  // Нормы должности нужны, чтобы показать срок носки и подсказать размер
+  async function loadNormsForEmployee(emp) {
+    normByItem = new Map();
+    if (!emp.position_id) return;
+    try {
+      const norms = await API.get(`/api/v1/position_ppe_norms/?position_id=${emp.position_id}`);
+      norms.forEach((n) => normByItem.set(n.ppe_item_id, n));
+    } catch (err) {
+      // без норм выдача всё равно возможна
+    }
+  }
+
+  // Размер берём из карточки по размерной группе СИЗ
+  function sizeFromCard(emp, item) {
+    const groupId = item?.size_group_id;
+    if (!groupId) return null;
+    const size = (emp?.ppe_sizes ?? []).find((s) => s.size_group_id === groupId);
+    return size?.size_value ?? null;
+  }
+
+  async function openIssueModal() {
+    if (!editingId) return;
+
+    if (!allPpeItems) {
+      try {
+        allPpeItems = await API.get('/api/v1/ppe_items');
+      } catch (err) {
+        window.showToast(`Ошибка загрузки СИЗ: ${err.message}`, 'danger');
+        return;
+      }
+    }
+
+    issueItemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' +
+      allPpeItems.map((i) => `<option value="${i.id}">${escapeHtml(i.name)}</option>`).join('');
+
+    issueForm.reset();
+    issueForm.elements['quantity'].value = '1';
+    issueDateInput.value = new Date().toISOString().split('T')[0];
+    issueSizeInput.value = '';
+    issueSizeHint.textContent = '';
+    issueNormHint.textContent = '';
+
+    bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
+  }
+
+  // При выборе СИЗ подставляем размер из карточки и показываем норму
+  issueItemSelect?.addEventListener('change', () => {
+    const itemId = Number(issueItemSelect.value);
+    const item = allPpeItems?.find((i) => i.id === itemId);
+    const emp = currentEmployee;
+
+    issueSizeInput.value = '';
+    issueSizeHint.textContent = '';
+    issueNormHint.textContent = '';
+
+    if (!item) return;
+
+    const cardSize = sizeFromCard(emp, item);
+    if (cardSize) {
+      issueSizeInput.value = cardSize;
+      issueSizeHint.textContent = 'Подставлено из карточки сотрудника';
+    } else if (item.size_group_id) {
+      issueSizeHint.textContent = 'В карточке не указан размер для этой группы — введите вручную';
+    }
+    else {
+      issueSizeHint.textContent = 'У этого СИЗ размерная группа не задана';
+    }
+
+    const norm = normByItem.get(itemId);
+    if (norm) {
+      issueNormHint.textContent =
+        `По норме: ${norm.wear_period_value} ${norm.wear_period_unit}, количество ${norm.quantity}`;
+    }
+  });
+
+  issueForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!editingId) return;
+
+    const payload = {
+      employee_id: editingId,
+      ppe_item_id: Number(issueItemSelect.value),
+      issue_date: issueDateInput.value,
+      quantity: issueForm.elements['quantity'].value.trim() || '1',
+      size_value: issueSizeInput.value.trim() || null,
+    };
+
+    if (!payload.ppe_item_id) {
+      window.showToast('Выберите наименование СИЗ', 'danger');
+      return;
+    }
+
+    const submit = document.getElementById('issue-submit');
+    submit.disabled = true;
+    try {
+      await API.post('/api/v1/employee_ppe_issues/', payload);
+      window.showToast('СИЗ выдан', 'success');
+      bootstrap.Modal.getOrCreateInstance(issueModalEl).hide();
+      await reloadEmployee();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      submit.disabled = false;
+      window.FormValidation.refresh();
+    }
+  });
+
+  // Перезапрос карточки: срок носки считает сервер, клиенту его не вычислить
+  async function reloadEmployee() {
+    if (!editingId) return;
+    try {
+      const emp = await API.get(`/api/v1/employees/${editingId}`);
+      currentEmployee = emp;
+      renderIssues(emp);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  }
+
+  issuesBody?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-action="delete-issue"]');
+    if (!btn) return;
+    if (!confirm('Убрать выдачу из карточки?')) return;
+
+    try {
+      await API.request(`/api/v1/employee_ppe_issues/${btn.dataset.id}`, { method: 'DELETE' });
+      window.showToast('Выдача убрана', 'success');
+      await reloadEmployee();
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  });
+
+  document.getElementById('emp-add-issue')?.addEventListener('click', () => {
+    // Нормы грузим один раз на открытие карточки
+    Promise.resolve(currentEmployee ? loadNormsForEmployee(currentEmployee) : null)
+      .then(openIssueModal);
+  });
 
   document.getElementById('btn-add-employee')?.addEventListener('click', window.openCreateEmployee);
   document.getElementById('emp-add-size')?.addEventListener('click', async () => {

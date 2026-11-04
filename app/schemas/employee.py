@@ -3,6 +3,7 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.department import DepartmentRead
+from app.schemas.employee_ppe_issue import EmployeePpeIssueRead
 from app.schemas.position import PositionRead
 from app.schemas.ppe_size_group import PpeSizeGroupRead
 
@@ -48,6 +49,9 @@ class EmployeeRead(EmployeeBase):
     id: int
     version: int
     ppe_sizes: list[EmployeePpeSizeRead] = []
+    # Без этого поля карточка не получала выдачи: эндпоинт их загружал,
+    # но в ответ они не попадали, и вкладка всегда была пустой
+    ppe_issues: list[EmployeePpeIssueRead] = []
     department_rel: DepartmentRead | None = None
     position_rel: PositionRead | None = None
     model_config = ConfigDict(from_attributes=True)
