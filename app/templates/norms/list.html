@@ -8,6 +8,10 @@
 
     <div class="page-head__spacer"></div>
 
+    <button class="btn btn-sm btn-brand" id="btn-copy-norms" title="Скопировать нормы с другой должности">
+        <i class="bi bi-files"></i> Скопировать нормы
+    </button>
+
     <!-- Блок массовых операций (появляется при выборе) -->
     <div id="bulk-actions" class="d-flex align-items-center gap-2 d-none">
         <span class="badge-soft badge-purple">Выбрано: <span id="selected-count">0</span></span>
@@ -103,6 +107,41 @@
         </div>
     </div>
 </div>
+
+<!-- Модалка копирования норм с должности на должности -->
+<div class="modal fade" id="copyNormsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Скопировать нормы</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" for="copy-source">Скопировать нормы с должности</label>
+                    <select class="form-select" id="copy-source">
+                        <option value="">Выберите должность-источник...</option>
+                    </select>
+                    <div class="form-text" id="copy-source-hint"></div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label" for="copy-targets">Кому скопировать</label>
+                    <select class="form-select" id="copy-targets" multiple size="8"></select>
+                    <div class="form-text">
+                        Удерживайте Ctrl, чтобы выбрать несколько должностей.
+                        Нормы, которые у получателя уже есть, не изменяются.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-brand" id="copy-submit">Скопировать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}

@@ -414,6 +414,108 @@
   // Кнопка "Добавить" открывает модалку в режиме создания
   document.getElementById('btn-create-norm')?.addEventListener('click', openCreateModal);
 
+  // --- Копирование норм с должности на должности -----------------------
+  const copyModalEl = document.getElementById('copyNormsModal');
+  const copySource = document.getElementById('copy-source');
+  const copyTargets = document.getElementById('copy-targets');
+  const copySourceHint = document.getElementById('copy-source-hint');
+  const copySubmit = document.getElementById('copy-submit');
+
+  // Сколько норм у каждой должности — для подсказки в списке источников
+  function normsCountByPosition() {
+    const counts = new Map();
+    allNorms.forEach((n) => {
+      counts.set(n.position_id, (counts.get(n.position_id) ?? 0) + 1);
+    });
+    return counts;
+  }
+
+  function fillCopySelects() {
+    const counts = normsCountByPosition();
+    const positions = [...allPositions].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+    const options = positions.map((p) => {
+      const dept = p.department?.name ?? '';
+      const label = dept ? `${dept} / ${p.name}` : p.name;
+      return { value: p.id, label };
+    });
+
+    copySource.innerHTML = '<option value="">Выберите должность-источник...</option>' +
+      options.map((o) => `<option value="${o.value}">${escapeHtml(o.label)}</option>`).join('');
+
+    copyTargets.innerHTML = options
+      .map((o) => `<option value="${o.value}">${escapeHtml(o.label)}</option>`)
+      .join('');
+
+    copySourceHint.textContent = '';
+    copySubmit.disabled = true;
+  }
+
+  // Подсказываем, сколько норм у выбранного источника
+  copySource?.addEventListener('change', () => {
+    const id = Number(copySource.value);
+    if (!id) {
+      copySourceHint.textContent = '';
+      copySubmit.disabled = true;
+      return;
+    }
+
+    const count = normsCountByPosition().get(id) ?? 0;
+    copySourceHint.textContent = count
+      ? `У этой должности ${count} норм(а)`
+      : 'У этой должности нет норм — копировать нечего';
+    copySubmit.disabled = count === 0;
+
+    // Источник не должен быть получателем — убираем его из списка
+    Array.from(copyTargets.options).forEach((opt) => {
+      opt.disabled = Number(opt.value) === id;
+      if (opt.disabled) opt.selected = false;
+    });
+  });
+
+  document.getElementById('btn-copy-norms')?.addEventListener('click', async () => {
+    // Свежие данные: нормы могли измениться. Без paginated эндпоинт отдаёт
+    // обычный массив, поэтому проверяем тип явно
+    try {
+      const data = await API.get('/api/v1/position_ppe_norms');
+      allNorms = Array.isArray(data) ? data : (data.items ?? []);
+    } catch (err) {
+      window.showToast(`Ошибка загрузки норм: ${err.message}`, 'danger');
+      return;
+    }
+    fillCopySelects();
+    bootstrap.Modal.getOrCreateInstance(copyModalEl).show();
+  });
+
+  copySubmit?.addEventListener('click', async () => {
+    const sourceId = Number(copySource.value);
+    const targetIds = Array.from(copyTargets.selectedOptions).map((o) => Number(o.value));
+
+    if (!sourceId) {
+      window.showToast('Выберите должность-источник', 'danger');
+      return;
+    }
+    if (!targetIds.length) {
+      window.showToast('Выберите хотя бы одну должность-получателя', 'danger');
+      return;
+    }
+
+    copySubmit.disabled = true;
+    try {
+      const res = await API.post('/api/v1/position_ppe_norms/copy', {
+        source_position_id: sourceId,
+        target_position_ids: targetIds,
+      });
+      window.showToast(res.message, 'success');
+      bootstrap.Modal.getOrCreateInstance(copyModalEl).hide();
+      loadPage(1);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      copySubmit.disabled = false;
+    }
+  });
+
   WS.subscribe((data) => {
     if (data.event === 'norm_updated') loadData();
   });

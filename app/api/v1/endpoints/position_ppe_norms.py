@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,13 @@ async def get_norm_with_relations(db: AsyncSession, norm_id: int) -> PositionPpe
     )
     # scalar_one() падал бы NoResultFound (500) вместо 404
     return result.scalar_one_or_none()
+
+
+class CopyNormsRequest(BaseModel):
+    """Копирование норм с одной должности на другие."""
+
+    source_position_id: int = Field(..., description="Откуда копировать")
+    target_position_ids: list[int] = Field(..., description="Куда копировать")
 
 
 @router.post("/", response_model=PositionPpeNormRead, status_code=status.HTTP_201_CREATED)
@@ -130,6 +137,91 @@ async def get_norms(
         page=params.page,
         page_size=params.page_size,
     )
+
+
+@router.post("/copy")
+async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db)):
+    """Копирует нормы с одной должности на другие.
+
+    Часто у нескольких должностей нормы совпадают — проще скопировать набор,
+    чем заводить каждую строку заново.
+
+    Существующие нормы целевых должностей не изменяются: если для пары
+    «должность + СИЗ» норма уже есть, она пропускается. Поэтому операцию
+    можно повторять безопасно.
+    """
+    if not data.target_position_ids:
+        raise HTTPException(status_code=400, detail="Не выбрано ни одной должности-получателя")
+
+    if data.source_position_id in data.target_position_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Должность-источник не может быть получателем",
+        )
+
+    source_res = await db.execute(
+        select(PositionPpeNorm).where(PositionPpeNorm.position_id == data.source_position_id)
+    )
+    source_norms = source_res.scalars().all()
+    if not source_norms:
+        raise HTTPException(
+            status_code=400,
+            detail="У выбранной должности нет норм — копировать нечего",
+        )
+
+    # Проверяем, что все получатели существуют
+    targets_res = await db.execute(
+        select(Position.id).where(Position.id.in_(data.target_position_ids))
+    )
+    found_targets = set(targets_res.scalars().all())
+    missing_targets = sorted(set(data.target_position_ids) - found_targets)
+    if not found_targets:
+        raise HTTPException(status_code=404, detail="Должности-получатели не найдены")
+
+    # Что уже есть у получателей: пары «должность + СИЗ»
+    existing_res = await db.execute(
+        select(PositionPpeNorm.position_id, PositionPpeNorm.ppe_item_id).where(
+            PositionPpeNorm.position_id.in_(found_targets)
+        )
+    )
+    existing = {(row[0], row[1]) for row in existing_res.all()}
+
+    created = 0
+    skipped = 0
+
+    for position_id in found_targets:
+        for norm in source_norms:
+            key = (position_id, norm.ppe_item_id)
+            if key in existing:
+                skipped += 1
+                continue
+
+            db.add(
+                PositionPpeNorm(
+                    position_id=position_id,
+                    ppe_item_id=norm.ppe_item_id,
+                    wear_period_value=norm.wear_period_value,
+                    wear_period_unit=norm.wear_period_unit,
+                    quantity=norm.quantity,
+                )
+            )
+            existing.add(key)
+            created += 1
+
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка копирования норм") from exc
+
+    await broadcast(0, {"event": "norm_updated", "id": 0})
+
+    return {
+        "message": f"Скопировано норм: {created}, пропущено: {skipped}",
+        "created": created,
+        "skipped": skipped,
+        "missing_targets": missing_targets,
+    }
 
 
 @router.get("/{norm_id}", response_model=PositionPpeNormRead)
