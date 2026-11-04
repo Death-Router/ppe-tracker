@@ -47,13 +47,19 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
     # 3. Рассчитываем срок годности на основе нормы для должности сотрудника
     expiry_date = None
     if employee.position_id:
+        # Норм на пару «должность + СИЗ» может быть несколько: в матрице
+        # норм есть основное наименование и альтернативы. scalar_one_or_none
+        # тут падал бы MultipleResultsFound, поэтому берём первую.
         norm_res = await db.execute(
-            select(PositionPpeNorm).where(
+            select(PositionPpeNorm)
+            .where(
                 PositionPpeNorm.position_id == employee.position_id,
                 PositionPpeNorm.ppe_item_id == issue_in.ppe_item_id,
             )
+            .order_by(PositionPpeNorm.id)
+            .limit(1)
         )
-        norm = norm_res.scalar_one_or_none()
+        norm = norm_res.scalars().first()
         if norm:
             expiry_date = add_wear_period(
                 issue_in.issue_date, norm.wear_period_value, norm.wear_period_unit
