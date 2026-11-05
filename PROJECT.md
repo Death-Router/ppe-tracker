@@ -265,13 +265,23 @@ alembic heads                    # одна голова, цепочка цел�
 **Где что лежит** (проверено 4 ноября 2026):
 
 - `node` v26 — в PATH, `node --check` работает сразу, ставить нечего.
-- `ruff` 0.17.3 — в WSL-окружении из `(ppe-tracker)` venv, а на Windows
+- `ruff` 0.17.3 — в среде **docker** из `(ppe-tracker)` venv, а на Windows
   в `%LOCALAPPDATA%\dsh-tools\ruff.exe` (standalone-бинарник, Python не
   нужен). Версии совпадают намеренно: набор правил у ruff растёт от
   версии к версии, и разница версий даёт разный результат на одном коде.
 - Кэш ruff — `.ruff_cache/`. В `.gitignore` его добавлять не нужно:
   ruff кладёт внутрь свой `.gitignore` со звёздочкой, поэтому `git add -A`
   в `push-ppe.ps1` его не подхватит.
+
+**`.venv` в среде docker — только для линтера и IDE, приложение в нём не
+запускается.** Зависимости для запуска стоят в образе (`dockerfile` +
+`requirements.txt`), поэтому неполный venv контейнеру не мешает, но мешает
+проверкам: без `uv pip install -r requirements.txt` падает
+`from app.main import app` на `No module named 'jinja2'`. По той же причине
+версии в `requirements.txt` запинены: незапиненные пакеты
+(`jinja2`, `python-multipart`, `pandas`, `openpyxl`, `python-dateutil`,
+`itsdangerous`) давали в venv не те версии, что в работающем образе, и
+локальная проверка расходилась с контейнером.
 
 **`ruff format` в проекте не применяется.** `ruff format --check .` говорит
 «45 files would be reformatted» — код никогда не прогонялся через
@@ -350,29 +360,44 @@ Manager не переносится, запись `git:https://github.com` (по
 
 ---
 
-## Рабочая среда: home и work
+## Рабочая среда: home, work и docker
 
-Две машины, роли разделены. В переписке и документах называются так:
+Машин две, а сред, в которых идёт работа, — три. В переписке и документах
+они называются так:
 
 | Имя | Путь | Роль |
 |---|---|---|
 | **home** | `C:\projects\ppe-tracker` | правки кода, git, commit, push |
-| **work** | `C:\projects\ppe-tracker` + клон внутри WSL | то же плюс запуск: Docker в WSL, `.env`, БД, браузер |
+| **work** | `C:\projects\ppe-tracker` (Windows-клон) | то же: правки кода, git, commit, push |
+| **docker** | VS Code на work внутри WSL, `/home/vagur/projects/ppe-tracker` | запуск и проверка: `docker compose`, `alembic`, `.env`, БД, браузер |
+
+**`docker` — не третья машина, а среда запуска.** Это VS Code на work,
+подключённый к WSL (`ppe-tracker [WSL: Ubuntu]`): там лежит WSL-клон, и в
+том же WSL-дистрибутиве Docker Desktop поднимает движок с контейнерами
+`api` и `db`. Отдельное имя понадобилось потому, что «work» — это
+Windows-клон, где приложение не запущено, а «docker» — тот клон, на коде
+которого приложение действительно работает. Приглашение `(ppe-tracker)`
+в терминале этой среды — активированный `.venv` из клона.
 
 **Клон лежит по одному и тому же пути на обеих машинах**, поэтому все
 пути в этом документе к машине не привязаны. Правки можно делать на
 любой — они сходятся через GitHub: `push` на одной, `git pull` на другой.
 Раньше здесь было «home — код, work — только запуск»; на деле сессия
-ассистента бывает и на work, и правки оттуда уходят так же.
+ассистента бывает и на work, и в docker, и правки оттуда уходят так же.
 
 **Где что выполняется:**
 
 - **home** — только код и git. Ни `docker compose`, ни `alembic`: на этой
   машине нет ни Docker, ни `.env`, ни базы. Сюда `.env` и не нужен — он
-  в `.gitignore` и живёт только на work.
-- **work** — и код, и всё, что связано с запуском: `docker compose up`,
+  в `.gitignore` и живёт только в WSL-клоне.
+- **work** — Windows-клон: код и git, как на home. Docker и `.env` на
+  машине есть, но к этой копии не относятся — они принадлежат среде
+  **docker**.
+- **docker** — и код, и всё, что связано с запуском: `docker compose up`,
   `alembic upgrade head`, проверка в браузере. Docker берётся из
-  Docker Desktop в WSL, с ним работают вручную через VS Code.
+  Docker Desktop в WSL, работа идёт вручную через VS Code. Правки в `app/`
+  видны приложению сразу: каталог смонтирован в контейнер, uvicorn с
+  `--reload`.
 
 ### Две копии проекта на work
 
@@ -380,11 +405,12 @@ Manager не переносится, запись `git:https://github.com` (по
 
 | Копия | Где | Что в ней |
 |---|---|---|
-| Windows-клон | `C:\projects\ppe-tracker` | рабочее дерево для правок и git; `.env`, `.venv`, `.vscode` отсутствуют |
-| WSL-клон | `/home/vagur/projects/ppe-tracker`, открыт в VS Code как `ppe-tracker [WSL: Ubuntu]` | `.env`, `.venv`, `.vscode`, `.ruff_cache`; отсюда запускают `docker compose` |
+| Windows-клон (среда **work**) | `C:\projects\ppe-tracker` | рабочее дерево для правок и git; `.env`, `.venv`, `.vscode` отсутствуют |
+| WSL-клон (среда **docker**) | `/home/vagur/projects/ppe-tracker`, открыт в VS Code как `ppe-tracker [WSL: Ubuntu]` | `.env`, `.venv`, `.vscode`, `.ruff_cache`; отсюда запускают `docker compose` |
 
 В приглашении WSL-терминала видно `(ppe-tracker)` — это активированное
-окружение `.venv` из клона, а не отдельная копия проекта.
+окружение `.venv` из клона, а не отдельная копия проекта. Раз работа идёт
+в этой копии, в переписке она и называется средой **docker**.
 
 Копии независимы: у каждой свой `.git` и свои неотслеживаемые файлы.
 Сходятся они только через GitHub. Отсюда ловушка: **правка в
@@ -392,19 +418,21 @@ Windows-клоне не видна приложению, пока не сдел�
 WSL-клоне** — приложение работает на том коде, который лежит рядом с
 `docker-compose.yml`, а не на том, который правили.
 
-Из Windows-сессии ассистент до WSL не достаёт: `\\wsl.localhost\Ubuntu`
-отвечает «Отказано в доступе». Поэтому `git pull`, `docker compose` и
-`alembic` в WSL-клоне выполняет человек через VS Code.
+Из Windows-сессии (среды **home** и **work**) ассистент до WSL не
+достаёт: `\\wsl.localhost\Ubuntu` отвечает «Отказано в доступе». Поэтому
+`git pull`, `docker compose` и `alembic` в WSL-клоне выполняет человек
+через VS Code — либо ассистент из среды **docker**, где эти команды
+доступны напрямую.
 
 **Цикл работы:**
 
 1. Правки на той машине, где удобно, затем из `C:\projects` —
    `push-ppe.cmd` (двойной клик или `.\push-ppe.cmd -Message "..."`).
    Не `push-ppe.ps1` — почему, см. ниже.
-2. На второй машине: `git pull`, а на work при необходимости
+2. На второй машине: `git pull`, а в среде **docker** при необходимости
    `docker compose restart api` и `alembic upgrade head`.
-3. На work — ещё один `git pull` **в WSL-клоне**, иначе браузер покажет
-   старую версию.
+3. В среде **docker** — ещё один `git pull` **в WSL-клоне**, иначе браузер
+   покажет старую версию.
 
 ### Скрипт push живёт вне репозитория
 
