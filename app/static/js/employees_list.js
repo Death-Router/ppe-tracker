@@ -330,13 +330,21 @@
   const issueModalEl = document.getElementById('issueModal');
   const issueForm = document.getElementById('issue-form');
   const issueItemSelect = document.getElementById('issue-item');
-  const issueSizeInput = document.getElementById('issue-size');
+  const issueSizeSelect = document.getElementById('issue-size');
   const issueSizeHint = document.getElementById('issue-size-hint');
   const issueNormHint = document.getElementById('issue-norm-hint');
+  const issueQuantityInput = document.getElementById('issue-quantity');
+  const issueQuantityHint = document.getElementById('issue-quantity-hint');
+  const issueWarningEl = document.getElementById('issue-warning');
   const issueDateInput = document.getElementById('issue-date');
 
   let allPpeItems = null;
   let normByItem = new Map();
+
+  // Справочник размеров по размерным группам. Размер выдаваемого СИЗ — это
+  // список, а не ввод руками: ручной ввод давал «58 размер» мимо таблицы
+  // размеров, и такие значения потом не совпадали с карточкой сотрудника.
+  const sizesByGroup = new Map();
 
   // Нормы должности нужны, чтобы показать срок носки и подсказать размер
   async function loadNormsForEmployee(emp) {
@@ -362,6 +370,148 @@
   function issuedCount(itemId) {
     const issues = currentEmployee?.ppe_issues ?? [];
     return issues.filter((i) => i.ppe_item_id === itemId).length;
+  }
+
+  // Размеры размерной группы берём из справочника и запоминаем: при открытии
+  // модалки сотрудник перебирает несколько СИЗ одной группы подряд.
+  async function loadSizesForGroup(groupId) {
+    if (!sizesByGroup.has(groupId)) {
+      sizesByGroup.set(
+        groupId,
+        API.get(`/api/v1/ppe_sizes/?size_group_id=${groupId}`).catch((err) => {
+          // Ошибку не кэшируем: следующий выбор СИЗ должен повторить запрос
+          sizesByGroup.delete(groupId);
+          throw err;
+        })
+      );
+    }
+    return sizesByGroup.get(groupId);
+  }
+
+  // В справочнике размер может быть без указания пола — он подходит обоим
+  function sizesForEmployeeGender(sizes) {
+    const gender = currentEmployee?.gender ?? null;
+    return gender ? sizes.filter((s) => !s.gender || s.gender === gender) : sizes;
+  }
+
+  // Список размеров выбранного СИЗ: значения из справочника его размерной
+  // группы, а выбран по умолчанию тот, что записан в карточке сотрудника.
+  async function fillSizeOptions(item) {
+    issueSizeSelect.innerHTML = '<option value="">Загрузка…</option>';
+    issueSizeSelect.disabled = true;
+    issueSizeHint.textContent = '';
+
+    const cardSize = sizeFromCard(currentEmployee, item);
+    const group = item?.size_group ?? null;
+
+    if (!item || !item.size_group_id) {
+      issueSizeSelect.innerHTML = '<option value="">Не требуется</option>';
+      issueSizeHint.textContent = item
+        ? 'У этого СИЗ размерная группа не задана — размер не нужен'
+        : '';
+      return;
+    }
+
+    let sizes;
+    try {
+      sizes = sizesForEmployeeGender(await loadSizesForGroup(item.size_group_id));
+    } catch (err) {
+      issueSizeSelect.innerHTML = '<option value="">Не удалось загрузить</option>';
+      issueSizeHint.textContent = 'Справочник размеров недоступен — размер не выбран';
+      return;
+    }
+
+    // Размер из карточки мог быть задан до появления справочника и в него не
+    // попасть. Тогда оставляем его вариантом: иначе подстановка молча терялась
+    // и вместо своего размера сотрудник получал чужой из начала списка.
+    const values = sizes.map((s) => s.size_value);
+    if (cardSize && !values.includes(cardSize)) values.unshift(cardSize);
+
+    if (!values.length) {
+      issueSizeSelect.innerHTML = '<option value="">В группе нет размеров</option>';
+      issueSizeHint.textContent = group
+        ? `В группе «${group.name}» не заданы размеры — заполните справочник размеров`
+        : 'В размерной группе этого СИЗ не заданы размеры';
+      return;
+    }
+
+    issueSizeSelect.disabled = false;
+    issueSizeSelect.innerHTML = '<option value="">Размер...</option>' + values.map((value) => {
+      const size = sizes.find((s) => s.size_value === value);
+      const genderMark = size?.gender === 'М' ? ' (М)' : size?.gender === 'Ж' ? ' (Ж)' : '';
+      const fromCard = value === cardSize;
+      return `<option value="${escapeHtml(value)}" ${fromCard ? 'selected' : ''}>` +
+        `${escapeHtml(value)}${genderMark}${fromCard ? ' — из карточки' : ''}</option>`;
+    }).join('');
+
+    if (cardSize) {
+      issueSizeHint.textContent = group
+        ? `Подставлено из карточки сотрудника (группа «${group.name}»)`
+        : 'Подставлено из карточки сотрудника';
+    } else {
+      issueSizeHint.textContent = group
+        ? `В карточке нет размера для группы «${group.name}» — выберите из списка`
+        : 'В карточке не указан размер — выберите из списка';
+    }
+  }
+
+  // Сравнение количеств: «1 пара» и «1» — одно и то же, поэтому сравниваем
+  // первое число. Если чисел нет («комплект») — сравниваем строки целиком.
+  function firstNumber(raw) {
+    const match = String(raw ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
+  // Предупреждения о расхождении выдачи с карточкой и нормой. Показываем, но
+  // не запрещаем выдачу: обоснованное отклонение от нормы — рабочая ситуация,
+  // а молчаливая запись «чего-нибудь» — ошибка учёта.
+  function updateIssueWarnings() {
+    if (!issueWarningEl) return;
+
+    const itemId = Number(issueItemSelect?.value);
+    const item = allPpeItems?.find((i) => i.id === itemId);
+    const warnings = [];
+
+    if (item) {
+      const groupName = item.size_group?.name;
+      const cardSize = sizeFromCard(currentEmployee, item);
+      const chosenSize = issueSizeSelect?.value?.trim() ?? '';
+
+      if (item.size_group_id && !cardSize) {
+        warnings.push(groupName
+          ? `В карточке сотрудника не указан размер для группы «${groupName}».`
+          : 'В карточке сотрудника не указан размер для этой группы.');
+      } else if (cardSize && chosenSize && chosenSize !== cardSize) {
+        warnings.push(
+          `Размер «${chosenSize}» не совпадает с размером из карточки сотрудника («${cardSize}»).`
+        );
+      }
+
+      const norm = normByItem.get(itemId);
+      const quantity = issueQuantityInput?.value?.trim() ?? '';
+      if (norm && quantity) {
+        const normQuantity = String(norm.quantity ?? '1').trim();
+        const left = firstNumber(quantity);
+        const right = firstNumber(normQuantity);
+        const same = left !== null && right !== null
+          ? left === right
+          : quantity === normQuantity;
+        if (!same) {
+          warnings.push(
+            `Количество «${quantity}» не совпадает с нормой для должности («${normQuantity}»).`
+          );
+        }
+      }
+    }
+
+    if (!warnings.length) {
+      issueWarningEl.classList.add('d-none');
+      issueWarningEl.innerHTML = '';
+      return;
+    }
+
+    issueWarningEl.classList.remove('d-none');
+    issueWarningEl.innerHTML = warnings.map((w) => `<div>${escapeHtml(w)}</div>`).join('');
   }
 
   async function openIssueModal() {
@@ -393,6 +543,13 @@
       issueItemSelect.innerHTML = `<option value="">Нет норм: ${escapeHtml(reason)}</option>`;
       issueItemSelect.disabled = true;
       document.getElementById('issue-submit').disabled = true;
+      // Поля выдачи остаются пустыми: подставлять размер и количество не из чего
+      issueSizeSelect.innerHTML = '<option value="">Нет норм</option>';
+      issueSizeSelect.disabled = true;
+      issueSizeHint.textContent = '';
+      issueQuantityHint.textContent = '';
+      issueNormHint.textContent = '';
+      updateIssueWarnings();
       bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
       return;
     }
@@ -409,44 +566,55 @@
       }).join('');
 
     issueForm.reset();
-    issueForm.elements['quantity'].value = '1';
+    issueQuantityInput.value = '1';
+    issueQuantityHint.textContent = '';
     issueDateInput.value = new Date().toISOString().split('T')[0];
-    issueSizeInput.value = '';
+    issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ</option>';
+    issueSizeSelect.disabled = true;
     issueSizeHint.textContent = '';
     issueNormHint.textContent = '';
+    updateIssueWarnings();
 
     bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
   }
 
-  // При выборе СИЗ подставляем размер из карточки и показываем норму
-  issueItemSelect?.addEventListener('change', () => {
+  // При выборе СИЗ: размер — списком из справочника с подстановкой размера из
+  // карточки сотрудника, количество — из нормы выдачи для должности.
+  issueItemSelect?.addEventListener('change', async () => {
     const itemId = Number(issueItemSelect.value);
     const item = allPpeItems?.find((i) => i.id === itemId);
-    const emp = currentEmployee;
-
-    issueSizeInput.value = '';
-    issueSizeHint.textContent = '';
-    issueNormHint.textContent = '';
-
-    if (!item) return;
-
-    const cardSize = sizeFromCard(emp, item);
-    if (cardSize) {
-      issueSizeInput.value = cardSize;
-      issueSizeHint.textContent = 'Подставлено из карточки сотрудника';
-    } else if (item.size_group_id) {
-      issueSizeHint.textContent = 'В карточке не указан размер для этой группы — введите вручную';
-    }
-    else {
-      issueSizeHint.textContent = 'У этого СИЗ размерная группа не задана';
-    }
-
     const norm = normByItem.get(itemId);
-    if (norm) {
-      issueNormHint.textContent =
-        `По норме: ${norm.wear_period_value} ${norm.wear_period_unit}, количество ${norm.quantity}`;
+
+    issueNormHint.textContent = '';
+    issueQuantityHint.textContent = '';
+
+    if (!item) {
+      issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ</option>';
+      issueSizeSelect.disabled = true;
+      issueSizeHint.textContent = '';
+      updateIssueWarnings();
+      return;
     }
+
+    if (norm) {
+      const normQuantity = String(norm.quantity ?? '1').trim();
+      issueNormHint.textContent =
+        `По норме: ${norm.wear_period_value} ${norm.wear_period_unit}, количество ${normQuantity}`;
+      issueQuantityInput.value = normQuantity;
+      issueQuantityHint.textContent = 'Подставлено из нормы выдачи для должности';
+    } else {
+      issueQuantityHint.textContent = 'Для должности норма не задана — количество не подставлено';
+    }
+
+    await fillSizeOptions(item);
+    updateIssueWarnings();
+    window.FormValidation.refresh(issueForm);
   });
+
+  // Размер и количество после подстановки можно изменить — тогда предупреждение
+  // должно появиться или исчезнуть сразу, без повторного выбора СИЗ
+  issueSizeSelect?.addEventListener('change', updateIssueWarnings);
+  issueQuantityInput?.addEventListener('input', updateIssueWarnings);
 
   issueForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -457,7 +625,7 @@
       ppe_item_id: Number(issueItemSelect.value),
       issue_date: issueDateInput.value,
       quantity: issueForm.elements['quantity'].value.trim() || '1',
-      size_value: issueSizeInput.value.trim() || null,
+      size_value: issueSizeSelect.value.trim() || null,
     };
 
     if (!payload.ppe_item_id) {

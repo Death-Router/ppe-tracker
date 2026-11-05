@@ -187,6 +187,11 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                 </div>
                 <div class="modal-body">
+                    <!-- Предупреждение о расхождении с карточкой и нормой.
+                         Выдачу не блокирует: выдать «не по норме» иногда нужно
+                         осознанно, поэтому это предупреждение, а не ошибка. -->
+                    <div id="issue-warning" class="alert alert-warning d-none" role="alert"></div>
+
                     <div class="mb-3">
                         <label class="form-label" for="issue-item">Наименование СИЗ <span class="req">*</span></label>
                         <select class="form-select" id="issue-item" name="ppe_item_id" required>
@@ -197,12 +202,15 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label" for="issue-size">Размер</label>
-                            <input type="text" class="form-control" id="issue-size" name="size_value" maxlength="50">
+                            <select class="form-select" id="issue-size" name="size_value">
+                                <option value="">Сначала выберите СИЗ</option>
+                            </select>
                             <div class="form-text" id="issue-size-hint"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="issue-quantity">Количество <span class="req">*</span></label>
                             <input type="text" class="form-control" id="issue-quantity" name="quantity" value="1" required maxlength="50">
+                            <div class="form-text" id="issue-quantity-hint"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="issue-date">Дата выдачи <span class="req">*</span></label>
