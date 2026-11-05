@@ -8,6 +8,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.position import Position
     from app.models.ppe_item import PpeItem
+    from app.models.typical_norm import TypicalNorm
 
 class PositionPpeNorm(Base):
     __tablename__ = "position_ppe_norms"
@@ -29,7 +30,15 @@ class PositionPpeNorm(Base):
     wear_period_unit: Mapped[str] = mapped_column(String(20), comment="год, месяц, до износа")
     quantity: Mapped[str] = mapped_column(String(50), default="1")
 
+    # Пункт типовых отраслевых норм — графа «Пункт Норм» личной карточки.
+    # RESTRICT: пункт, на который ссылаются нормы, удалять нельзя, иначе в
+    # карточке молча пропадёт основание выдачи
+    typical_norm_id: Mapped[int | None] = mapped_column(
+        ForeignKey("typical_norms.id", ondelete="RESTRICT"), nullable=True
+    )
+
     version: Mapped[int] = mapped_column(default=1, server_default="1", nullable=False)
 
     position: Mapped["Position"] = relationship(back_populates="ppe_norms")
     ppe_item: Mapped["PpeItem"] = relationship(back_populates="position_norms")
+    typical_norm: Mapped["TypicalNorm | None"] = relationship(back_populates="norms")

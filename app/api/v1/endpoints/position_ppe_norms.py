@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.position import Position
 from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.ppe_item import PpeItem
+from app.models.typical_norm import TypicalNorm
 from app.schemas.position_ppe_norm import (
     PositionPpeNormCreate,
     PositionPpeNormRead,
@@ -27,6 +28,7 @@ def norm_options():
         selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.function),
         selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.size_group),
         selectinload(PositionPpeNorm.ppe_item).selectinload(PpeItem.unit),
+        selectinload(PositionPpeNorm.typical_norm),
         selectinload(PositionPpeNorm.position).selectinload(Position.department)
     ]
 
@@ -37,6 +39,22 @@ async def get_norm_with_relations(db: AsyncSession, norm_id: int) -> PositionPpe
     )
     # scalar_one() падал бы NoResultFound (500) вместо 404
     return result.scalar_one_or_none()
+
+
+async def ensure_typical_norm_exists(
+    db: AsyncSession, typical_norm_id: int | None
+) -> None:
+    """Пункт норм выбирается из справочника — проверяем, что он ещё существует.
+
+    Без этого удалённый в другой вкладке пункт давал бы IntegrityError и
+    непонятное «не удалось сохранить».
+    """
+    if typical_norm_id is None:
+        return
+
+    result = await db.execute(select(TypicalNorm.id).where(TypicalNorm.id == typical_norm_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Пункт типовых норм не найден")
 
 
 class CopyNormsRequest(BaseModel):
@@ -55,6 +73,8 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
     item_res = await db.execute(select(PpeItem).where(PpeItem.id == norm_in.ppe_item_id))
     if not item_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
+
+    await ensure_typical_norm_exists(db, norm_in.typical_norm_id)
 
     db_norm = PositionPpeNorm(**norm_in.model_dump())
     db.add(db_norm)
@@ -238,6 +258,9 @@ async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db))
                 PositionPpeNorm(
                     position_id=position_id,
                     ppe_item_id=norm.ppe_item_id,
+                    # Пункт норм копируем вместе с нормой: у должностей из
+                    # одного приложения основание выдачи то же самое
+                    typical_norm_id=norm.typical_norm_id,
                     wear_period_value=norm.wear_period_value,
                     wear_period_unit=norm.wear_period_unit,
                     quantity=norm.quantity,
@@ -281,6 +304,9 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
         raise HTTPException(status_code=409, detail="Данные устарели")
     
     update_data = norm_in.model_dump(exclude_unset=True, exclude={"version"})
+    if "typical_norm_id" in update_data:
+        await ensure_typical_norm_exists(db, update_data["typical_norm_id"])
+
     for field, value in update_data.items():
         setattr(db_norm, field, value)
     db_norm.version += 1

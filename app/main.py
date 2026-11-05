@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     ppe_items,
     ppe_size_groups,
     ppe_sizes,
+    typical_norms,
     units,
     users,
     ws,
@@ -94,6 +95,7 @@ PROTECTED_ROUTERS = (
     units.router,
     ppe_functions.router,
     ppe_size_groups.router,
+    typical_norms.router,
     users.router,
 )
 

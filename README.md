@@ -59,6 +59,7 @@ uvicorn app.main:app --reload
 | Подразделения     | `/api/v1/departments`          |
 | Должности         | `/api/v1/positions`            |
 | Нормы выдачи      | `/api/v1/position_ppe_norms`   |
+| Пункты норм       | `/api/v1/typical_norms`        |
 | Выдачи СИЗ        | `/api/v1/employee_ppe_issues`  |
 | Наименования СИЗ  | `/api/v1/ppe_items`            |
 | Импорт / экспорт  | `/api/v1/import`, `/api/v1/export` |

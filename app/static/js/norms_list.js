@@ -14,6 +14,17 @@
   const itemIdInput = document.getElementById('norm-item-id');
   const itemsDatalist = document.getElementById('ppe-items-list');
   const createForm = document.getElementById('create-norm-form');
+  const modalTypicalNorm = document.getElementById('modal-typical-norm');
+
+  // Справочник типовых отраслевых норм (графа «Пункт Норм» карточки)
+  const typicalModalEl = document.getElementById('typicalNormsModal');
+  const typicalForm = document.getElementById('typical-norm-form');
+  const typicalTableBody = document.querySelector('#typical-norms-table tbody');
+  const typicalSubmit = document.getElementById('typical-norm-submit');
+  const typicalCancel = document.getElementById('typical-norm-cancel');
+
+  let allTypicalNorms = [];
+  let editingTypicalId = null;
 
   let allNorms = [];
   let allPositions = [];
@@ -130,9 +141,12 @@
           }).join('');
       }
 
+      // Справочник пунктов норм: и в модалке нормы, и в своей таблице
+      await loadTypicalNorms();
+
       await loadPage(currentPage);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
@@ -181,7 +195,7 @@
 
   function renderTable(norms) {
     if (!norms.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="state">Норм пока нет</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="state">Норм пока нет</td></tr>`;
       return;
     }
     tbody.innerHTML = norms.map(n => {
@@ -193,6 +207,8 @@
       // Длинный путь обрезаем спереди: важнее конец — сама должность
       const posShort = truncateStart(posStr, 60);
       const itemName = n.ppe_item?.name ?? '—';
+      // Пункт норм печатается в карточке; пусто — значит норма без основания
+      const clause = n.typical_norm?.clause ?? '—';
       return `
       <tr data-norm-id="${n.id}" class="${rowClass}">
         <td>
@@ -200,6 +216,7 @@
         </td>
         <td title="${escapeHtml(posStr)}"><strong>${escapeHtml(posShort)}</strong></td>
         <td title="${escapeHtml(itemName)}">${escapeHtml(itemName)}</td>
+        <td class="cell-mono">${escapeHtml(clause)}</td>
         <td class="col-actions">
           <button class="btn btn-icon" data-action="edit" data-id="${n.id}" title="Редактировать"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-icon btn-icon--danger" data-action="delete" data-id="${n.id}" title="Удалить"><i class="bi bi-trash"></i></button>
@@ -282,6 +299,7 @@
     itemIdInput.value = '';
     modalDepartment.value = '';
     modalPosition.innerHTML = '<option value="">Сначала выберите подразделение</option>';
+    if (modalTypicalNorm) modalTypicalNorm.value = '';
     // Раньше модалку открывал data-bs-toggle на кнопке, скрипт только
     // заполнял поля. Атрибут убран из-за двойного backdrop — теперь
     // показывать обязан скрипт.
@@ -320,6 +338,8 @@
       createForm.elements['wear_period_value'].value = norm.wear_period_value;
       createForm.elements['wear_period_unit'].value = norm.wear_period_unit;
       createForm.elements['quantity'].value = norm.quantity;
+      // Пункт норм связан со справочником; null — «не указан»
+      if (modalTypicalNorm) modalTypicalNorm.value = norm.typical_norm_id ?? '';
 
       bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (err) {
@@ -344,6 +364,10 @@
     const payload = {
       position_id: Number(modalPosition.value),
       ppe_item_id: Number(itemIdInput.value),
+      // Пустой пункт — это null: в карточке графа останется пустой
+      typical_norm_id: modalTypicalNorm && modalTypicalNorm.value
+        ? Number(modalTypicalNorm.value)
+        : null,
       wear_period_value: createForm.elements['wear_period_value'].value.trim(),
       wear_period_unit: createForm.elements['wear_period_unit'].value,
       quantity: createForm.elements['quantity'].value.trim()
@@ -514,6 +538,130 @@
     } finally {
       copySubmit.disabled = false;
     }
+  });
+
+  // --- Справочник типовых отраслевых норм -------------------------------
+  async function loadTypicalNorms() {
+    allTypicalNorms = await API.get('/api/v1/typical_norms');
+    fillTypicalNormSelect();
+    renderTypicalNorms();
+  }
+
+  function fillTypicalNormSelect() {
+    if (!modalTypicalNorm) return;
+
+    // Выбранное значение не теряем: список перерисовывается после каждой правки
+    const current = modalTypicalNorm.value;
+    modalTypicalNorm.innerHTML = '<option value="">Не указан</option>' +
+      allTypicalNorms.map((n) => {
+        const tail = n.description.length > 60 ? `${n.description.slice(0, 60)}…` : n.description;
+        return `<option value="${n.id}">${escapeHtml(n.clause)} — ${escapeHtml(tail)}</option>`;
+      }).join('');
+
+    if (current) modalTypicalNorm.value = current;
+  }
+
+  function renderTypicalNorms() {
+    if (!typicalTableBody) return;
+
+    typicalTableBody.innerHTML = allTypicalNorms.length
+      ? allTypicalNorms.map((n) => `<tr data-typical-id="${n.id}">
+          <td class="cell-mono">${escapeHtml(n.clause)}</td>
+          <td>${escapeHtml(n.description)}</td>
+          <td class="col-actions">
+            <button class="btn btn-icon" data-typical-action="edit" data-id="${n.id}"
+                    title="Изменить"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-icon btn-icon--danger" data-typical-action="delete" data-id="${n.id}"
+                    title="Удалить"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" class="state">Справочник пуст — добавьте пункты приложения к Положению</td></tr>';
+  }
+
+  function resetTypicalForm() {
+    editingTypicalId = null;
+    typicalForm?.reset();
+    if (typicalSubmit) typicalSubmit.textContent = 'Добавить';
+    typicalCancel?.classList.add('d-none');
+    if (typicalForm) window.FormValidation.refresh(typicalForm);
+  }
+
+  typicalTableBody?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-typical-action]');
+    if (!btn) return;
+
+    const id = Number(btn.dataset.id);
+    const norm = allTypicalNorms.find((n) => n.id === id);
+    if (!norm) return;
+
+    if (btn.dataset.typicalAction === 'edit') {
+      editingTypicalId = id;
+      typicalForm.elements['clause'].value = norm.clause;
+      typicalForm.elements['description'].value = norm.description;
+      if (typicalSubmit) typicalSubmit.textContent = 'Сохранить';
+      typicalCancel?.classList.remove('d-none');
+      typicalForm.elements['clause'].focus();
+      return;
+    }
+
+    if (!confirm(`Удалить пункт «${norm.clause}»?`)) return;
+    try {
+      await API.request(`/api/v1/typical_norms/${id}`, { method: 'DELETE' });
+      window.showToast('Пункт удалён', 'success');
+      await loadTypicalNorms();
+      // В таблице норм пункт тоже показывается — перечитываем страницу
+      await loadPage(currentPage);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  });
+
+  typicalCancel?.addEventListener('click', resetTypicalForm);
+
+  typicalForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const payload = {
+      clause: typicalForm.elements['clause'].value.trim(),
+      description: typicalForm.elements['description'].value.trim(),
+    };
+    if (!payload.clause || !payload.description) {
+      window.showToast('Заполните пункт и описание', 'danger');
+      return;
+    }
+
+    typicalSubmit.disabled = true;
+    try {
+      if (editingTypicalId) {
+        // Версию берём из загруженного справочника — оптимистичная блокировка
+        const current = allTypicalNorms.find((n) => n.id === editingTypicalId);
+        payload.version = current?.version ?? 1;
+        await API.put(`/api/v1/typical_norms/${editingTypicalId}`, payload);
+        window.showToast('Пункт обновлён', 'success');
+      } else {
+        await API.post('/api/v1/typical_norms/', payload);
+        window.showToast('Пункт добавлен', 'success');
+      }
+
+      resetTypicalForm();
+      await loadTypicalNorms();
+      await loadPage(currentPage);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      typicalSubmit.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-typical-norms')?.addEventListener('click', async () => {
+    resetTypicalForm();
+    try {
+      await loadTypicalNorms();
+    } catch (err) {
+      window.showToast(`Ошибка загрузки справочника: ${err.message}`, 'danger');
+      return;
+    }
+    bootstrap.Modal.getOrCreateInstance(typicalModalEl).show();
   });
 
   WS.subscribe((data) => {

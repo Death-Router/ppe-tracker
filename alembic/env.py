@@ -29,6 +29,7 @@ from app.models.ppe_function import PpeFunction  # noqa: F401
 from app.models.ppe_item import PpeItem  # noqa: F401
 from app.models.ppe_size import PpeSize  # noqa: F401
 from app.models.ppe_size_group import PpeSizeGroup  # noqa: F401
+from app.models.typical_norm import TypicalNorm  # noqa: F401
 from app.models.unit import Unit  # noqa: F401
 from app.models.user import User  # noqa: F401
 

@@ -8,6 +8,11 @@
 
     <div class="page-head__spacer"></div>
 
+    <button class="btn btn-sm btn-brand" id="btn-typical-norms"
+            title="Справочник типовых отраслевых норм (пункты приложения к Положению)">
+        <i class="bi bi-journal-text"></i> Типовые нормы
+    </button>
+
     <button class="btn btn-sm btn-brand" id="btn-copy-norms" title="Скопировать нормы с другой должности">
         <i class="bi bi-files"></i> Скопировать нормы
     </button>
@@ -40,11 +45,12 @@
                 <th class="col-check"><input type="checkbox" id="select-all" aria-label="Выбрать все"></th>
                 <th>Подразделение / Должность</th>
                 <th>СИЗ</th>
+                <th>Пункт норм</th>
                 <th class="col-actions">Действия</th>
             </tr>
             </thead>
             <tbody>
-            <tr><td colspan="4" class="state">Загрузка…</td></tr>
+            <tr><td colspan="5" class="state">Загрузка…</td></tr>
             </tbody>
         </table>
     </div>
@@ -79,6 +85,15 @@
                                placeholder="Начните вводить название..." required autocomplete="off">
                         <datalist id="ppe-items-list"></datalist>
                         <input type="hidden" name="ppe_item_id" id="norm-item-id">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="modal-typical-norm">Пункт норм</label>
+                        <select class="form-select" id="modal-typical-norm" name="typical_norm_id">
+                            <option value="">Не указан</option>
+                        </select>
+                        <div class="form-text">
+                            Из справочника типовых отраслевых норм — печатается в графе «Пункт Норм» карточки
+                        </div>
                     </div>
                     <div class="row g-3">
                         <div class="col-6">
@@ -137,6 +152,57 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
                 <button type="button" class="btn btn-brand" id="copy-submit">Скопировать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка справочника типовых отраслевых норм.
+     Форма и таблица в одном окне: вложенная модалка дала бы двойной backdrop
+     (см. ловушку про data-bs-toggle в PROJECT.md). -->
+<div class="modal fade" id="typicalNormsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Типовые отраслевые нормы</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <form id="typical-norm-form" data-validate="true">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label" for="typical-norm-clause">Пункт нормы <span class="req">*</span></label>
+                            <input class="form-control" id="typical-norm-clause" name="clause"
+                                   required maxlength="50" placeholder="Например, п. 4">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" for="typical-norm-description">Описание <span class="req">*</span></label>
+                            <input class="form-control" id="typical-norm-description" name="description"
+                                   required maxlength="500" placeholder="Что предусмотрено пунктом">
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="button" class="btn btn-cancel d-none" id="typical-norm-cancel">
+                            Отменить правку
+                        </button>
+                        <button type="submit" class="btn btn-brand" id="typical-norm-submit">Добавить</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive mt-4">
+                    <table class="data-table data-table--dense" id="typical-norms-table">
+                        <thead>
+                        <tr>
+                            <th class="col-narrow">Пункт</th>
+                            <th>Описание</th>
+                            <th class="col-actions">Действия</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr><td colspan="3" class="state">Загрузка…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
