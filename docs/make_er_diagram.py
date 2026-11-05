@@ -27,6 +27,7 @@ PROJECT_ROOT = __file__.rsplit("/docs/", 1)[0]
 TEMPLATE = f"{PROJECT_ROOT}/docs/er_template.vsdx"
 OUTPUT = f"{PROJECT_ROOT}/docs/ppe-tracker-db-schema.vsdx"
 MERMAID = f"{PROJECT_ROOT}/docs/db-schema.md"
+PDF = f"{PROJECT_ROOT}/docs/ppe-tracker-db-schema.pdf"
 PAGE_NAME = "Схема БД"
 
 # Размер страницы и геометрия таблиц (дюймы — единица Visio по умолчанию)
@@ -400,6 +401,199 @@ def connector(shape_no: int, x1: float, y1: float, x2: float, y2: float) -> str:
         "</Shape>"
     )
 
+# ---------------------------------------------------------------- PDF-схема
+
+# Visio в этой среде нет, поэтому основной человекочитаемый вид — PDF:
+# координаты задаём сами, рендер предсказуем. Шрифты DejaVu — с кириллицей,
+# моноширинный нужен для ровных колонок в таблицах.
+FONT_DIR = "/usr/share/fonts/truetype/dejavu"
+FONTS = {
+    "text": f"{FONT_DIR}/DejaVuSans.ttf",
+    "bold": f"{FONT_DIR}/DejaVuSans-Bold.ttf",
+    "mono": f"{FONT_DIR}/DejaVuSansMono.ttf",
+}
+
+
+def register_fonts() -> None:
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    for name, path in FONTS.items():
+        pdfmetrics.registerFont(TTFont(name, path))
+
+
+def pdf_boxes(tables: dict[str, Table]) -> dict[str, tuple[float, float, float, float]]:
+    """Прямоугольники таблиц: (лево, верх, ширина, высота) в дюймах сверху."""
+    return {name: (LAYOUT[name][0], LAYOUT[name][1], BOX_W, table.height)
+            for name, table in tables.items()}
+
+
+def link_path(child: tuple[float, float, float, float],
+              parent: tuple[float, float, float, float],
+              offset: float = 0.0) -> list[tuple[float, float, float, float]]:
+    """Ортогональный маршрут связи от дочерней таблицы к родительской.
+
+    Три правила, без которых схема читается плохо:
+    * связи соседних колонок идут напрямую через зазор между ними;
+    * всё остальное — по «шине» сбоку своей колонки, иначе линия проходит
+      сквозь таблицы, стоящие между (например, users -> departments через
+      positions);
+    * самоссылка (departments.parent_id) рисуется петлёй, а не прикидывается
+      связью с соседней таблицей.
+    """
+    cx, ctop, cw, ch = child
+    px, ptop, pw, ph = parent
+
+    # Самоссылка: петля у правого края таблицы
+    if abs(cx - px) < 0.01 and abs(ctop - ptop) < 0.01:
+        edge = cx + cw
+        y_out = ctop + ch * 0.28
+        y_in = ctop + ch * 0.72
+        return [(edge, y_out, edge + 0.45, y_out),
+                (edge + 0.45, y_out, edge + 0.45, y_in),
+                (edge + 0.45, y_in, edge, y_in)]
+
+    # Соседние колонки: короткий переход через зазор
+    gap: float | None = None
+    if px >= cx + cw:
+        gap = px - (cx + cw)
+    elif px + pw <= cx:
+        gap = cx - (px + pw)
+
+    y_child = ctop + ch / 2
+    y_parent = ptop + ph / 2
+
+    if gap is not None and gap <= 1.2:
+        if px >= cx + cw:
+            mid = (cx + cw + px) / 2
+            return [(cx + cw, y_child, mid, y_child),
+                    (mid, y_child, mid, y_parent),
+                    (mid, y_parent, px, y_parent)]
+        mid = (cx + px + pw) / 2
+        return [(cx, y_child, mid, y_child),
+                (mid, y_child, mid, y_parent),
+                (mid, y_parent, px + pw, y_parent)]
+
+    # Остальное — по шине сбоку колонки
+    if cx + cw / 2 > PAGE_W / 2:
+        bus = cx + cw + 0.22 + offset
+        start_x = cx + cw
+    else:
+        bus = cx - 0.22 - offset
+        start_x = cx
+
+    if bus < px:
+        end_x = px
+    elif bus > px + pw:
+        end_x = px + pw
+    else:
+        end_x = px if bus < cx else px + pw
+
+    return [(start_x, y_child, bus, y_child),
+            (bus, y_child, bus, y_parent),
+            (bus, y_parent, end_x, y_parent)]
+
+def build_pdf(tables: dict[str, Table], relations: list[tuple[str, str, str, str]]) -> None:
+    """Рисует схему в PDF: связи под таблицами, координаты — из LAYOUT."""
+    import math
+
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfgen import canvas
+
+    register_fonts()
+
+    width_pt, height_pt = PAGE_W * 72, PAGE_H * 72
+    pdf = canvas.Canvas(PDF, pagesize=(width_pt, height_pt))
+    pdf.setTitle("PPE Tracker — схема базы данных")
+
+    def y(top: float) -> float:
+        """Перевод «расстояния сверху» в координату PDF (Y растёт вверх)."""
+        return height_pt - top * 72
+
+    def box(left: float, top: float, w: float, h: float, fill: str, stroke: str) -> None:
+        pdf.setFillColor(HexColor(fill))
+        pdf.setStrokeColor(HexColor(stroke))
+        pdf.setLineWidth(0.7)
+        pdf.roundRect(left * 72, y(top + h), w * 72, h * 72, 3, stroke=1, fill=1)
+
+    def text(x: float, top: float, value: str, font: str, size: float,
+             color: str = INK, align: str = "left") -> None:
+        pdf.setFillColor(HexColor(color))
+        pdf.setFont(font, size)
+        if align == "center":
+            pdf.drawCentredString(x * 72, y(top), value)
+        else:
+            pdf.drawString(x * 72, y(top), value)
+
+    def polyline(segments: list[tuple[float, float, float, float]]) -> None:
+        pdf.setStrokeColor(HexColor(ACCENT))
+        pdf.setLineWidth(1.1)
+        for x1, y1, x2, y2 in segments:
+            pdf.line(x1 * 72, y(y1), x2 * 72, y(y2))
+
+        # Стрелка на последнем сегменте — у родительской таблицы
+        x1, y1, x2, y2 = segments[-1]
+        angle = math.atan2(-(y2 - y1), x2 - x1)
+        for delta in (-0.42, 0.42):
+            pdf.line(x2 * 72, y(y2),
+                     x2 * 72 - 5.5 * math.cos(angle + delta),
+                     y(y2) + 5.5 * math.sin(angle + delta))
+
+    boxes = pdf_boxes(tables)
+
+    # 1. Связи первыми: таблицы рисуются поверх и закрывают пересечения
+    for index, (child, _child_col, parent, _parent_col) in enumerate(relations):
+        # Небольшой разброс шин, чтобы совпадающие маршруты не слипались
+        offset = 0.07 * (index % 4)
+        polyline(link_path(boxes[child], boxes[parent], offset))
+
+    # 2. Таблицы
+    for name, table in tables.items():
+        left, top, w, h = boxes[name]
+
+        box(left, top, w, HEADER_H, BRAND, BRAND)
+        # 0.04 дюйма ≈ 2,9 pt: смещение baseline внутри шапки
+        text(left + w / 2, top + HEADER_H / 2 + 0.04,
+             TABLE_TITLES.get(name, name), "bold", 7.6, "#FFFFFF", "center")
+
+        body_top = top + HEADER_H
+        box(left, body_top, w, h - HEADER_H, "#FFFFFF", LINE)
+
+        pdf.setFillColor(HexColor(INK))
+        pdf.setFont("mono", 6.4)
+        text_object = pdf.beginText((left + 0.07) * 72, y(body_top + 0.13))
+        text_object.setLeading(8.4)
+        for column in table.columns:
+            text_object.textLine(column_line(column).rstrip())
+        pdf.drawText(text_object)
+
+    # 3. Заголовок и легенда (рисуются последними — ничего не перекрывают)
+    box(0.5, 0.30, 9.0, 0.42, BRAND, BRAND)
+    text(0.62, 0.58, "PPE Tracker — схема базы данных", "bold", 14, "#FFFFFF")
+
+    text(0.5, 0.95,
+         f"PostgreSQL 16 · таблиц: {len(tables)} · связей: {len(relations)} · "
+         f"сгенерировано из information_schema {date.today().strftime('%d.%m.%Y')}",
+         "text", 8, INK)
+
+    box(10.4, 0.30, 8.5, 0.74, "#FFFFFF", LINE)
+    legend = [
+        "PK — первичный ключ, U — уникальное поле, NN — NOT NULL",
+        "→ в поле — внешний ключ и правило ON DELETE",
+        "Стрелка ведёт от дочерней таблицы к родительской",
+    ]
+    pdf.setFillColor(HexColor(INK))
+    pdf.setFont("text", 7.4)
+    text_object = pdf.beginText(10.55 * 72, y(0.52))
+    text_object.setLeading(9.4)
+    for line in legend:
+        text_object.textLine(line)
+    pdf.drawText(text_object)
+
+    pdf.showPage()
+    pdf.save()
+
+
 def build_mermaid(tables: dict[str, Table], relations: list[tuple[str, str, str, str]]) -> str:
     """Текстовое представление схемы: видно в браузере и диффится в git."""
     lines = [
@@ -536,6 +730,7 @@ def main() -> int:
     ET.fromstring(page_xml)
 
     build_package(page_xml)
+    build_pdf(tables, relations)
 
     with open(MERMAID, "w", encoding="utf-8") as mermaid_file:
         mermaid_file.write(build_mermaid(tables, relations))
@@ -548,6 +743,7 @@ def main() -> int:
     print(
         f"{OUTPUT}: таблиц {len(tables)}, связей {len(relations)}, фигур {len(shapes)}"
     )
+    print(f"{PDF}: та же схема в PDF (предсказуемый рендер, без Visio)")
     print(f"{MERMAID}: та же схема текстом (mermaid) для просмотра в браузере")
     return 0
 
