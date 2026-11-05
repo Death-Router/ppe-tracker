@@ -295,7 +295,13 @@ alembic heads                    # одна голова, цепочка цел�
 
 **Где что лежит** (проверено 4 ноября 2026):
 
-- `node` v26 — в PATH, `node --check` работает сразу, ставить нечего.
+- `node` v26 — в PATH на Windows, `node --check` работает сразу, ставить
+  нечего. **В среде docker (WSL) node нет**: проверять синтаксис JS можно
+  только Windows-нодой (`/mnt/c/Program Files/nodejs/node.exe`), и она не
+  читает файлы по UNC-пути WSL — падает с
+  `Cannot read package config \\?\UNC\wsl.localhost\package.json`. Поэтому
+  файл копируют в Windows-каталог (например, `C:\Users\Public\ppe-js-check`)
+  и проверяют там.
 - `ruff` 0.17.3 — в среде **docker** из `(ppe-tracker)` venv, а на Windows
   в `%LOCALAPPDATA%\dsh-tools\ruff.exe` (standalone-бинарник, Python не
   нужен). Версии совпадают намеренно: набор правил у ruff растёт от
