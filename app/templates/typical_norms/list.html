@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_tabs.html" import norms_tabs %}
+{% block content %}
+{# Вкладки раздела «Нормы выдачи» #}
+{{ norms_tabs('typical') }}
+
+<div class="page-head">
+    <button class="btn btn-add" id="btn-create" title="Добавить пункт">
+        <i class="bi bi-plus-lg"></i>
+    </button>
+    <h1 class="page-title">Типовые нормы</h1>
+</div>
+
+<div class="filter-bar">
+    <div class="input-group filter-bar__search">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="search-input"
+               placeholder="Поиск по пункту или описанию...">
+    </div>
+</div>
+
+<div class="panel">
+    <div class="table-responsive">
+        <table class="data-table data-table--dense" id="typical-norms-table">
+            <thead>
+            <tr>
+                <th class="col-narrow">Пункт</th>
+                <th>Описание</th>
+                <th class="col-actions">Действия</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr><td colspan="3" class="state">Загрузка…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Модалка создания/редактирования пункта -->
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="create-form" data-validate="true">
+                <div class="modal-header">
+                    <h5 class="modal-title">Новый пункт норм</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Пункт нормы <span class="req">*</span></label>
+                        <input type="text" class="form-control" name="clause" required maxlength="50"
+                               placeholder="Например, п. 4">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание <span class="req">*</span></label>
+                        <textarea class="form-control" name="description" required maxlength="500" rows="3"
+                                  placeholder="Что предусмотрено пунктом"></textarea>
+                        <div class="form-text">
+                            Пункт печатается в графе «Пункт Норм» личной карточки учёта СИЗ,
+                            описание помогает выбрать нужный пункт в норме выдачи
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-brand-orange" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-brand">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/typical_norms_list.js') }}"></script>
+{% endblock %}

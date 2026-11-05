@@ -1,5 +1,10 @@
 {% extends "base.html" %}
+{% from "_tabs.html" import norms_tabs %}
 {% block content %}
+{# Вкладки раздела: справочник пунктов — отдельная страница, а не модалка,
+   иначе раздел выпадал из общей схемы остальных вкладок #}
+{{ norms_tabs('norms') }}
+
 <div class="page-head">
     <button class="btn btn-add" id="btn-create-norm" title="Добавить норму">
         <i class="bi bi-plus-lg"></i>
@@ -7,11 +12,6 @@
     <h1 class="page-title">Нормы выдачи СИЗ</h1>
 
     <div class="page-head__spacer"></div>
-
-    <button class="btn btn-sm btn-brand" id="btn-typical-norms"
-            title="Справочник типовых отраслевых норм (пункты приложения к Положению)">
-        <i class="bi bi-journal-text"></i> Типовые нормы
-    </button>
 
     <button class="btn btn-sm btn-brand" id="btn-copy-norms" title="Скопировать нормы с другой должности">
         <i class="bi bi-files"></i> Скопировать нормы
@@ -152,57 +152,6 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
                 <button type="button" class="btn btn-brand" id="copy-submit">Скопировать</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Модалка справочника типовых отраслевых норм.
-     Форма и таблица в одном окне: вложенная модалка дала бы двойной backdrop
-     (см. ловушку про data-bs-toggle в PROJECT.md). -->
-<div class="modal fade" id="typicalNormsModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Типовые отраслевые нормы</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-            </div>
-            <div class="modal-body">
-                <form id="typical-norm-form" data-validate="true">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label" for="typical-norm-clause">Пункт нормы <span class="req">*</span></label>
-                            <input class="form-control" id="typical-norm-clause" name="clause"
-                                   required maxlength="50" placeholder="Например, п. 4">
-                        </div>
-                        <div class="col-md-8">
-                            <label class="form-label" for="typical-norm-description">Описание <span class="req">*</span></label>
-                            <input class="form-control" id="typical-norm-description" name="description"
-                                   required maxlength="500" placeholder="Что предусмотрено пунктом">
-                        </div>
-                    </div>
-                    <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button type="button" class="btn btn-cancel d-none" id="typical-norm-cancel">
-                            Отменить правку
-                        </button>
-                        <button type="submit" class="btn btn-brand" id="typical-norm-submit">Добавить</button>
-                    </div>
-                </form>
-
-                <div class="table-responsive mt-4">
-                    <table class="data-table data-table--dense" id="typical-norms-table">
-                        <thead>
-                        <tr>
-                            <th class="col-narrow">Пункт</th>
-                            <th>Описание</th>
-                            <th class="col-actions">Действия</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr><td colspan="3" class="state">Загрузка…</td></tr>
-                        </tbody>
-                    </table>
-                </div>
             </div>
         </div>
     </div>

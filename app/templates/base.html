@@ -49,8 +49,9 @@
                 </li>
                 <li class="nav-item">
                     {# Нормы — про должность, а не про сотрудника, поэтому это
-                       отдельный раздел, а не вкладка в карточке #}
-                    <a class="app-nav__link {% if '/norms' in request.url.path %}is-active{% endif %}" href="/norms">
+                       отдельный раздел, а не вкладка в карточке.
+                       Справочник пунктов норм — вторая вкладка этого раздела #}
+                    <a class="app-nav__link {% if '/norms' in request.url.path or '/typical-norms' in request.url.path %}is-active{% endif %}" href="/norms">
                         <i class="bi bi-clipboard-check"></i>
                         <span>Нормы выдачи</span>
                     </a>

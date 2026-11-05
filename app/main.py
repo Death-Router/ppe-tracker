@@ -251,6 +251,18 @@ async def norms_page(request: Request):
         context={"title": "Нормы выдачи СИЗ"},
     )
 
+@app.get("/typical-norms", response_class=HTMLResponse)
+async def typical_norms_page(request: Request):
+    """Справочник пунктов норм — вкладка раздела «Нормы выдачи»."""
+    redirect = check_auth(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse(
+        request=request,
+        name="typical_norms/list.html",
+        context={"title": "Типовые нормы"},
+    )
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     redirect = check_auth(request)

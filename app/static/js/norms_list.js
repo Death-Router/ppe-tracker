@@ -16,15 +16,9 @@
   const createForm = document.getElementById('create-norm-form');
   const modalTypicalNorm = document.getElementById('modal-typical-norm');
 
-  // Справочник типовых отраслевых норм (графа «Пункт Норм» карточки)
-  const typicalModalEl = document.getElementById('typicalNormsModal');
-  const typicalForm = document.getElementById('typical-norm-form');
-  const typicalTableBody = document.querySelector('#typical-norms-table tbody');
-  const typicalSubmit = document.getElementById('typical-norm-submit');
-  const typicalCancel = document.getElementById('typical-norm-cancel');
-
+  // Пункты норм нужны только для выпадающего списка в модалке нормы;
+  // сам справочник живёт на отдельной вкладке /typical-norms
   let allTypicalNorms = [];
-  let editingTypicalId = null;
 
   let allNorms = [];
   let allPositions = [];
@@ -540,17 +534,16 @@
     }
   });
 
-  // --- Справочник типовых отраслевых норм -------------------------------
+  // --- Пункты норм: только чтение справочника для выпадающего списка -----
   async function loadTypicalNorms() {
     allTypicalNorms = await API.get('/api/v1/typical_norms');
     fillTypicalNormSelect();
-    renderTypicalNorms();
   }
 
   function fillTypicalNormSelect() {
     if (!modalTypicalNorm) return;
 
-    // Выбранное значение не теряем: список перерисовывается после каждой правки
+    // Выбранное значение не теряем: список перерисовывается при каждой загрузке
     const current = modalTypicalNorm.value;
     modalTypicalNorm.innerHTML = '<option value="">Не указан</option>' +
       allTypicalNorms.map((n) => {
@@ -560,109 +553,6 @@
 
     if (current) modalTypicalNorm.value = current;
   }
-
-  function renderTypicalNorms() {
-    if (!typicalTableBody) return;
-
-    typicalTableBody.innerHTML = allTypicalNorms.length
-      ? allTypicalNorms.map((n) => `<tr data-typical-id="${n.id}">
-          <td class="cell-mono">${escapeHtml(n.clause)}</td>
-          <td>${escapeHtml(n.description)}</td>
-          <td class="col-actions">
-            <button class="btn btn-icon" data-typical-action="edit" data-id="${n.id}"
-                    title="Изменить"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-icon btn-icon--danger" data-typical-action="delete" data-id="${n.id}"
-                    title="Удалить"><i class="bi bi-trash"></i></button>
-          </td>
-        </tr>`).join('')
-      : '<tr><td colspan="3" class="state">Справочник пуст — добавьте пункты приложения к Положению</td></tr>';
-  }
-
-  function resetTypicalForm() {
-    editingTypicalId = null;
-    typicalForm?.reset();
-    if (typicalSubmit) typicalSubmit.textContent = 'Добавить';
-    typicalCancel?.classList.add('d-none');
-    if (typicalForm) window.FormValidation.refresh(typicalForm);
-  }
-
-  typicalTableBody?.addEventListener('click', async (event) => {
-    const btn = event.target.closest('[data-typical-action]');
-    if (!btn) return;
-
-    const id = Number(btn.dataset.id);
-    const norm = allTypicalNorms.find((n) => n.id === id);
-    if (!norm) return;
-
-    if (btn.dataset.typicalAction === 'edit') {
-      editingTypicalId = id;
-      typicalForm.elements['clause'].value = norm.clause;
-      typicalForm.elements['description'].value = norm.description;
-      if (typicalSubmit) typicalSubmit.textContent = 'Сохранить';
-      typicalCancel?.classList.remove('d-none');
-      typicalForm.elements['clause'].focus();
-      return;
-    }
-
-    if (!confirm(`Удалить пункт «${norm.clause}»?`)) return;
-    try {
-      await API.request(`/api/v1/typical_norms/${id}`, { method: 'DELETE' });
-      window.showToast('Пункт удалён', 'success');
-      await loadTypicalNorms();
-      // В таблице норм пункт тоже показывается — перечитываем страницу
-      await loadPage(currentPage);
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    }
-  });
-
-  typicalCancel?.addEventListener('click', resetTypicalForm);
-
-  typicalForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    const payload = {
-      clause: typicalForm.elements['clause'].value.trim(),
-      description: typicalForm.elements['description'].value.trim(),
-    };
-    if (!payload.clause || !payload.description) {
-      window.showToast('Заполните пункт и описание', 'danger');
-      return;
-    }
-
-    typicalSubmit.disabled = true;
-    try {
-      if (editingTypicalId) {
-        // Версию берём из загруженного справочника — оптимистичная блокировка
-        const current = allTypicalNorms.find((n) => n.id === editingTypicalId);
-        payload.version = current?.version ?? 1;
-        await API.put(`/api/v1/typical_norms/${editingTypicalId}`, payload);
-        window.showToast('Пункт обновлён', 'success');
-      } else {
-        await API.post('/api/v1/typical_norms/', payload);
-        window.showToast('Пункт добавлен', 'success');
-      }
-
-      resetTypicalForm();
-      await loadTypicalNorms();
-      await loadPage(currentPage);
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      typicalSubmit.disabled = false;
-    }
-  });
-
-  document.getElementById('btn-typical-norms')?.addEventListener('click', async () => {
-    resetTypicalForm();
-    try {
-      await loadTypicalNorms();
-    } catch (err) {
-      window.showToast(`Ошибка загрузки справочника: ${err.message}`, 'danger');
-      return;
-    }
-    bootstrap.Modal.getOrCreateInstance(typicalModalEl).show();
-  });
 
   WS.subscribe((data) => {
     if (data.event === 'norm_updated') loadData();
