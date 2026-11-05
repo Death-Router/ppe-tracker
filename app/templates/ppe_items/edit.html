@@ -20,6 +20,16 @@
                 <label class="form-label" for="name">Наименование <span class="req">*</span></label>
                 <input class="form-control" id="name" name="name" required maxlength="255">
             </div>
+            {# Графа 2 оборотной стороны личной карточки: «Модель, марка,
+               артикул, класс защиты СИЗ, дерматологических СИЗ» #}
+            <div class="col-md-6">
+                <label class="form-label" for="model">Модель, марка, артикул</label>
+                <input class="form-control" id="model" name="model" maxlength="255">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="protection_class">Класс защиты</label>
+                <input class="form-control" id="protection_class" name="protection_class" maxlength="100" placeholder="Например, S3 SRC">
+            </div>
             <div class="col-12">
                 <label class="form-label" for="function_id">Функция СИЗ (Защита)</label>
                 <select class="form-select" id="function_id" name="function_id">

@@ -25,6 +25,7 @@ from app.api.v1.endpoints import (
     ws,
 )
 from app.core.config import settings
+from app.core.constants import HEIGHT_GRID
 from app.core.csrf import csrf_token_for, require_csrf
 from app.core.deps import get_current_active_user
 
@@ -139,7 +140,9 @@ async def employees_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="employees/list.html",
-        context={"title": "Сотрудники"},
+        # Сетка роста задаётся Положением: список значений приходит из
+        # app/core/constants.py, чтобы шаблон и серверная проверка не разошлись
+        context={"title": "Сотрудники", "height_grid": HEIGHT_GRID},
     )
 
 @app.get("/employees/{employee_id}/edit")

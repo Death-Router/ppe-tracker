@@ -11,9 +11,29 @@ class EmployeePpeIssueBase(BaseModel):
     issue_date: date
     quantity: str = Field("1", max_length=50)
     size_value: str | None = Field(None, max_length=50)
+    # «лично/дозатор» — только для дерматологических СИЗ (сноска <*> карточки)
+    issue_method: str | None = Field(None, pattern="^(лично|дозатор)$")
+    # Графы 7-10 «Возвращено» и «Акт списания»
+    returned_date: date | None = None
+    returned_quantity: str | None = Field(None, max_length=50)
+    write_off_act_date: date | None = None
+    write_off_act_number: str | None = Field(None, max_length=50)
 
 class EmployeePpeIssueCreate(EmployeePpeIssueBase):
     pass
+
+class EmployeePpeIssueUpdate(BaseModel):
+    """Правка возврата и акта списания по уже выданной записи.
+
+    Отдельная схема, а не EmployeePpeIssueBase: менять дату выдачи, размер и
+    количество задним числом нельзя — на них уже ссылается личная карточка.
+    """
+    issue_method: str | None = Field(None, pattern="^(лично|дозатор)$")
+    returned_date: date | None = None
+    returned_quantity: str | None = Field(None, max_length=50)
+    write_off_act_date: date | None = None
+    write_off_act_number: str | None = Field(None, max_length=50)
+    version: int = Field(..., description="Текущая версия записи")
 
 class EmployeePpeIssueRead(EmployeePpeIssueBase):
     id: int

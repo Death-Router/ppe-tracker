@@ -63,6 +63,11 @@
       }
 
       if (form.elements['name']) form.elements['name'].value = item.name ?? '';
+      // Модель, артикул и класс защиты печатаются в графе 2 личной карточки
+      if (form.elements['model']) form.elements['model'].value = item.model ?? '';
+      if (form.elements['protection_class']) {
+        form.elements['protection_class'].value = item.protection_class ?? '';
+      }
       if (functionSelect) functionSelect.value = item.function_id ?? '';
       if (sizeGroupSelect) sizeGroupSelect.value = item.size_group_id ?? '';
       if (unitSelect) unitSelect.value = item.unit_id ?? '';

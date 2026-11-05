@@ -30,6 +30,7 @@ async def export_employees(db: AsyncSession = Depends(get_db)):
         
         data.append({
             "Табельный номер": emp.personnel_number,
+            "Номер личной карточки": emp.personal_card_number or "",
             "Фамилия": emp.last_name,
             "Имя": emp.first_name,
             "Отчество": emp.middle_name or "",
@@ -63,6 +64,8 @@ async def export_ppe_items(db: AsyncSession = Depends(get_db)):
     for item in items:
         data.append({
             "Наименование": item.name,
+            "Модель, марка, артикул": item.model or "",
+            "Класс защиты": item.protection_class or "",
             "Функция": item.function.name if item.function else "",
             "Размерная группа": item.size_group.name if item.size_group else "",
             "Единица измерения": item.unit.short_name if item.unit else ""

@@ -10,6 +10,10 @@ class PpeItemBase(BaseModel):
     function_id: int | None = Field(None, description="ID функции СИЗ")
     size_group_id: int | None = Field(None, description="ID размерной группы")
     unit_id: int | None = Field(None, description="ID единицы измерения")
+    # Графа 2 оборотной стороны личной карточки: «Модель, марка, артикул,
+    # класс защиты СИЗ, дерматологических СИЗ»
+    model: str | None = Field(None, max_length=255, description="Модель, марка, артикул")
+    protection_class: str | None = Field(None, max_length=100, description="Класс защиты")
 
 class PpeItemCreate(PpeItemBase):
     pass
@@ -27,4 +31,6 @@ class PpeItemUpdate(PpeItemBase):
     function_id: int | None = None
     size_group_id: int | None = None
     unit_id: int | None = None
+    model: str | None = Field(None, max_length=255)
+    protection_class: str | None = Field(None, max_length=100)
     version: int

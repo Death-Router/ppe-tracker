@@ -84,17 +84,21 @@
                                     <label class="form-label" for="emp-middle-name">Отчество</label>
                                     <input class="form-control" id="emp-middle-name" name="middle_name" maxlength="100">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label class="form-label" for="emp-personnel">Табельный номер <span class="req">*</span></label>
                                     <input class="form-control" id="emp-personnel" name="personnel_number" required maxlength="20">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
+                                    <label class="form-label" for="emp-card-number">№ личной карточки</label>
+                                    <input class="form-control" id="emp-card-number" name="personal_card_number" maxlength="30" placeholder="Например, 12">
+                                </div>
+                                <div class="col-md-3">
                                     <label class="form-label" for="create-dept">Подразделение <span class="req">*</span></label>
                                     <select class="form-select" id="create-dept" name="department_id" required>
                                         <option value="">Загрузка...</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label class="form-label" for="create-pos">Должность <span class="req">*</span></label>
                                     <select class="form-select" id="create-pos" name="position_id" required>
                                         <option value="">Сначала выберите подразделение</option>
@@ -118,7 +122,14 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label" for="emp-height">Рост <span class="req">*</span></label>
-                                    <input class="form-control" id="emp-height" name="height" placeholder="Например, 182" maxlength="10" required>
+                                    {# Рост выбирается из сетки Положения: межразмерность
+                                       (например, 180) по примечанию к форме карточки — ошибка #}
+                                    <select class="form-select" id="emp-height" name="height" required>
+                                        <option value="">Не указан</option>
+                                        {% for value in height_grid or [] %}
+                                        <option value="{{ value }}">{{ value }}</option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
                             </div>
                         </form>
@@ -157,11 +168,12 @@
                                     <th>Кол-во</th>
                                     <th>Дата выдачи</th>
                                     <th>Действует до</th>
+                                    <th>Возвращено, акт</th>
                                     <th class="col-actions">Действия</th>
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <tr><td colspan="6" class="state">Нет данных</td></tr>
+                                <tr><td colspan="7" class="state">Нет данных</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -212,6 +224,17 @@
                             <input type="text" class="form-control" id="issue-quantity" name="quantity" value="1" required maxlength="50">
                             <div class="form-text" id="issue-quantity-hint"></div>
                         </div>
+                        <!-- Графа 5 карточки: «лично/дозатор» — только для
+                             дерматологических СИЗ, у остальных всегда «лично» -->
+                        <div class="col-md-6 d-none" id="issue-method-wrap">
+                            <label class="form-label" for="issue-method">Способ выдачи</label>
+                            <select class="form-select" id="issue-method" name="issue_method">
+                                <option value="">Не указан</option>
+                                <option value="лично">Лично</option>
+                                <option value="дозатор">Дозатор</option>
+                            </select>
+                            <div class="form-text">Заполняется для дерматологических СИЗ</div>
+                        </div>
                         <div class="col-md-6">
                             <label class="form-label" for="issue-date">Дата выдачи <span class="req">*</span></label>
                             <input type="date" class="form-control" id="issue-date" name="issue_date" required>
@@ -221,6 +244,50 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
                     <button type="submit" class="btn btn-brand" id="issue-submit">Выдать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка возврата и акта списания: графы 7-10 оборотной стороны
+     личной карточки. Пустые поля означают, что возврата ещё не было. -->
+<div class="modal fade" id="returnModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="return-form" data-validate="true">
+                <div class="modal-header">
+                    <h5 class="modal-title">Возврат и списание</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 form-text" id="return-issue-title"></div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="return-date">Дата возврата</label>
+                            <input type="date" class="form-control" id="return-date" name="returned_date">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="return-quantity">Возвращено, количество</label>
+                            <input type="text" class="form-control" id="return-quantity" name="returned_quantity" maxlength="50">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="return-act-date">Дата акта списания</label>
+                            <input type="date" class="form-control" id="return-act-date" name="write_off_act_date">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="return-act-number">Номер акта списания</label>
+                            <input type="text" class="form-control" id="return-act-number" name="write_off_act_number" maxlength="50" placeholder="Например, 17-СИЗ">
+                        </div>
+                    </div>
+                    <div class="form-text mt-3">
+                        Дата и количество возврата заполняются парой, акт списания — тоже
+                        парой «дата + номер». Пустые поля означают, что возврата не было.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-brand" id="return-submit">Сохранить</button>
                 </div>
             </form>
         </div>

@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.api import pagination
+from app.core.constants import height_error_message, is_height_from_grid
 from app.core.deps import get_current_active_user
 from app.db.session import get_db
 from app.models.department import Department
@@ -49,7 +50,41 @@ async def get_employee_with_relations(db: AsyncSession, employee_id: int) -> Emp
     return result.scalar_one_or_none()
 
 
+def validate_height(height: str | None) -> None:
+    """Рост должен быть из размерной сетки Положения.
+
+    Проверяем здесь, а не в Pydantic: значение приходит из формы как текст,
+    а ответ 422 с массивом ошибок клиент показывает как «HTTP 422» вместо
+    объяснения, какой рост допустим.
+    """
+    if height and not is_height_from_grid(height):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=height_error_message(height),
+        )
+
+
+async def ensure_card_number_free(
+    db: AsyncSession, card_number: str | None, employee_id: int | None = None
+) -> None:
+    """Номер личной карточки — номер документа, повторов быть не должно."""
+    if not card_number:
+        return
+
+    query = select(Employee).where(Employee.personal_card_number == card_number)
+    if employee_id is not None:
+        # При правке сотрудник «занимает» свой же номер — это не конфликт
+        query = query.where(Employee.id != employee_id)
+
+    if (await db.execute(query)).scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Номер личной карточки «{card_number}» уже занят другим сотрудником",
+        )
+
+
 async def get_allowed_department_ids(db: AsyncSession, user: User) -> list[int]:
+
     """Возвращает список ID подразделений, доступных пользователю (с учётом иерархии)."""
     if user.role == "admin" or not user.department_id:
         return []  # Пустой список = без ограничений (все)
@@ -87,6 +122,9 @@ async def create_employee(
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Сотрудник с таким табельным номером уже существует")
 
+    validate_height(employee_in.height)
+    await ensure_card_number_free(db, employee_in.personal_card_number)
+
     employee_data = employee_in.model_dump(exclude={"ppe_sizes"})
     db_employee = Employee(**employee_data)
     db.add(db_employee)
@@ -121,9 +159,13 @@ async def create_employee(
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
+        # Проверки выше ловят обычные случаи; сюда попадает только гонка
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Для одной из размерных групп у сотрудника уже есть размер",
+            detail=(
+                "Не удалось сохранить сотрудника: табельный номер, номер личной "
+                "карточки или размер по одной из групп уже заняты"
+            ),
         ) from exc
 
     await broadcast(0, {"event": "employee_created", "employee_id": db_employee.id})
@@ -233,6 +275,10 @@ async def update_employee(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
 
     update_data = employee_in.model_dump(exclude_unset=True, exclude={"version", "ppe_sizes"})
+
+    validate_height(update_data.get("height"))
+    await ensure_card_number_free(db, update_data.get("personal_card_number"), employee_id)
+
     for field, value in update_data.items():
         setattr(db_employee, field, value)
 
@@ -270,11 +316,14 @@ async def update_employee(
         raise HTTPException(status_code=409, detail="Конфликт версий") from exc
     except IntegrityError as exc:
         # Страховка на случай гонки: параллельный запрос успел вставить тот же
-        # размер между проверкой и commit
+        # размер или занять номер карточки между проверкой и commit
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Для одной из размерных групп у сотрудника уже есть размер",
+            detail=(
+                "Не удалось сохранить сотрудника: номер личной карточки или "
+                "размер по одной из групп уже заняты"
+            ),
         ) from exc
 
     await broadcast(employee_id, {"event": "employee_updated", "employee_id": employee_id})

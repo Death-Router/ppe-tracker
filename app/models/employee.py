@@ -16,6 +16,13 @@ class Employee(Base):
     __tablename__ = "employees"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     personnel_number: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+
+    # Номер личной карточки учёта СИЗ — печатается на лицевой стороне формы
+    # (приложение № 4 к Положению). Уникален: это номер документа, повтор
+    # номера у двух сотрудников означает ошибку ввода.
+    personal_card_number: Mapped[str | None] = mapped_column(
+        String(30), unique=True, nullable=True
+    )
     last_name: Mapped[str] = mapped_column(String(100))
     first_name: Mapped[str] = mapped_column(String(100))
     middle_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

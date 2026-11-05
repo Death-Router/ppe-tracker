@@ -21,6 +21,18 @@ class EmployeePpeIssue(Base):
     issue_date: Mapped[date] = mapped_column(Date, nullable=False)
     quantity: Mapped[str] = mapped_column(String(50), default="1")
     size_value: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # Графа 5 «лично/дозатор» — заполняется только для дерматологических СИЗ
+    # (сноска <*> формы личной карточки)
+    issue_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # Графы 7-10 «Возвращено» и «Акт списания». Возврат один на выдачу:
+    # в карточке под выдачи отведена ровно одна строка, а частичные возвраты
+    # оформляются актом, номер которого здесь и хранится.
+    returned_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    returned_quantity: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    write_off_act_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    write_off_act_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     
     # Дата окончания срока носки (рассчитывается автоматически)
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)

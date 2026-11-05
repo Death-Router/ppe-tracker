@@ -17,6 +17,12 @@ class PpeItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), index=True)
+
+    # Графа 2 оборотной стороны личной карточки: «Модель, марка, артикул,
+    # класс защиты СИЗ». Два поля, а не одно: печать склеивает их через
+    # запятую, а искать модель и класс защиты удобнее по отдельности.
+    model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    protection_class: Mapped[str | None] = mapped_column(String(100), nullable=True)
     
     function_id: Mapped[int | None] = mapped_column(ForeignKey("ppe_functions.id", ondelete="SET NULL"), nullable=True)
     size_group_id: Mapped[int | None] = mapped_column(ForeignKey("ppe_size_groups.id", ondelete="SET NULL"), nullable=True)

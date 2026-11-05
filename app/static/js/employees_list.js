@@ -205,12 +205,14 @@
 
   let editingId = null;
   let currentEmployee = null;
+  // Выдачи текущей карточки по id — нужны модалке возврата
+  let issueById = new Map();
 
   function resetModal() {
     createForm.reset();
     versionInput.value = '';
     sizesBody.innerHTML = '';
-    issuesBody.innerHTML = '<tr><td colspan="4" class="state">Нет данных</td></tr>';
+    issuesBody.innerHTML = '<tr><td colspan="7" class="state">Нет данных</td></tr>';
     createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
     // Возвращаемся на первую вкладку
     bootstrap.Tab.getOrCreateInstance(
@@ -262,12 +264,18 @@
       saveBtn.textContent = 'Сохранить';
       resetModal();
 
-      const FIELDS = ['personnel_number', 'last_name', 'first_name', 'middle_name', 'hire_date', 'position_change_date', 'gender', 'height'];
+      const FIELDS = [
+        'personnel_number', 'personal_card_number', 'last_name', 'first_name',
+        'middle_name', 'hire_date', 'position_change_date', 'gender',
+      ];
       FIELDS.forEach((f) => {
         const input = createForm.elements[f];
         if (!input) return;
         input.value = f.includes('_date') && emp[f] ? emp[f].split('T')[0] : (emp[f] ?? '');
       });
+
+      // Рост — список из сетки Положения, а не свободный ввод
+      setEmployeeHeight(emp.height);
 
       createDeptSelect.value = emp.department_id ?? '';
       await loadPositionsForSelect(emp.department_id, emp.position_id);
@@ -307,8 +315,31 @@
     return `<span class="${cls}">${escapeHtml(label)}</span>`;
   }
 
+  // Рост приходит из сетки Положения. У старых записей там может стоять
+  // значение вне сетки («180») — показываем его отдельным пунктом с пометкой,
+  // чтобы было видно, что чинить: молча подменить значение нельзя.
+  function setEmployeeHeight(value) {
+    const select = createForm.elements['height'];
+    if (!select) return;
+
+    select.querySelectorAll('option[data-legacy]').forEach((option) => option.remove());
+
+    const known = [...select.options].map((option) => option.value);
+    if (value && !known.includes(value)) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = `${value} (вне сетки — выберите из списка)`;
+      option.dataset.legacy = '1';
+      select.appendChild(option);
+    }
+
+    select.value = value ?? '';
+  }
+
   function renderIssues(emp) {
     const issues = emp.ppe_issues ?? emp.issues ?? [];
+    issueById = new Map(issues.map((i) => [String(i.id), i]));
+
     issuesBody.innerHTML = issues.length
       ? issues.map((i) => `<tr>
           <td>${escapeHtml(i.ppe_item?.name ?? '—')}</td>
@@ -316,14 +347,35 @@
           <td>${escapeHtml(String(i.quantity ?? '—'))}</td>
           <td>${escapeHtml(formatDate(i.issue_date))}</td>
           <td>${expiryCell(i.expiry_date)}</td>
+          <td>${returnCell(i)}</td>
           <td class="col-actions">
+            <button class="btn btn-icon" data-action="return-issue" data-id="${i.id}"
+                    title="Возврат и акт списания">
+              <i class="bi bi-arrow-return-left"></i>
+            </button>
             <button class="btn btn-icon btn-icon--danger" data-action="delete-issue"
                     data-id="${i.id}" title="Убрать выдачу">
               <i class="bi bi-trash"></i>
             </button>
           </td>
         </tr>`).join('')
-      : '<tr><td colspan="6" class="state">Выдач пока нет</td></tr>';
+      : '<tr><td colspan="7" class="state">Выдач пока нет</td></tr>';
+  }
+
+  // Графы 7-10 карточки: что вернули и каким актом списали
+  function returnCell(issue) {
+    const parts = [];
+    if (issue.returned_date) {
+      const qty = issue.returned_quantity ? ` (${issue.returned_quantity})` : '';
+      parts.push(`возврат ${formatDate(issue.returned_date)}${qty}`);
+    }
+    if (issue.write_off_act_number) {
+      const date = issue.write_off_act_date ? ` от ${formatDate(issue.write_off_act_date)}` : '';
+      parts.push(`акт № ${issue.write_off_act_number}${date}`);
+    }
+
+    if (!parts.length) return '<span class="cell-muted">—</span>';
+    return `<span class="badge-soft badge-purple">${escapeHtml(parts.join('; '))}</span>`;
   }
 
   // --- Выдача СИЗ -------------------------------------------------------
@@ -337,6 +389,8 @@
   const issueQuantityHint = document.getElementById('issue-quantity-hint');
   const issueWarningEl = document.getElementById('issue-warning');
   const issueDateInput = document.getElementById('issue-date');
+  const issueMethodWrap = document.getElementById('issue-method-wrap');
+  const issueMethodSelect = document.getElementById('issue-method');
 
   let allPpeItems = null;
   let normByItem = new Map();
@@ -356,6 +410,14 @@
     } catch (err) {
       // без норм выдача всё равно возможна
     }
+  }
+
+  // Графа 5 карточки заполняется только для дерматологических СИЗ: у
+  // остальных там всегда «лично», и лишнее поле в форме только путало бы
+  function toggleIssueMethod(item) {
+    const isDermatological = /дерматолог/i.test(item?.function?.name ?? '');
+    issueMethodWrap?.classList.toggle('d-none', !isDermatological);
+    if (!isDermatological && issueMethodSelect) issueMethodSelect.value = '';
   }
 
   // Размер берём из карточки по размерной группе СИЗ
@@ -549,6 +611,7 @@
       issueSizeHint.textContent = '';
       issueQuantityHint.textContent = '';
       issueNormHint.textContent = '';
+      toggleIssueMethod(null);
       updateIssueWarnings();
       bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
       return;
@@ -573,6 +636,8 @@
     issueSizeSelect.disabled = true;
     issueSizeHint.textContent = '';
     issueNormHint.textContent = '';
+    issueMethodWrap?.classList.add('d-none');
+    if (issueMethodSelect) issueMethodSelect.value = '';
     updateIssueWarnings();
 
     bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
@@ -592,6 +657,7 @@
       issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ</option>';
       issueSizeSelect.disabled = true;
       issueSizeHint.textContent = '';
+      toggleIssueMethod(null);
       updateIssueWarnings();
       return;
     }
@@ -607,6 +673,7 @@
     }
 
     await fillSizeOptions(item);
+    toggleIssueMethod(item);
     updateIssueWarnings();
     window.FormValidation.refresh(issueForm);
   });
@@ -626,6 +693,11 @@
       issue_date: issueDateInput.value,
       quantity: issueForm.elements['quantity'].value.trim() || '1',
       size_value: issueSizeSelect.value.trim() || null,
+      // «дозатор» бывает только у дерматологических СИЗ — поле скрыто
+      // у остальных, и в запрос уходит null
+      issue_method: issueMethodWrap?.classList.contains('d-none')
+        ? null
+        : (issueMethodSelect?.value || null),
     };
 
     if (!payload.ppe_item_id) {
@@ -661,6 +733,12 @@
   }
 
   issuesBody?.addEventListener('click', async (event) => {
+    const returnBtn = event.target.closest('[data-action="return-issue"]');
+    if (returnBtn) {
+      openReturnModal(issueById.get(returnBtn.dataset.id));
+      return;
+    }
+
     const btn = event.target.closest('[data-action="delete-issue"]');
     if (!btn) return;
     if (!confirm('Убрать выдачу из карточки?')) return;
@@ -671,6 +749,66 @@
       await reloadEmployee();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  });
+
+  // --- Возврат и акт списания (графы 7-10 карточки) ---------------------
+  const returnModalEl = document.getElementById('returnModal');
+  const returnForm = document.getElementById('return-form');
+  const returnTitle = document.getElementById('return-issue-title');
+  let returnIssue = null;
+
+  // Даты приходят строками ISO либо с временем — input[type=date] ждёт YYYY-MM-DD
+  function dateValue(raw) {
+    return raw ? String(raw).split('T')[0] : '';
+  }
+
+  function openReturnModal(issue) {
+    if (!issue || !returnForm) return;
+    returnIssue = issue;
+
+    const name = issue.ppe_item?.name ?? 'Выдача СИЗ';
+    const size = issue.size_value ? `, размер ${issue.size_value}` : '';
+    returnTitle.textContent = `${name}${size} — выдано ${formatDate(issue.issue_date)}`;
+
+    const fields = returnForm.elements;
+    fields['returned_date'].value = dateValue(issue.returned_date);
+    fields['returned_quantity'].value = issue.returned_quantity ?? '';
+    fields['write_off_act_date'].value = dateValue(issue.write_off_act_date);
+    fields['write_off_act_number'].value = issue.write_off_act_number ?? '';
+
+    window.FormValidation.refresh(returnForm);
+    bootstrap.Modal.getOrCreateInstance(returnModalEl).show();
+  }
+
+  returnForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!returnIssue) return;
+
+    const fields = returnForm.elements;
+    const payload = {
+      returned_date: fields['returned_date'].value || null,
+      returned_quantity: fields['returned_quantity'].value.trim() || null,
+      write_off_act_date: fields['write_off_act_date'].value || null,
+      write_off_act_number: fields['write_off_act_number'].value.trim() || null,
+      version: Number(returnIssue.version),
+    };
+
+    const submit = document.getElementById('return-submit');
+    submit.disabled = true;
+    try {
+      await API.put(`/api/v1/employee_ppe_issues/${returnIssue.id}`, payload);
+      window.showToast('Возврат сохранён', 'success');
+      bootstrap.Modal.getOrCreateInstance(returnModalEl).hide();
+      await reloadEmployee();
+    } catch (err) {
+      if (err.isConflict) {
+        window.showToast('Запись изменилась, откройте её заново', 'warning');
+      } else {
+        window.showToast(`Ошибка: ${err.message}`, 'danger');
+      }
+    } finally {
+      submit.disabled = false;
     }
   });
 
@@ -782,6 +920,10 @@
   WS.subscribe((data) => {
     if (data.event === 'employee_updated' || data.event === 'employee_created') {
       setTimeout(loadEmployees, 300);
+    }
+    // Возврат оформили в другой вкладке — перечитываем выдачи открытой карточки
+    if (data.event === 'issue_updated' && data.employee_id === editingId) {
+      reloadEmployee();
     }
   });
 

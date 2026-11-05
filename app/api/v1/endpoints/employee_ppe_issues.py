@@ -9,7 +9,11 @@ from app.models.employee import Employee
 from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.ppe_item import PpeItem
-from app.schemas.employee_ppe_issue import EmployeePpeIssueCreate, EmployeePpeIssueRead
+from app.schemas.employee_ppe_issue import (
+    EmployeePpeIssueCreate,
+    EmployeePpeIssueRead,
+    EmployeePpeIssueUpdate,
+)
 from app.utils.broadcast import broadcast
 from app.utils.dates import add_wear_period
 
@@ -72,6 +76,9 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
         issue_date=issue_in.issue_date,
         quantity=issue_in.quantity,
         size_value=issue_in.size_value,
+        # Способ выдачи заполняется сразу: «дозатор» у дерматологических СИЗ
+        # известен в момент выдачи, позже его пришлось бы восстанавливать
+        issue_method=issue_in.issue_method,
         expiry_date=expiry_date
     )
     db.add(db_issue)
@@ -93,6 +100,54 @@ async def get_issues(employee_id: int, db: AsyncSession = Depends(get_db)):
         .options(*issue_item_options())
     )
     return result.scalars().all()
+
+
+@router.put("/{issue_id}", response_model=EmployeePpeIssueRead)
+async def update_issue(
+    issue_id: int, issue_in: EmployeePpeIssueUpdate, db: AsyncSession = Depends(get_db)
+):
+    """Возврат СИЗ и акт списания — графы 7-10 оборотной стороны карточки.
+
+    Дату выдачи, размер и количество здесь менять нельзя: это факт выдачи,
+    он уже отражён в личной карточке. Правка задним числом — через удаление
+    записи и новую выдачу, чтобы в истории не появлялось подменённых данных.
+    """
+    result = await db.execute(select(EmployeePpeIssue).where(EmployeePpeIssue.id == issue_id))
+    db_issue = result.scalar_one_or_none()
+    if not db_issue:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+
+    if db_issue.version != issue_in.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
+
+    update_data = issue_in.model_dump(exclude_unset=True, exclude={"version"})
+    for field, value in update_data.items():
+        setattr(db_issue, field, value)
+
+    # Пара «дата + количество» и пара «дата + номер акта» заполняются вместе:
+    # акт без номера или возврат без даты в карточке не читаются
+    if bool(db_issue.returned_date) != bool(db_issue.returned_quantity):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="У возврата должны быть и дата, и количество",
+        )
+    if bool(db_issue.write_off_act_date) != bool(db_issue.write_off_act_number):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="У акта списания должны быть и дата, и номер",
+        )
+
+    db_issue.version += 1
+    await db.commit()
+
+    await broadcast(0, {"event": "issue_updated", "employee_id": db_issue.employee_id})
+
+    result = await db.execute(
+        select(EmployeePpeIssue)
+        .where(EmployeePpeIssue.id == issue_id)
+        .options(*issue_item_options())
+    )
+    return result.scalar_one()
 
 
 @router.delete("/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)

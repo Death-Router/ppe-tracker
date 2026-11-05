@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.department import DepartmentRead
 from app.schemas.employee_ppe_issue import EmployeePpeIssueRead
@@ -24,6 +24,9 @@ class EmployeePpeSizeRead(BaseModel):
 # --- Схемы для Сотрудника ---
 class EmployeeBase(BaseModel):
     personnel_number: str = Field(..., max_length=20)
+    personal_card_number: str | None = Field(
+        None, max_length=30, description="Номер личной карточки учёта СИЗ"
+    )
     last_name: str = Field(..., max_length=100)
     first_name: str = Field(..., max_length=100)
     middle_name: str | None = Field(None, max_length=100)
@@ -33,6 +36,18 @@ class EmployeeBase(BaseModel):
     position_change_date: date | None = None
     gender: str | None = Field(None, pattern="^[МЖ]$")
     height: str | None = Field(None, max_length=10)
+
+    @field_validator("personal_card_number", mode="before")
+    @classmethod
+    def _blank_card_number_to_none(cls, value):
+        """Пустая строка — это «номер не указан», а не номер «».
+
+        Без этого две записи с пустым номером падали бы на уникальном
+        ограничении: в Postgres NULL-ы расходятся, а '' — нет.
+        """
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
 
 class EmployeeCreate(EmployeeBase):
@@ -61,6 +76,7 @@ class EmployeeUpdate(EmployeeBase):
     # Ограничения длины сохраняем те же, что в EmployeeBase:
     # иначе слишком длинное значение уходило в БД и давало 500 вместо 422.
     personnel_number: str | None = Field(None, max_length=20)
+    personal_card_number: str | None = Field(None, max_length=30)
     last_name: str | None = Field(None, max_length=100)
     first_name: str | None = Field(None, max_length=100)
     middle_name: str | None = Field(None, max_length=100)
