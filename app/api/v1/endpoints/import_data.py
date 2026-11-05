@@ -307,13 +307,20 @@ async def import_norms(
             raise ValueError(f"Неверный формат срока '{period_str}', нужно например '1 год'")
         period_value, period_unit = parts
 
+        # Норм на пару «должность + СИЗ» может быть несколько: основное
+        # наименование и альтернативы. scalar_one_or_none() на такой паре
+        # бросает MultipleResultsFound и даёт 500, поэтому берём первую —
+        # по ней же считается срок носки при выдаче.
         norm_res = await db.execute(
-            select(PositionPpeNorm).where(
+            select(PositionPpeNorm)
+            .where(
                 PositionPpeNorm.position_id == pos.id,
                 PositionPpeNorm.ppe_item_id == item.id,
             )
+            .order_by(PositionPpeNorm.id)
+            .limit(1)
         )
-        existing = norm_res.scalar_one_or_none()
+        existing = norm_res.scalars().first()
 
         if existing:
             existing.wear_period_value = period_value

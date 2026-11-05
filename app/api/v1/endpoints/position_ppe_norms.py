@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
@@ -62,8 +64,11 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
-            status_code=400, 
-            detail="Для этой должности норма на данное СИЗ уже существует."
+            status_code=400,
+            detail=(
+                "Не удалось сохранить норму: должность или наименование СИЗ"
+                " были изменены. Обновите страницу и повторите."
+            ),
         ) from exc
         
     norm = await get_norm_with_relations(db, db_norm.id)
@@ -139,6 +144,26 @@ async def get_norms(
     )
 
 
+def norm_signature(position_id: int, norm: Any) -> tuple[int, int, str, str, str]:
+    """Ключ нормы для сравнения при копировании.
+
+    Пары «должность + СИЗ» недостаточно: после миграции a9f3c06b2d18 у неё
+    может быть основное наименование и до четырёх альтернатив, которые
+    отличаются сроком носки и количеством. Сравнение по одной паре принимало
+    бы альтернативы за дубли и не копировало их.
+
+    Подходит и ORM-объекту, и строке select-запроса: у обоих есть одноимённые
+    атрибуты.
+    """
+    return (
+        position_id,
+        norm.ppe_item_id,
+        (norm.wear_period_value or "").strip(),
+        (norm.wear_period_unit or "").strip(),
+        (norm.quantity or "").strip(),
+    )
+
+
 @router.post("/copy")
 async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db)):
     """Копирует нормы с одной должности на другие.
@@ -146,9 +171,10 @@ async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db))
     Часто у нескольких должностей нормы совпадают — проще скопировать набор,
     чем заводить каждую строку заново.
 
-    Существующие нормы целевых должностей не изменяются: если для пары
-    «должность + СИЗ» норма уже есть, она пропускается. Поэтому операцию
-    можно повторять безопасно.
+    Копируются все нормы источника, включая альтернативы: у пары
+    «должность + СИЗ» их может быть несколько. Существующие нормы получателей
+    не изменяются, а повторный запуск безопасен — пропускается только точное
+    совпадение по СИЗ, сроку носки и количеству.
     """
     if not data.target_position_ids:
         raise HTTPException(status_code=400, detail="Не выбрано ни одной должности-получателя")
@@ -160,7 +186,11 @@ async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db))
         )
 
     source_res = await db.execute(
-        select(PositionPpeNorm).where(PositionPpeNorm.position_id == data.source_position_id)
+        select(PositionPpeNorm)
+        .where(PositionPpeNorm.position_id == data.source_position_id)
+        # Явный порядок: без него Postgres вправе вернуть нормы в другом
+        # порядке, и id созданных копий менялись бы от запуска к запуску
+        .order_by(PositionPpeNorm.id)
     )
     source_norms = source_res.scalars().all()
     if not source_norms:
@@ -178,20 +208,28 @@ async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db))
     if not found_targets:
         raise HTTPException(status_code=404, detail="Должности-получатели не найдены")
 
-    # Что уже есть у получателей: пары «должность + СИЗ»
+    # Что уже есть у получателей: полный набор значимых полей, а не только
+    # пара «должность + СИЗ». Пара не уникальна — у неё есть альтернативы,
+    # и сравнение по паре принимало бы их за дубли.
     existing_res = await db.execute(
-        select(PositionPpeNorm.position_id, PositionPpeNorm.ppe_item_id).where(
-            PositionPpeNorm.position_id.in_(found_targets)
-        )
+        select(
+            PositionPpeNorm.position_id,
+            PositionPpeNorm.ppe_item_id,
+            PositionPpeNorm.wear_period_value,
+            PositionPpeNorm.wear_period_unit,
+            PositionPpeNorm.quantity,
+        ).where(PositionPpeNorm.position_id.in_(found_targets))
     )
-    existing = {(row[0], row[1]) for row in existing_res.all()}
+    existing = {norm_signature(row.position_id, row) for row in existing_res.all()}
 
     created = 0
     skipped = 0
 
-    for position_id in found_targets:
+    # sorted(): порядок обхода set случаен, а от него зависят id созданных
+    # норм — без явного порядка результат повторного запуска отличался бы
+    for position_id in sorted(found_targets):
         for norm in source_norms:
-            key = (position_id, norm.ppe_item_id)
+            key = norm_signature(position_id, norm)
             if key in existing:
                 skipped += 1
                 continue
@@ -251,7 +289,10 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая норма уже существует") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="Не удалось сохранить изменения нормы. Обновите страницу и повторите.",
+        ) from exc
     
     await broadcast(0, {"event": "norm_updated", "id": norm_id})
 

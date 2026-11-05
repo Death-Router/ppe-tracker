@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -11,8 +11,13 @@ if TYPE_CHECKING:
 
 class PositionPpeNorm(Base):
     __tablename__ = "position_ppe_norms"
+    # Пара «должность + СИЗ» не уникальна: у нормы есть основное наименование
+    # и до четырёх альтернатив, ограничение снято миграцией a9f3c06b2d18.
+    # UniqueConstraint здесь возвращать нельзя — автогенерация попытается
+    # восстановить ограничение и упадёт на базе, где альтернативы уже есть.
+    # Индекс повторяет тот, что создала эта же миграция.
     __table_args__ = (
-        UniqueConstraint("position_id", "ppe_item_id", name="uq_position_ppe_item"),
+        Index("ix_position_ppe_norms_position_item", "position_id", "ppe_item_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
