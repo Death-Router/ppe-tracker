@@ -15,7 +15,6 @@
 """
 from __future__ import annotations
 
-import math
 import re
 import subprocess
 import zipfile
@@ -208,8 +207,8 @@ def rect(shape_no: int, x: float, top: float, w: float, h: float, *,
         f"<Cell N='PinY' V='{pin_y:.4f}'/>",
         f"<Cell N='Width' V='{w:.4f}'/>",
         f"<Cell N='Height' V='{h:.4f}'/>",
-        "<Cell N='LocPinX' V='0' F='Width*0.5'/>",
-        "<Cell N='LocPinY' V='0' F='Height*0.5'/>",
+        f"<Cell N='LocPinX' V='{w / 2:.4f}' F='Width*0.5'/>",
+        f"<Cell N='LocPinY' V='{h / 2:.4f}' F='Height*0.5'/>",
         "<Cell N='Angle' V='0'/><Cell N='FlipX' V='0'/><Cell N='FlipY' V='0'/>",
         "<Cell N='ResizeMode' V='0'/>",
         f"<Cell N='FillForegnd' V='{fill}'/><Cell N='FillBkgnd' V='{fill}'/>",
@@ -352,35 +351,54 @@ def build_page(tables: dict[str, Table], relations: list[tuple[str, str, str, st
 
 
 def connector(shape_no: int, x1: float, y1: float, x2: float, y2: float) -> str:
-    """Линия связи. Координаты — уже в системе Visio (Y снизу вверх)."""
-    length = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
-    angle = math.atan2(y2 - y1, x2 - x1)
-    parts = [
-        shape_id(shape_no),
-        f"<Cell N='PinX' V='{(x1 + x2) / 2:.4f}'/>",
-        f"<Cell N='PinY' V='{(y1 + y2) / 2:.4f}'/>",
-        f"<Cell N='Width' V='{length:.4f}'/>",
-        "<Cell N='Height' V='0'/>",
-        f"<Cell N='LocPinX' V='{length / 2:.4f}' F='Width*0.5'/>",
-        "<Cell N='LocPinY' V='0'/>",
-        f"<Cell N='Angle' V='{angle:.6f}'/>",
-        "<Cell N='FlipX' V='0'/><Cell N='FlipY' V='0'/><Cell N='ResizeMode' V='0'/>",
-        f"<Cell N='BeginX' V='{x1:.4f}'/><Cell N='BeginY' V='{y1:.4f}'/>",
-        f"<Cell N='EndX' V='{x2:.4f}'/><Cell N='EndY' V='{y2:.4f}'/>",
-        f"<Cell N='LineColor' V='{ACCENT}'/><Cell N='LineWeight' V='0.015'/>",
-        "<Cell N='EndArrow' V='4'/><Cell N='EndArrowSize' V='1'/>",
-        "<Section N='Geometry' IX='0'>",
-        "<Cell N='NoFill' V='1'/><Cell N='NoLine' V='0'/><Cell N='NoShow' V='0'/>",
-        "<Cell N='NoSnap' V='0'/><Cell N='NoQuickDrag' V='0'/>",
-        "<Row T='MoveTo' IX='1'><Cell N='X' V='0' F='Width*0'/></Row>",
-        f"<Row T='LineTo' IX='2'><Cell N='X' V='{length:.4f}' F='Width*1'/><Cell N='Y' V='0'/></Row>",
-        "</Section>",
-        "</Shape>",
-    ]
-    return "".join(parts)
+    """Связь как коннектор Visio на мастере Dynamic connector.
 
-
-# ---------------------------------------------------------------- сборка .vsdx
+    Ключевые моменты, без которых Visio рисует линии «из ниоткуда»:
+    * фигура обязана ссылаться на мастер (Master='2'), иначе у неё нет формул
+      1D-фигуры, и Visio трактует её как обычный прямоугольник;
+    * Width/Height у Visio неотрицательные, а направление задаётся FlipX/FlipY —
+      поэтому берём модули, а знаки уводим в флаги.
+    """
+    flip_x = 1 if x2 < x1 else 0
+    flip_y = 1 if y2 < y1 else 0
+    width = abs(x2 - x1)
+    height = abs(y2 - y1)
+    mid_x = (x1 + x2) / 2
+    mid_y = (y1 + y2) / 2
+    return (
+        f"<Shape ID='{shape_no}' NameU='Dynamic connector' Name='Dynamic connector' "
+        "Type='Shape' Master='2'>"
+        f"<Cell N='PinX' V='{mid_x:.4f}' F='Inh'/>"
+        f"<Cell N='PinY' V='{mid_y:.4f}' F='Inh'/>"
+        f"<Cell N='Width' V='{width:.4f}'/>"
+        f"<Cell N='Height' V='{height:.4f}'/>"
+        f"<Cell N='LocPinX' V='{width / 2:.4f}' F='Inh'/>"
+        f"<Cell N='LocPinY' V='{height / 2:.4f}' F='Inh'/>"
+        f"<Cell N='FlipX' V='{flip_x}'/><Cell N='FlipY' V='{flip_y}'/>"
+        f"<Cell N='BeginX' V='{x1:.4f}'/><Cell N='BeginY' V='{y1:.4f}'/>"
+        f"<Cell N='EndX' V='{x2:.4f}'/><Cell N='EndY' V='{y2:.4f}'/>"
+        "<Cell N='LayerMember' V='0'/>"
+        "<Cell N='BegTrigger' V='1' F='_XFTRIGGER(EventXFMod)'/>"
+        "<Cell N='EndTrigger' V='1' F='_XFTRIGGER(EventXFMod)'/>"
+        "<Cell N='ShapeRouteStyle' V='16'/><Cell N='ConLineRouteExt' V='1'/>"
+        f"<Cell N='TxtPinX' V='{mid_x:.4f}' F='Inh'/>"
+        f"<Cell N='TxtPinY' V='{mid_y:.4f}' F='Inh'/>"
+        "<Cell N='TxtHeight' V='0.2445' F='Inh'/>"
+        "<Cell N='TxtLocPinY' V='0.1222' F='Inh'/>"
+        f"<Cell N='LineColor' V='{ACCENT}'/><Cell N='LineWeight' V='0.015'/>"
+        "<Cell N='BeginArrow' V='0'/><Cell N='EndArrow' V='4'/>"
+        "<Cell N='EndArrowSize' V='1'/>"
+        "<Section N='Control'><Row N='TextPosition'>"
+        f"<Cell N='X' V='{mid_x:.4f}'/><Cell N='Y' V='{mid_y:.4f}'/>"
+        f"<Cell N='XDyn' V='{mid_x:.4f}' F='Inh'/>"
+        f"<Cell N='YDyn' V='{mid_y:.4f}' F='Inh'/>"
+        "<Cell N='XCon' V='0' F='Inh'/></Row></Section>"
+        "<Section N='Geometry' IX='0'>"
+        f"<Row T='LineTo' IX='2'><Cell N='X' V='{width:.4f}'/>"
+        f"<Cell N='Y' V='{height:.4f}'/></Row>"
+        "<Row T='LineTo' IX='3' Del='1'/></Section>"
+        "</Shape>"
+    )
 
 def build_mermaid(tables: dict[str, Table], relations: list[tuple[str, str, str, str]]) -> str:
     """Текстовое представление схемы: видно в браузере и диффится в git."""
