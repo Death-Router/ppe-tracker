@@ -26,18 +26,28 @@ CONSTRAINT_NAME = "uq_position_ppe_item"
 
 
 def upgrade() -> None:
+    # Ограничение снимаем, только если оно есть: в цепочке миграций его
+    # никогда не создавали (e1e06dfc6360 вместо create_unique_constraint
+    # выдала drop_table), поэтому на чистой базе DROP CONSTRAINT падал бы
+    # с UndefinedObject. IF EXISTS делает шаг no-op там, где ограничения нет,
+    # и сохраняет прежнее поведение на базах, где оно успело появиться вручную.
+    op.execute(f"ALTER TABLE position_ppe_norms DROP CONSTRAINT IF EXISTS {CONSTRAINT_NAME}")
     # Оставляем обычный индекс: поиск норм по должности и СИЗ остаётся быстрым
-    op.drop_constraint(CONSTRAINT_NAME, "position_ppe_norms", type_="unique")
     op.create_index(
         "ix_position_ppe_norms_position_item",
         "position_ppe_norms",
         ["position_id", "ppe_item_id"],
+        if_not_exists=True,
     )
 
 
 def downgrade() -> None:
-    # Возврат возможен только если дублей нет — иначе БД откажется
+    # Возврат возможен только если дублей нет — иначе БД откажется.
+    # Ограничение добавляем через IF NOT EXISTS: на базах, развёрнутых с нуля
+    # после правки e1e06dfc6360, его нет, а на старых оно могло сохраниться —
+    # create_unique_constraint упал бы на "already exists".
     op.drop_index("ix_position_ppe_norms_position_item", table_name="position_ppe_norms")
-    op.create_unique_constraint(
-        CONSTRAINT_NAME, "position_ppe_norms", ["position_id", "ppe_item_id"]
+    op.execute(
+        f"ALTER TABLE position_ppe_norms "
+        f"ADD CONSTRAINT IF NOT EXISTS {CONSTRAINT_NAME} UNIQUE (position_id, ppe_item_id)"
     )

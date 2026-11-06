@@ -6,9 +6,11 @@
 #   docker compose -f docker-compose.prod.yml up -d --build
 #   docker compose -f docker-compose.prod.yml exec api alembic upgrade head
 #
-# Миграции намеренно не запускаются в entrypoint по умолчанию: схема с нуля
-# сейчас не собирается (PROJECT.md, ловушка 8). Флаг AUTO_MIGRATE=1 включает
-# их для базы, уже приведённой к голове.
+# Миграции в entrypoint по умолчанию не запускаются: прод-база обычно уже
+# на голове, а лишний upgrade при каждом старте — лишний риск. Схема с нуля
+# теперь собирается (PROJECT.md, ловушка 8 исправлена), поэтому для пустой
+# базы достаточно AUTO_MIGRATE=1: entrypoint применит `alembic upgrade head`
+# с повторами, дожидаясь готовности БД.
 services:
   api:
     build:

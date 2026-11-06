@@ -400,26 +400,40 @@ Bootstrap создаёт второй backdrop на каждый клик, эк�
 Тот же приём обязателен для файла кеша в `push-ppe.ps1`: с BOM первый
 символ пути не совпадает, и сохранённый путь перестаёт находиться.
 
-### 8. Цепочка миграций не собирается с нуля
+### 8. Цепочка миграций не собиралась с нуля (исправлено)
 
-`alembic upgrade head` на пустой базе не пройдёт: миграция
-`e1e06dfc6360` («add unique constraint to position_ppe_norms») в
-`upgrade()` делает `DROP TABLE position_ppe_norms` и не создаёт таблицу
-заново, а следующая `a95a41654eeb` обращается к её колонкам (`ALTER`,
-`DROP INDEX`). Таблица появляется только в `bd09b9140447`, то есть до
-удаления.
+**Было:** `alembic upgrade head` на пустой базе падал. Обрыв был не один,
+а цепочка из семи ревизий — и корень у них общий, см. ловушку 12.
 
-Распознать, не поднимая базу:
+**Стало:** 29 ревизий от `cc65c5711e1e` до головы `e7b41c05a9d3` проходят на
+пустой `postgres:16-alpine`. Проверено на стенде: контейнер `db` +
+`ppe-tracker-api:prod` с `alembic upgrade head`, затем старт приложения —
+`/healthz` → 200, `/login` → 200. Дамп рабочей базы для первой заливки
+**больше не обязателен**: база разворачивается миграциями.
 
-```bash
-alembic upgrade head --sql | grep -E '(CREATE|DROP) TABLE position_ppe_norms'
+Что поменялось:
+
+| Ревизия | Было | Стало |
+|---|---|---|
+| `e1e06dfc6360` | `drop_table('position_ppe_norms')`, в downgrade `create_table` | `pass` / `pass` |
+| `a95a41654eeb` | `drop_index` двух несуществующих индексов | убрано, остались `alter_column` для комментариев |
+| `a9f3c06b2d18` | `drop_constraint('uq_position_ppe_item')` | `DROP CONSTRAINT IF EXISTS` через `op.execute` |
+| `42b7bb81cc04` | `drop_table('ppe_sizes')` | `add_column(gender)` + `uq_ppe_item_size_gender` |
+| `9dbb6662bf81` | `drop_index` + `drop_table('ppe_sizes')` | убрано, остался `add_column(parent_id)` |
+| `f3bb1b7dee7d` | `drop_index` без создания | убран `drop_index` |
+| `cc31f1fe06fd` | `op.f('uq_category_size_gender')` | имя без `op.f` |
+
+**Как теперь проверять** (одна команда вместо «поднять базу и посмотреть»):
+
+```powershell
+docker run --rm --network ppe-migtest -e SECRET_KEY=<ключ ≥32 символов> `
+  -e POSTGRES_USER=ppe -e POSTGRES_PASSWORD=ppe -e POSTGRES_DB=ppe_db `
+  -e POSTGRES_HOST=migtest-db -e POSTGRES_PORT=5432 `
+  --entrypoint alembic ppe-tracker-api:prod upgrade head
 ```
 
-В выводе будет `DROP TABLE` без обратного `CREATE`. Отдельно: `--sql`
-обрывается на первой data-миграции (`b7e1c93d5a24` обращается к соединению),
-это нормально — нужные строки идут раньше. Рабочую базу на work это не
-затрагивает, она уже на голове, но чистый разворот по README сейчас не
-проходит. Пока не исправлено.
+`SECRET_KEY` нужен валидной длины: `config.py` падает на коротком ключе ещё
+до подключения к базе, и ошибка миграций не покажется.
 
 ### 9. Одинаковое имя у `const` и `function` в одном IIFE
 
@@ -620,12 +634,10 @@ docker compose -f docker-compose.prod.yml exec api python create_admin.py
 
 **Ограничения, которые нужно помнить:**
 
-- **Миграции с нуля не собираются** (ловушка 8). На чистой базе
-  `alembic upgrade head` падает на `COMMENT ON COLUMN position_ppe_norms...`,
-  поэтому первая заливка — из дампа рабочей базы:
-  `pg_dump … | docker compose -f docker-compose.prod.yml exec -T db psql …`.
-  `AUTO_MIGRATE=1` в entrypoint включает `upgrade head` при старте, но только
-  для базы, уже стоящей на голове цепочки.
+- **Миграции с нуля теперь собираются** (было ловушкой 8, исправлено —
+  см. раздел «Цепочка миграций»). `alembic upgrade head` на пустой базе
+  проходит все 29 ревизий; проверено на `postgres:16-alpine` и на
+  `ppe-tracker-api:prod` (`/healthz` → 200, `/login` → 200).
 - `SESSION_COOKIE_SECURE=true` работает только вместе с HTTPS на прокси.
 - `base.html` тянет Bootstrap, иконки и Google Fonts с CDN: в закрытом контуре
   страницы останутся без стилей — файлы нужно положить в `app/static`.
@@ -675,6 +687,34 @@ $b = [IO.File]::ReadAllBytes('docker/entrypoint.sh'); $b[0..9] -join ' '
 Само по себе `dockerfile.prod` с CRLF собирается нормально: Docker построчно
 читает директивы и переносы гасит. Ломаются только файлы, которые исполняет
 ядро Linux: `.sh`, а также любые shebang-скрипты.
+
+### 12. Автогенерация выдаёт `drop_table` вместо `add_column`
+
+Корень обрыва из ловушки 8. Когда Alembic при `--autogenerate` не видит
+таблицу в базе, он считает её лишней и вместо правки колонки пишет
+`op.drop_table(...)`. Это случилось дважды:
+
+- `e1e06dfc6360` («add unique constraint to position_ppe_norms») —
+  `drop_table('position_ppe_norms')`, хотя таблицу создал `bd09b9140447`
+  предыдущим шагом;
+- `42b7bb81cc04` («add gender to ppe_sizes») — `drop_table('ppe_sizes')`
+  вместо `add_column(gender)`, хотя таблицу создал `5b495550fcfc`.
+
+Последствия каскадом: следующие ревизии обращаются к удалённой таблице и
+падают. Так «одна миграция с `drop`» утащила за собой `a95a41654eeb`,
+`9dbb6662bf81`, `f3bb1b7dee7d` и `cc31f1fe06fd`.
+
+**Правило: миграцию проверяют на ПУСТОЙ базе, а не на рабочей.** На рабочей
+всё зелено, потому что таблица уже есть, и `drop_table` проходит там лишь
+потому, что миграции когда-то применялись по одной, а таблица появлялась
+позже. Признак в файле — `op.drop_table(...)` или `op.drop_constraint(...)`
+в `upgrade()` ревизии, название которой обещает *добавление*. Такое
+`drop_table` почти наверняка ошибка автогенерации.
+
+Там же вторые грабли: **`op.f('имя')` подставляет naming convention**, а не
+буквальное имя. Если ограничение создано «сырым» SQL, до появления convention
+или в базе его имя отличается — `drop_constraint(op.f('...'))` ищет не то
+имя и падает. Надёжнее `ALTER TABLE ... DROP CONSTRAINT IF EXISTS`.
 
 ---
 

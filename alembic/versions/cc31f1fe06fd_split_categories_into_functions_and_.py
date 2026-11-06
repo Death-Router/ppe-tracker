@@ -42,7 +42,7 @@ def upgrade() -> None:
     op.create_foreign_key(None, 'ppe_items', 'ppe_size_groups', ['size_group_id'], ['id'], ondelete='SET NULL')
     op.drop_column('ppe_items', 'category_id')
     op.add_column('ppe_sizes', sa.Column('size_group_id', sa.Integer(), nullable=False))
-    op.drop_constraint(op.f('uq_category_size_gender'), 'ppe_sizes', type_='unique')
+    op.drop_constraint('uq_category_size_gender', 'ppe_sizes', type_='unique')
     op.create_unique_constraint('uq_size_group_size_gender', 'ppe_sizes', ['size_group_id', 'size_value', 'gender'])
     op.drop_constraint(op.f('ppe_sizes_category_id_fkey'), 'ppe_sizes', type_='foreignkey')
     op.create_foreign_key(None, 'ppe_sizes', 'ppe_size_groups', ['size_group_id'], ['id'], ondelete='CASCADE')
