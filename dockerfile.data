@@ -2,7 +2,8 @@
 #
 # Это не отдельное приложение, а ppe-tracker-api:prod + дамп, который
 # срабатывает при первом старте на пустой базе. Собирается скриптом
-# make-data-image.sh — он кладёт дамп в контекст как data/dump.sql.
+# make-data-image.sh — он кладёт в контекст data/dump.sql и
+# docker/entrypoint-data.sh.
 #
 # Почему через дамп, а не копированием каталога Postgres внутрь:
 # PGDATA привязан к версии сервера, к control-файлу с system identifier и к
@@ -12,19 +13,26 @@
 ARG BASE_IMAGE=ppe-tracker-api:prod
 FROM ${BASE_IMAGE}
 
+# Базовый образ заканчивается USER app (uid 10001). COPY с --chown ему доступен,
+# а вот sed -i и chmod в /usr/local/bin — нет: sed создаёт временный файл рядом
+# с целевым и падает с "Permission denied" (проверено). Поэтому подготовку
+# файлов делаем от root, а в конце возвращаемся к непривилегированному
+# пользователю — рантайм остаётся под app.
+USER root
+
 # Дамп читает приложение под app (uid 10001) — права на копию такие же.
-# Пользователь задан так, а не через USER: имя пользователя может измениться
-# в базовом образе, а id остаётся.
+# Пользователь задан числом, а не именем: id остаётся тем же, если в базовом
+# образе имя пользователя поменяют.
 COPY --chown=10001:10001 data/dump.sql /app/data/dump.sql
-# entrypoint-data.sh лежит в КОРНЕ контекста сборки: make-data-image.sh кладёт
-# его туда вместе с data/. Путь "docker/entrypoint-data.sh" здесь не работает —
-# временный контекст не содержит каталога docker/ (проверено: COPY падал с
-# '"/docker/entrypoint-data.sh": not found').
-COPY --chown=10001:10001 entrypoint-data.sh /usr/local/bin/entrypoint-data.sh
+COPY docker/entrypoint-data.sh /usr/local/bin/entrypoint-data.sh
+
 # CRLF ломает шебанг так же, как в entrypoint.sh (PROJECT.md, ловушка 11):
 # ядро ищет "/bin/sh\r" и сообщает "no such file or directory" при живом файле.
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint-data.sh \
     && chmod 0755 /usr/local/bin/entrypoint-data.sh \
-    && chmod 0644 /app/data/dump.sql
+    && chmod 0644 /app/data/dump.sql \
+    && chown -R 10001:10001 /app/data
+
+USER 10001
 
 ENTRYPOINT ["/usr/local/bin/entrypoint-data.sh"]
