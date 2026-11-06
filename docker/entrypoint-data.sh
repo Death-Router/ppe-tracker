@@ -133,12 +133,68 @@ export PGPASSWORD="$POSTGRES_PASSWORD"
 export PGDATABASE="$POSTGRES_DB"
 
 log "заливаю $DUMP в базу"
+# Порядок INSERT-ов в дампе задаёт pg_dump, и он не гарантирует, что
+# справочники (ppe_size_groups) идут раньше ссылающихся на них таблиц
+# (ppe_items). Практика: заливка падала с
+#   violates foreign key constraint "ppe_items_size_group_id_fkey"
+#   Key (size_group_id)=(10) is not present in table "ppe_size_groups"
+# хотя строка id=10 в дампе есть — она была ниже по тексту.
+#
+# session_replication_role=replica на время транзакции отключает проверку FK.
+# Допустимо: дамп снят с живой базы, где ссылочная целостность соблюдалась,
+# и транзакция откатывается целиком при любой ошибке. Требует прав
+# суперпользователя — POSTGRES_USER в postgres:16-alpine им и является.
+# SET живёт в пределах сессии, а psql -c ... -f ... идёт в одной сессии.
 if ! psql \
         --single-transaction \
         --set ON_ERROR_STOP=1 \
         --quiet \
+        --command "SET session_replication_role = replica" \
         --file "$DUMP"; then
     echo "data-image: дамп не применился, изменения откачены" >&2
+    exit 1
+fi
+
+# Последовательности после INSERT с явными id не сдвигаются: первая же
+# новая запись через интерфейс попробовала бы существующий id. Выставляем
+# nextval за максимум по каждой таблице с SERIAL-колонкой.
+log "синхронизирую последовательности"
+if ! psql \
+        --single-transaction \
+        --set ON_ERROR_STOP=1 \
+        --quiet \
+        --command "
+DO \$\$
+DECLARE
+    r record;
+    seq text;
+    max_id bigint;
+BEGIN
+    FOR r IN
+        SELECT c.table_name
+        FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+          AND c.column_name = 'id'
+          AND c.is_identity = 'NO'
+          AND EXISTS (
+              SELECT 1 FROM information_schema.tables t
+              WHERE t.table_schema = 'public'
+                AND t.table_name = c.table_name
+                AND t.table_type = 'BASE TABLE'
+          )
+    LOOP
+        seq := pg_get_serial_sequence(format('public.%I', r.table_name), 'id');
+        CONTINUE WHEN seq IS NULL;
+        EXECUTE format('SELECT COALESCE(max(id), 0) FROM public.%I', r.table_name)
+            INTO max_id;
+        IF max_id > 0 THEN
+            PERFORM setval(seq, max_id, true);
+        END IF;
+    END LOOP;
+END
+\$\$;
+"; then
+    echo "data-image: не удалось синхронизировать последовательности" >&2
     exit 1
 fi
 
