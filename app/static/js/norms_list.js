@@ -556,7 +556,15 @@
 
   WS.subscribe((data) => {
     if (data.event === 'norm_updated') loadData();
+    // Справочник пунктов норм правят на соседней вкладке: в выпадающем списке
+    // формы остались бы старые пункты
+    if (data.event === 'typical_norm_updated') loadTypicalNorms();
   });
+
+  // Срок носки и количество — только цифры, не больше трёх: «1,5» в поле
+  // срока давало неверную дату окончания носки
+  FormHelper.onlyDigits(createForm?.elements['wear_period_value'], 3);
+  FormHelper.onlyDigits(createForm?.elements['quantity'], 3);
 
   loadData();
 })();

@@ -1,5 +1,29 @@
 // app/static/js/common/form.js
 window.FormHelper = {
+  // Только цифры, не длиннее maxLength. Нужна для количеств: СИЗ считаются
+  // штуками, а «-5» или «2,5» в карточке ломают остаток.
+  digits(value, maxLength = 3) {
+    return String(value ?? '').replace(/\D+/g, '').slice(0, maxLength);
+  },
+
+  // Маска на поле: чистит ввод на лету, при вставке и при потере фокуса.
+  // Возвращает поле, чтобы вызывающий код мог продолжить настройку.
+  onlyDigits(input, maxLength = 3) {
+    if (!input) return null;
+
+    const clean = () => {
+      const digits = FormHelper.digits(input.value, maxLength);
+      if (digits !== input.value) input.value = digits;
+    };
+
+    input.addEventListener('input', clean);
+    input.addEventListener('blur', clean);
+    // Автозаполнение и восстановление значения браузером не дают input —
+    // поэтому чистим и сразу при подключении маски
+    clean();
+    return input;
+  },
+
   // Превращает форму в объект { name: value, ... }
   serialize(form) {
     const data = {};
