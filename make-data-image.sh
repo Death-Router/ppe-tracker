@@ -172,6 +172,12 @@ fi
 TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ppe-data.XXXXXX")
 mkdir -p "$TMP_DIR/data"
 
+# Точка входа образа с данными кладётся в контекст сборки: dockerfile.data
+# читает её относительно контекста, а не репозитория. Без этого COPY падает
+# с '"/docker/entrypoint-data.sh": not found'.
+cp docker/entrypoint-data.sh "$TMP_DIR/entrypoint-data.sh"
+chmod 0755 "$TMP_DIR/entrypoint-data.sh"
+
 if [ -n "$DUMP_FILE" ]; then
     [ -f "$DUMP_FILE" ] || die "нет файла дампа: $DUMP_FILE"
     step "Беру готовый дамп $DUMP_FILE"

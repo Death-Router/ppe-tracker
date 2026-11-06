@@ -16,7 +16,11 @@ FROM ${BASE_IMAGE}
 # Пользователь задан так, а не через USER: имя пользователя может измениться
 # в базовом образе, а id остаётся.
 COPY --chown=10001:10001 data/dump.sql /app/data/dump.sql
-COPY --chown=10001:10001 docker/entrypoint-data.sh /usr/local/bin/entrypoint-data.sh
+# entrypoint-data.sh лежит в КОРНЕ контекста сборки: make-data-image.sh кладёт
+# его туда вместе с data/. Путь "docker/entrypoint-data.sh" здесь не работает —
+# временный контекст не содержит каталога docker/ (проверено: COPY падал с
+# '"/docker/entrypoint-data.sh": not found').
+COPY --chown=10001:10001 entrypoint-data.sh /usr/local/bin/entrypoint-data.sh
 # CRLF ломает шебанг так же, как в entrypoint.sh (PROJECT.md, ловушка 11):
 # ядро ищет "/bin/sh\r" и сообщает "no such file or directory" при живом файле.
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint-data.sh \
