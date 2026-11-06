@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.ppe_function import PpeFunction
 from app.schemas.ppe_function import PpeFunctionCreate, PpeFunctionRead, PpeFunctionUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/ppe_functions", tags=["Справочник: Функции СИЗ"])
 
@@ -22,6 +23,7 @@ async def create_function(func_in: PpeFunctionCreate, db: AsyncSession = Depends
         await db.rollback()
         raise HTTPException(status_code=400, detail="Такая функция уже существует") from exc
     await db.refresh(db_func)
+    await broadcast(0, {"event": "function_updated", "id": db_func.id})
     return db_func
 
 @router.get("/", response_model=list[PpeFunctionRead])
@@ -44,6 +46,7 @@ async def update_function(func_id: int, func_in: PpeFunctionUpdate, db: AsyncSes
     db_func.version += 1
     await db.commit()
     await db.refresh(db_func)
+    await broadcast(0, {"event": "function_updated", "id": func_id})
     return db_func
 
 @router.delete("/{func_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -58,3 +61,5 @@ async def delete_function(func_id: int, db: AsyncSession = Depends(get_db)):
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить функцию, есть привязанные СИЗ") from exc
+
+    await broadcast(0, {"event": "function_updated", "id": func_id})

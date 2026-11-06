@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.models.ppe_size import PpeSize
 from app.models.ppe_size_group import PpeSizeGroup
 from app.schemas.ppe_size import PpeSizeCreate, PpeSizeRead
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/ppe_sizes", tags=["Справочник: Размеры СИЗ"])
 
@@ -26,6 +27,14 @@ async def create_size(size_in: PpeSizeCreate, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=400, detail="Такой размер уже существует для этой группы") from exc
     
     await db.refresh(db_size)
+    await broadcast(
+        0,
+        {
+            "event": "size_updated",
+            "id": db_size.id,
+            "size_group_id": db_size.size_group_id,
+        },
+    )
     return db_size
 
 @router.get("/", response_model=list[PpeSizeRead])
@@ -59,5 +68,12 @@ async def delete_size(size_id: int, db: AsyncSession = Depends(get_db)):
     db_size = result.scalar_one_or_none()
     if not db_size:
         raise HTTPException(status_code=404, detail="Размер не найден")
+    # Группа нужна после удаления: по ней страница решает, перерисовывать ли
+    # открытый список размеров
+    size_group_id = db_size.size_group_id
     await db.delete(db_size)
     await db.commit()
+
+    await broadcast(
+        0, {"event": "size_updated", "id": size_id, "size_group_id": size_group_id}
+    )

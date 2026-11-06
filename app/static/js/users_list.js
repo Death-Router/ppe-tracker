@@ -141,5 +141,10 @@
 
   document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
+  // Пользователей и подразделения в списке могли поменять в другой вкладке
+  WS.subscribe((data) => {
+    if (data.event === 'user_updated') loadData();
+  });
+
   loadData();
 })();

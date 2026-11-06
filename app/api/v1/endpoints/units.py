@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.unit import Unit
 from app.schemas.unit import UnitCreate, UnitRead, UnitUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/units", tags=["Справочник: Единицы измерения"])
 
@@ -24,6 +25,7 @@ async def create_unit(unit_in: UnitCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Ошибка при создании единицы") from exc
     
     await db.refresh(db_unit)
+    await broadcast(0, {"event": "unit_updated", "id": db_unit.id})
     return db_unit
 
 @router.get("/", response_model=list[UnitRead])
@@ -49,6 +51,7 @@ async def update_unit(unit_id: int, unit_in: UnitUpdate, db: AsyncSession = Depe
         raise HTTPException(status_code=400, detail="Такая единица уже существует") from exc
     
     await db.refresh(db_unit)
+    await broadcast(0, {"event": "unit_updated", "id": unit_id})
     return db_unit
 
 @router.delete("/{unit_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -63,3 +66,5 @@ async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db)):
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить единицу, есть привязанные СИЗ") from exc
+
+    await broadcast(0, {"event": "unit_updated", "id": unit_id})

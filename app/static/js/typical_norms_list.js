@@ -155,5 +155,10 @@
 
   document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
+  // Пункт норм правят в соседней вкладке — список перечитываем, сохраняя поиск
+  WS.subscribe((data) => {
+    if (data.event === 'typical_norm_updated') loadItems();
+  });
+
   loadItems();
 })();

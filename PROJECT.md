@@ -265,6 +265,37 @@ PpeSizeGroup → PpeSize (значения размеров)
 
 Списки: `.data-table--dense` (отступ ячейки 6px), 20 строк на страницу.
 
+### Обновление в реальном времени (WebSocket)
+
+`/ws/employees/{id}` — канал уведомлений, требует сессии (без неё `close(1008)`).
+Клиент (`js/common/ws.js`) подключается к каналу `0` и раздаёт события
+подписчикам через `WS.subscribe(cb)`.
+
+**Правило: любая мутация через API рассылает событие.** Иначе соседняя вкладка
+показывает устаревшие данные до ручного обновления страницы.
+
+| Событие | Шлёт | Подписаны |
+|---|---|---|
+| `employee_created`, `employee_updated` | `employees`, импорт сотрудников | `employees_list` |
+| `issue_updated` | `employee_ppe_issues` | `employees_list` (открытая карточка) |
+| `norm_updated` | `position_ppe_norms` (создание, правка, удаление, копирование), импорт норм | `norms_list` |
+| `item_updated` | `ppe_items` (в т.ч. массовые операции), импорт СИЗ | `ppe_items_list`, `ppe_item_edit_v2` |
+| `department_updated` | `departments` | `departments_list`, `department_edit` |
+| `position_updated` | `positions` | `positions_list`, `position_edit` |
+| `function_updated` | `ppe_functions` | `ppe_functions_list`, `ppe_items_list`, `ppe_item_edit_v2` |
+| `size_group_updated` | `ppe_size_groups` | `ppe_size_groups_list`, `ppe_items_list`, `ppe_item_edit_v2`, `employees_list` |
+| `size_updated` | `ppe_sizes` (в сообщении есть `size_group_id`) | `ppe_size_groups_list` (модалка своей группы), `employees_list` |
+| `unit_updated` | `units` | `units_list`, `ppe_items_list`, `ppe_item_edit_v2` |
+| `typical_norm_updated` | `typical_norms` | `typical_norms_list`, `norms_list` (выпадающий список) |
+| `user_updated` | `users` | `users_list` |
+
+Особенности:
+- массовые операции и импорт шлют `item_id=0` / `employee_id=0` — это «изменилось
+  много записей»: списки перечитываются, карточка одной записи — нет;
+- рассылка идёт через `app/utils/broadcast.py`: сбой WS логируется, но не
+  ломает основной запрос;
+- `login`/`logout` события не шлют — это состояние сессии, а не данных.
+
 ---
 
 ## Известные ловушки

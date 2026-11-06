@@ -94,6 +94,9 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
     norm = await get_norm_with_relations(db, db_norm.id)
     if norm is None:
         raise HTTPException(status_code=404, detail="Норма не найдена")
+
+    # Матрица норм другой должности в соседней вкладке должна обновиться
+    await broadcast(0, {"event": "norm_updated", "id": db_norm.id})
     return norm
 
 
@@ -376,3 +379,5 @@ async def delete_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления") from exc
+
+    await broadcast(0, {"event": "norm_updated", "id": norm_id})

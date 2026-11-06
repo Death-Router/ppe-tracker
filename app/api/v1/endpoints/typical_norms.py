@@ -12,6 +12,7 @@ from app.schemas.typical_norm import (
     TypicalNormRead,
     TypicalNormUpdate,
 )
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/typical_norms", tags=["Справочник: Типовые нормы"])
 
@@ -50,6 +51,7 @@ async def create_typical_norm(
         ) from exc
 
     await db.refresh(db_norm)
+    await broadcast(0, {"event": "typical_norm_updated", "id": db_norm.id})
     return db_norm
 
 
@@ -109,6 +111,7 @@ async def update_typical_norm(
         ) from exc
 
     await db.refresh(db_norm)
+    await broadcast(0, {"event": "typical_norm_updated", "id": norm_id})
     return db_norm
 
 
@@ -139,3 +142,5 @@ async def delete_typical_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Пункт указан в нормах выдачи — сначала уберите его оттуда",
         ) from exc
+
+    await broadcast(0, {"event": "typical_norm_updated", "id": norm_id})

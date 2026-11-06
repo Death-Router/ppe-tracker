@@ -111,5 +111,10 @@
   // Привязка кнопки "Добавить" к открытию модалки
   document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
+  // Справочник мог изменить другой пользователь — перечитываем список
+  WS.subscribe((data) => {
+    if (data.event === 'function_updated') loadFunctions();
+  });
+
   loadFunctions();
 })();

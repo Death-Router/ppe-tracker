@@ -9,6 +9,7 @@ from app.core.security import get_password_hash
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/users", tags=["Пользователи"])
 
@@ -72,6 +73,7 @@ async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db), _
         raise HTTPException(status_code=400, detail="Ошибка при создании пользователя") from exc
     
     await db.refresh(db_user)
+    await broadcast(0, {"event": "user_updated", "id": db_user.id})
     return db_user
 
 @router.put("/{user_id}", response_model=UserRead)
@@ -91,6 +93,7 @@ async def update_user(user_id: int, user_in: UserUpdate, db: AsyncSession = Depe
     
     await db.commit()
     await db.refresh(db_user)
+    await broadcast(0, {"event": "user_updated", "id": user_id})
     return db_user
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -106,3 +109,5 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), _ = Depe
     
     await db.delete(db_user)
     await db.commit()
+
+    await broadcast(0, {"event": "user_updated", "id": user_id})

@@ -32,6 +32,7 @@ async def create_item(item_in: PpeItemCreate, db: AsyncSession = Depends(get_db)
     await db.refresh(db_item)
     
     result = await db.execute(select(PpeItem).where(PpeItem.id == db_item.id).options(*item_options()))
+    await broadcast(0, {"event": "item_updated", "item_id": db_item.id})
     return result.scalar_one()
 
 @router.get("/", response_model=None)
@@ -165,6 +166,8 @@ async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления") from exc
 
+    await broadcast(0, {"event": "item_updated", "item_id": item_id})
+
 
 # --- Массовые операции ---
 
@@ -200,6 +203,9 @@ async def bulk_update_items(
         item.version += 1
 
     await db.commit()
+    # id=0 — «изменилось много записей»: карточка конкретного СИЗ по такому
+    # событию не перезагружается, а списки — да
+    await broadcast(0, {"event": "item_updated", "item_id": 0})
     return {"message": f"Обновлено {len(items)} записей"}
 
 
@@ -236,4 +242,5 @@ async def bulk_delete_items(
 
     await db.execute(delete(PpeItem).where(PpeItem.id.in_(data.ids)))
     await db.commit()
+    await broadcast(0, {"event": "item_updated", "item_id": 0})
     return {"message": f"Удалено {len(data.ids)} записей"}

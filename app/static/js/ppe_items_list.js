@@ -330,6 +330,12 @@
 
   WS.subscribe((data) => {
     if (data.event === 'item_updated') loadItems();
+    // Функция, размерная группа и единица измерения показаны в таблице и
+    // используются фильтрами — после их правки перечитываем и справочники
+    if (['function_updated', 'size_group_updated', 'unit_updated'].includes(data.event)) {
+      loadSelects();
+      loadItems();
+    }
   });
 
   loadSelects();

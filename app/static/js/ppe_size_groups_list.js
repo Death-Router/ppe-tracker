@@ -185,5 +185,26 @@
 
   document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
+  // Открытую модалку размеров перерисовываем только для её группы: иначе
+  // добавленный в другой группе размер подменял бы список на экране
+  async function reloadSizesIfOpen(sizeGroupId) {
+    if (!sizesModalElement?.classList.contains('show')) return;
+
+    const openedGroup = Number(sizeGroupIdInput.value);
+    if (sizeGroupId != null && Number(sizeGroupId) !== openedGroup) return;
+
+    try {
+      const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${openedGroup}`);
+      renderSizesList(sizes);
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    }
+  }
+
+  WS.subscribe((data) => {
+    if (data.event === 'size_group_updated') loadGroups();
+    if (data.event === 'size_updated') reloadSizesIfOpen(data.size_group_id);
+  });
+
   loadGroups();
 })();

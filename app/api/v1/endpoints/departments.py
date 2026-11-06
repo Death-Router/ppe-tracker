@@ -54,6 +54,8 @@ async def create_department(dept_in: DepartmentCreate, db: AsyncSession = Depend
     db.add(db_dept)
     await db.commit()
     await db.refresh(db_dept)
+
+    await broadcast(0, {"event": "department_updated", "id": db_dept.id})
     return db_dept
 
 @router.get("/", response_model=list[DepartmentRead])
@@ -159,3 +161,5 @@ async def delete_department(dept_id: int, db: AsyncSession = Depends(get_db)):
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить, есть привязанные данные") from exc
+
+    await broadcast(0, {"event": "department_updated", "id": dept_id})

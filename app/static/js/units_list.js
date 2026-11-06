@@ -117,5 +117,9 @@
   // Привязка кнопки "Добавить" к открытию модалки
   document.getElementById('btn-create')?.addEventListener('click', openCreateModal);
 
+  WS.subscribe((data) => {
+    if (data.event === 'unit_updated') loadUnits();
+  });
+
   loadUnits();
 })();

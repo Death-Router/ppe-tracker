@@ -107,9 +107,20 @@
     }
   });
 
-  WS.subscribe((data) => {
+  WS.subscribe(async (data) => {
     if (data.event === 'item_updated' && data.item_id === itemId) {
       loadItem(true);
+    }
+
+    // Справочники могли поправить в соседней вкладке. Пересобираем списки,
+    // сохраняя выбор: иначе перерисовка сбрасывала бы значения на «Не указана»
+    if (['function_updated', 'size_group_updated', 'unit_updated'].includes(data.event)) {
+      const selects = [functionSelect, sizeGroupSelect, unitSelect];
+      const chosen = selects.map((el) => el?.value ?? '');
+      await loadSelects();
+      selects.forEach((el, index) => {
+        if (el && chosen[index]) el.value = chosen[index];
+      });
     }
   });
 

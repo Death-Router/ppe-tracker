@@ -44,6 +44,7 @@ async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get
             detail="В этом подразделении уже есть должность с таким названием",
         ) from exc
     await db.refresh(db_pos)
+    await broadcast(0, {"event": "position_updated", "id": db_pos.id})
     result = await db.execute(select(Position).where(Position.id == db_pos.id).options(selectinload(Position.department)))
     return result.scalar_one()
 
@@ -159,3 +160,5 @@ async def delete_position(pos_id: int, db: AsyncSession = Depends(get_db)):
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить, есть привязанные сотрудники") from exc
+
+    await broadcast(0, {"event": "position_updated", "id": pos_id})

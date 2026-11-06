@@ -15,6 +15,7 @@ from app.models.ppe_function import PpeFunction
 from app.models.ppe_item import PpeItem
 from app.models.ppe_size_group import PpeSizeGroup
 from app.models.unit import Unit
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/import", tags=["Импорт данных"])
 
@@ -176,6 +177,9 @@ async def import_employees(
             counters["created"] += 1
 
     counters, errors = await run_rows(db, df, handle_row)
+    # Импорт меняет сразу много строк: соседние вкладки должны перечитать списки,
+    # поэтому шлём событие «обновилось всё», как у массовых операций СИЗ
+    await broadcast(0, {"event": "employee_updated", "employee_id": 0})
     return {
         "message": "Импорт завершен",
         "created": counters["created"],
@@ -257,6 +261,7 @@ async def import_ppe_items(
             counters["created"] += 1
 
     counters, errors = await run_rows(db, df, handle_row)
+    await broadcast(0, {"event": "item_updated", "item_id": 0})
     return {
         "message": "Импорт СИЗ завершен",
         "created": counters["created"],
@@ -341,6 +346,7 @@ async def import_norms(
             counters["created"] += 1
 
     counters, errors = await run_rows(db, df, handle_row)
+    await broadcast(0, {"event": "norm_updated", "id": 0})
     return {
         "message": "Импорт норм завершен",
         "created": counters["created"],

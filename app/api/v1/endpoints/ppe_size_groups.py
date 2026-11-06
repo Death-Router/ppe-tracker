@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.ppe_size_group import PpeSizeGroup
 from app.schemas.ppe_size_group import PpeSizeGroupCreate, PpeSizeGroupRead, PpeSizeGroupUpdate
+from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/ppe_size_groups", tags=["Справочник: Размерные группы"])
 
@@ -22,6 +23,7 @@ async def create_group(group_in: PpeSizeGroupCreate, db: AsyncSession = Depends(
         await db.rollback()
         raise HTTPException(status_code=400, detail="Такая группа уже существует") from exc
     await db.refresh(db_group)
+    await broadcast(0, {"event": "size_group_updated", "id": db_group.id})
     return db_group
 
 @router.get("/", response_model=list[PpeSizeGroupRead])
@@ -58,6 +60,7 @@ async def update_group(group_id: int, group_in: PpeSizeGroupUpdate, db: AsyncSes
         await db.rollback()
         raise HTTPException(status_code=400, detail="Такая группа уже существует") from exc
     await db.refresh(db_group)
+    await broadcast(0, {"event": "size_group_updated", "id": group_id})
     return db_group
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -72,3 +75,5 @@ async def delete_group(group_id: int, db: AsyncSession = Depends(get_db)):
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Нельзя удалить группу, есть привязанные СИЗ или размеры") from exc
+
+    await broadcast(0, {"event": "size_group_updated", "id": group_id})
