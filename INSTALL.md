@@ -222,11 +222,59 @@ docker exec ppe-api python create_admin.py
 
 <http://127.0.0.1:8000>
 
+### 4.7 Или одной командой
+
+`install-ppe.ps1` делает всё из разделов 4.1–4.5: загружает образ, создаёт
+каталог, генерирует `.env`, пишет `docker-compose.yml`, поднимает контейнеры
+и заводит администратора.
+
+Политика выполнения в Windows запрещает `.ps1` по двойному клику, поэтому
+запуск — из PowerShell с обходом политики (тот же приём, что в
+`push-ppe.cmd`):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
+    -Image .\ppe-tracker-api-data.tar -Dir C:\ppe
+```
+
+Для чистого образа — добавить `-Clean`, тогда скрипт ещё и заведёт
+администратора:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
+    -Image .\ppe-tracker-api-prod.tar -Clean -AdminPass 'СложныйПароль1'
+```
+
+| Параметр | По умолчанию | Назначение |
+|---|---|---|
+| `-Image` | ищет `.tar` рядом со скриптом | файл образа |
+| `-Dir` | `C:\ppe` | каталог установки |
+| `-Port` | `8000` | порт на `127.0.0.1` |
+| `-Clean` | — | образ без данных: завести администратора |
+| `-AdminLogin` / `-AdminPass` | `admin` / сгенерирован | учётка |
+| `-Force` | — | перезаписать `.env` без вопроса |
+
+Скрипт идемпотентен: повторный запуск не трогает данные, а существующий
+`.env` перезаписывает только после подтверждения.
+
 ---
 
 ## 5. Установка на Linux
 
 Всё то же самое, отличия в путях и правах.
+
+### 5.0 Или одной командой
+
+`install-ppe.sh` — то же самое для POSIX-шелла (WSL, Ubuntu, любой Linux):
+
+```bash
+sh install-ppe.sh ppe-tracker-api-data.tar -d /opt/ppe
+sh install-ppe.sh ppe-tracker-api-prod.tar -d /opt/ppe --clean
+```
+
+Параметры: `-d` каталог, `-p` порт, `--clean`, `--admin-login`,
+`--admin-pass`, `--force`. Скрипт работает от обычного пользователя;
+`sudo` сам вызывается только чтобы создать каталог, если его нет.
 
 ### 5.1 Загрузить образ
 
