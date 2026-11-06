@@ -1,0 +1,42 @@
+# Контекст сборки: в образ не должно попадать ничего, что не нужно приложению.
+# Без этого файла `COPY . .` затягивал .env с секретами, .venv (237 МБ на
+# Python 3.14), .git и .ruff_cache — см. PROJECT.md, «Прод-запуск».
+
+# Секреты
+.env
+.env.*
+!.env.prod.example
+
+# Git и окружения разработчика
+.git
+.gitignore
+.venv
+venv
+env
+.ruff_cache
+.pytest_cache
+.vscode
+.idea
+
+# Python-мусор (шаблон без **/ матчит только корень контекста — проверено:
+# app/__pycache__ просочился в образ, поэтому здесь оба варианта)
+__pycache__
+**/__pycache__
+*.py[cod]
+**/*.py[cod]
+*.so
+.Python
+
+# Документация и генератор схемы: в runtime-образе не нужны
+docs
+*.md
+PROJECT.md
+README.md
+
+# Файлы сборки и локальные данные
+dockerfile
+dockerfile.prod
+docker-compose*.yml
+pyproject.toml
+*.docx
+push-ppe.*

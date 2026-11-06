@@ -1,10 +1,13 @@
+import asyncio
 import logging
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.v1.endpoints import (
@@ -29,12 +32,34 @@ from app.core.config import settings
 from app.core.constants import HEIGHT_GRID
 from app.core.csrf import csrf_token_for, require_csrf
 from app.core.deps import get_current_active_user
+from app.db.session import get_db
 
 BASE_DIR = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PPE Tracker API")
+# ENVIRONMENT влияет на то, что видно снаружи: в продакшене схема API закрыта,
+# а 500 не раскрывает внутренности. Сам по себе флаг ничего не включает —
+# reload и монтирование кода задаются при запуске (docker-compose.prod.yml).
+IS_PRODUCTION = settings.ENVIRONMENT.strip().lower() == "production"
+
+app = FastAPI(
+    title="PPE Tracker API",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
+)
+
+
+@app.get("/healthz", include_in_schema=False)
+async def healthz(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
+    """Готовность для docker healthcheck: приложение живо и БД отвечает."""
+    try:
+        await asyncio.wait_for(db.execute(text("SELECT 1")), timeout=3)
+    except Exception as exc:
+        logger.warning("healthz: база недоступна", exc_info=True)
+        raise HTTPException(status_code=503, detail="database unavailable") from exc
+    return {"status": "ok"}
 
 
 @app.exception_handler(Exception)
@@ -44,12 +69,17 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     По умолчанию FastAPI на необработанном исключении возвращает пустое тело,
     и клиент показывает голое «HTTP 500» — по такому сообщению причину не
     найти ни в интерфейсе, ни в логе, если трассировка не попала в вывод.
+
+    В продакшене текст исключения наружу не отдаём: в нём бывают пути, SQL и
+    имена таблиц. Подробности остаются в логе.
     """
     logger.exception("Необработанная ошибка на %s %s", request.method, request.url.path)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Внутренняя ошибка сервера: {type(exc).__name__}: {exc}"},
+    detail = (
+        "Внутренняя ошибка сервера"
+        if IS_PRODUCTION
+        else f"Внутренняя ошибка сервера: {type(exc).__name__}: {exc}"
     )
+    return JSONResponse(status_code=500, content={"detail": detail})
 
 
 app.add_middleware(

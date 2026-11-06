@@ -22,3 +22,6 @@ ENV/
 
 # Docker
 postgres_data/
+
+# Прод-окружение с секретами
+.env.prod

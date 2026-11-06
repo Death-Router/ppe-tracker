@@ -572,6 +572,74 @@ DejaVu с кириллицей): координаты и маршруты лин
 **Обувь в штихмассовой системе** (37–48). На самой обуви маркировка может
 отличаться (валяная 24–35, боты 300–345) — соответствие в описании группы.
 
+### 10. `.dockerignore`: шаблон без `**/` не покрывает вложенные каталоги
+
+`__pycache__` в `.dockerignore` исключает только каталог в корне контекста —
+`app/__pycache__` всё равно попадал в образ (проверено: `find /app -name
+__pycache__` внутри `ppe-tracker-api:prod`). Для вложенных нужен `**/`:
+`**/__pycache__`, `**/*.py[cod]`.
+
+Там же вторая ловушка: `.dockerignore` без `!.env.prod.example` и с широким
+`.env.*` скрывает шаблон окружения, а строка `docker` (вместо `dockerfile`)
+выкидывает каталог, из которого копируется `docker/entrypoint.sh`, — сборка
+падает на `COPY`.
+
+---
+
+## Прод-запуск
+
+Отдельный образ и compose, dev-запуск (`docker compose up`) не меняется.
+
+```bash
+cp .env.prod.example .env.prod      # SECRET_KEY, пароли; файл в .gitignore
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec api python create_admin.py
+```
+
+Отличия от dev:
+
+| | dev (`docker-compose.yml`) | prod (`docker-compose.prod.yml`) |
+|---|---|---|
+| образ | `dockerfile`, `COPY . .` | `dockerfile.prod`: multi-stage, только нужные файлы |
+| пользователь | root | `app` (uid 10001) |
+| код | bind-mount `./app:/app/app` | только из образа |
+| запуск | `uvicorn --reload` | `uvicorn --proxy-headers`, без reload, `CMD` в образе |
+| порт api | `8000:8000` наружу | `127.0.0.1:8000` — закрывает reverse-proxy |
+| порт БД | `5433:5432` наружу | не публикуется |
+| том БД | `postgres_data` | `ppe_prod_pgdata` (данные не смешиваются) |
+| `/docs`, `/redoc`, `/openapi.json` | открыты | 404 при `ENVIRONMENT=production` |
+| 500 | текст исключения | «Внутренняя ошибка сервера», детали в логе |
+| healthcheck | нет | `api` → `/healthz` (проверяет БД), `db` → `pg_isready` |
+| секреты | `.env` рядом, попадал в образ | `.env.prod` монтируется как env, в образ не попадает |
+
+**`.dockerignore` обязателен**: без него `COPY . .` затягивал `.env` (ключ и
+пароль БД в слое образа), `.venv` на Python 3.14 (237 МБ), `.git` (13 МБ) и
+`__pycache__`. После появления файла образ: 571 МБ вместо 885 МБ, из них кода
+912 КБ. Если образ с секретами успел куда-то уехать — ротировать `SECRET_KEY`
+и пароль БД.
+
+**Ограничения, которые нужно помнить:**
+
+- **Миграции с нуля не собираются** (ловушка 8). На чистой базе
+  `alembic upgrade head` падает на `COMMENT ON COLUMN position_ppe_norms...`,
+  поэтому первая заливка — из дампа рабочей базы:
+  `pg_dump … | docker compose -f docker-compose.prod.yml exec -T db psql …`.
+  `AUTO_MIGRATE=1` в entrypoint включает `upgrade head` при старте, но только
+  для базы, уже стоящей на голове цепочки.
+- `SESSION_COOKIE_SECURE=true` работает только вместе с HTTPS на прокси.
+- `base.html` тянет Bootstrap, иконки и Google Fonts с CDN: в закрытом контуре
+  страницы останутся без стилей — файлы нужно положить в `app/static`.
+- `create_admin.py` входит в образ: без него прод-базу не наполнить. Запускать
+  одноразово, `ADMIN_PASSWORD` не хранить в постоянном окружении.
+- workers не заданы (`uvicorn` в один процесс); масштабирование — репликами
+  контейнера или `--workers` в `CMD`.
+
+Проверено на живом стенде (порт 8001, отдельный проект compose): образ
+собирается без `.env`/`.git`/`.venv`/`__pycache__`, запускается от `uid=10001`,
+`/healthz` → 200, `/docs`, `/redoc`, `/openapi.json` → 404, cookie с флагом
+`secure`, вход и страницы (`/employees`, `/norms`, `/ppe-items`) → 200,
+API `GET /api/v1/employees/` → 200.
+
 ---
 
 ## Git

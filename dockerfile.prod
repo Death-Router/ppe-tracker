@@ -1,0 +1,55 @@
+# Прод-образ PPE Tracker: зависимости отдельным слоем, запуск от непривилегированного
+# пользователя, без исходников сборки и секретов внутри.
+#
+# Сборка и запуск — docker-compose.prod.yml; dev-вариант остаётся в dockerfile.
+
+# --- Этап 1: зависимости в отдельный venv --------------------------------
+FROM python:3.11-slim AS builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /build
+
+# Только requirements: слой переиспользуется, пока не менялись зависимости
+COPY requirements.txt .
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install -r requirements.txt
+
+
+# --- Этап 2: runtime ------------------------------------------------------
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+# Непривилегированный пользователь: в контейнере нет причин быть root
+RUN useradd --create-home --home-dir /home/app --uid 10001 --shell /usr/sbin/nologin app
+
+WORKDIR /app
+
+COPY --from=builder /opt/venv /opt/venv
+
+# Только то, что нужно для работы. alembic и alembic.ini — для `upgrade head`
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app alembic ./alembic
+COPY --chown=app:app app ./app
+# Одноразовый скрипт первого администратора: без него прод-базу не наполнить
+COPY --chown=app:app create_admin.py ./
+COPY --chown=app:app docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+USER app
+
+EXPOSE 8000
+
+# /healthz проверяет и приложение, и доступность БД с таймаутом
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import sys, urllib.request; \
+sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)"
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--no-server-header"]

@@ -37,6 +37,23 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
+## Прод-запуск
+
+Dev-стек (`docker compose up`) не меняется; для прода — отдельный образ и compose:
+
+```bash
+cp .env.prod.example .env.prod      # заполнить SECRET_KEY и пароли
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec api python create_admin.py
+```
+
+Отличия: multi-stage образ (`dockerfile.prod`) без `.env`/`.git`/`.venv`,
+запуск от `app` (uid 10001), без `--reload` и bind-монтов, порт БД наружу не
+публикуется, api слушает `127.0.0.1:8000` под reverse-proxy, `/docs` и
+`/openapi.json` отдают 404 при `ENVIRONMENT=production`, 500 не раскрывает
+внутренности, healthcheck у `api` (`/healthz`) и `db`. Подробности и
+ограничения — `PROJECT.md`, раздел «Прод-запуск».
+
 ## Роли
 
 | Роль            | Права                                                                 |
