@@ -32,6 +32,14 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 
+# psql нужен и прикладному коду, и entrypoint-data.sh образа с данными:
+# дамп переливается через psql, а не через Python — так сохраняются типы,
+# NULL-ы и кодировка без ручной сборки INSERT-ов. Без root, но с --no-install-
+# recommends, чтобы не тянуть лишние пакеты в прод-образ.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Только то, что нужно для работы. alembic и alembic.ini — для `upgrade head`
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app alembic ./alembic

@@ -1,0 +1,26 @@
+# Образ PPE Tracker С ДАННЫМИ из dev-базы.
+#
+# Это не отдельное приложение, а ppe-tracker-api:prod + дамп, который
+# срабатывает при первом старте на пустой базе. Собирается скриптом
+# make-data-image.sh — он кладёт дамп в контекст как data/dump.sql.
+#
+# Почему через дамп, а не копированием каталога Postgres внутрь:
+# PGDATA привязан к версии сервера, к control-файлу с system identifier и к
+# правам каталога; копия «как есть» переживает не каждую смену мажорной версии
+# и ломается при смене uid. Дамп переносится куда угодно и разворачивается
+# на чистой схеме штатными миграциями.
+ARG BASE_IMAGE=ppe-tracker-api:prod
+FROM ${BASE_IMAGE}
+
+# Дамп читает приложение под app (uid 10001) — права на копию такие же.
+# Пользователь задан так, а не через USER: имя пользователя может измениться
+# в базовом образе, а id остаётся.
+COPY --chown=10001:10001 data/dump.sql /app/data/dump.sql
+COPY --chown=10001:10001 docker/entrypoint-data.sh /usr/local/bin/entrypoint-data.sh
+# CRLF ломает шебанг так же, как в entrypoint.sh (PROJECT.md, ловушка 11):
+# ядро ищет "/bin/sh\r" и сообщает "no such file or directory" при живом файле.
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint-data.sh \
+    && chmod 0755 /usr/local/bin/entrypoint-data.sh \
+    && chmod 0644 /app/data/dump.sql
+
+ENTRYPOINT ["/usr/local/bin/entrypoint-data.sh"]

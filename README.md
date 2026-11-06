@@ -52,6 +52,22 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml exec api python c
 при старте. Для локальной проверки по http нужен `SESSION_COOKIE_SECURE=false`,
 иначе браузер не пришлёт cookie и вход не сработает.
 
+### Образ с данными из dev-базы
+
+Один образ, который на пустой базе сам применит миграции и зальёт данные —
+удобно для переноса стенда на другую машину:
+
+```bash
+chmod +x make-data-image.sh
+./make-data-image.sh                  # ppe-tracker-api:data
+./make-data-image.sh -d dump.sql      # из готового дампа
+./make-data-image.sh -t ppe-tracker-api:2026-11-06
+```
+
+Дамп применяется один раз (маркер `.dump-loaded`); в непустую базу — только с
+`FORCE=1`. Внутри образа персональные данные — не публиковать в registry.
+Подробности — `PROJECT.md`, «Образ с данными из dev-базы».
+
 Отличия: multi-stage образ (`dockerfile.prod`) без `.env`/`.git`/`.venv`,
 запуск от `app` (uid 10001), без `--reload` и bind-монтов, порт БД наружу не
 публикуется, api слушает `127.0.0.1:8000` под reverse-proxy, `/docs` и

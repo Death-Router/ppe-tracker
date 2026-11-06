@@ -36,7 +36,17 @@ README.md
 # Файлы сборки и локальные данные
 dockerfile
 dockerfile.prod
+dockerfile.data
 docker-compose*.yml
 pyproject.toml
 *.docx
 push-ppe.*
+make-data-image.sh
+
+# Дамп dev-базы с персональными данными: в обычный образ не имеет права
+# попасть. make-data-image.sh собирает образ с данными из ОТДЕЛЬНОГО временного
+# контекста (там свой каталог data/), поэтому этот запрет его не задевает —
+# но защищает от случайного `COPY data/dump.sql` в основном контексте.
+data
+**/dump.sql
+
