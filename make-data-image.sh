@@ -50,7 +50,7 @@ make-data-image.sh — собрать образ ppe-tracker-api с данным
 Что происходит:
   1. проверяются docker, демон, docker compose и файлы сборки;
   2. поднимается dev-база (docker compose up -d db), ждётся pg_isready;
-  3. pg_dump из dev-базы: все таблицы, кроме данных alembic_version —
+  3. pg_dump из dev-базы: все таблицы, кроме alembic_version —
      схему развернёт alembic, его версия от dev-базы не должна подменяться;
   4. собирается ppe-tracker-api:prod, затем поверх — образ с дампом.
 
@@ -188,11 +188,6 @@ if [ -n "$DUMP_FILE" ]; then
 else
     step "Снимаю pg_dump из dev-базы"
 
-    # Содержимое alembic_version в дамп не берём (--exclude-table-data), но
-    # саму таблицу и строку CREATE TABLE из pg_dump тоже не нужны: её создаёт
-    # alembic. Убираем строку CREATE TABLE alembic_version, иначе
-    # --single-transaction упрётся в "relation already exists".
-    #
     # --clean НЕ используем. Он генерирует DROP-ы, нужные только для заливки
     # в непустую базу, а дамп идёт только в пустую (проверка в
     # entrypoint-data.sh). При этом --clean падает на живой dev-базе:
@@ -201,22 +196,26 @@ else
     # employee_ppe_sizes_size_group_id_fkey1 (следствие того, что миграции
     # там накатывались по одной, а не с нуля). Без --clean дамп содержит
     # только CREATE и COPY и никаких зависимостей не трогает.
+    #
+    # alembic_version исключаем ЦЕЛИКОМ (--exclude-table), а не построчно:
+    # её DDL в дампе многострочный, и прежняя фильтрация grep-ом вырезала
+    # только первую строку CREATE TABLE, оставляя "version_num character
+    # varying(32) NOT NULL" без начала — psql падал с syntax error.
+    # Версию схемы в целевой базе ведёт alembic, в дампе она не нужна.
     if ! docker compose -f "$COMPOSE_FILE" exec -T "$DEV_DB_SERVICE" \
             pg_dump -U "$dev_user" -d "$dev_db" \
             --no-owner --no-privileges \
-            --exclude-table-data=alembic_version \
-            > "$TMP_DIR/dump.raw.sql"; then
+            --exclude-table=alembic_version \
+            > "$TMP_DIR/data/dump.sql"; then
         die "pg_dump не удался"
     fi
 
-    dump_bytes=$(wc -c < "$TMP_DIR/dump.raw.sql" | tr -d ' ')
+    dump_bytes=$(wc -c < "$TMP_DIR/data/dump.sql" | tr -d ' ')
     [ "$dump_bytes" -gt 1024 ] || die "дамп подозрительно мал ($dump_bytes байт) — dev-база пуста?"
 
-    # Вырезаем DDL и DROP по alembic_version: схему и версию ведёт alembic,
-    # а данные этой таблицы уже исключены через --exclude-table-data.
-    grep -v -E '^(DROP TABLE IF EXISTS public\.alembic_version|CREATE TABLE public\.alembic_version|ALTER TABLE ONLY public\.alembic_version|ALTER TABLE public\.alembic_version|COPY public\.alembic_version)' \
-        "$TMP_DIR/dump.raw.sql" > "$TMP_DIR/data/dump.sql"
-    rm -f "$TMP_DIR/dump.raw.sql"
+    if grep -q 'alembic_version' "$TMP_DIR/data/dump.sql"; then
+        die "в дампе остались строки alembic_version — исключение не сработало"
+    fi
 
     # Права: внутри контейнера читает app (uid 10001), скрипт может работать
     # под другим uid — выравниваем явно.
