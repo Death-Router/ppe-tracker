@@ -3,13 +3,18 @@
 # (дальше его закрывает reverse-proxy с HTTPS).
 #
 #   cp .env.prod.example .env.prod      # и заполнить секреты
-#   docker compose -f docker-compose.prod.yml up -d --build
-#   docker compose -f docker-compose.prod.yml exec api alembic upgrade head
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# --env-file .env.prod ОБЯЗАТЕЛЕН, а не удобен. Без него у db остаются пустыми
+# POSTGRES_USER/PASSWORD/DB: env_file у api кладёт переменные только ВНУТРЬ
+# контейнера api, а ${...} в этом файле compose подставляет из .env или из
+# --env-file. Пустой POSTGRES_USER = Postgres не создаёт пользователя = db
+# unhealthy = "dependency failed to start" без внятной причины.
 #
 # Миграции в entrypoint по умолчанию не запускаются: прод-база обычно уже
 # на голове, а лишний upgrade при каждом старте — лишний риск. Схема с нуля
-# теперь собирается (PROJECT.md, ловушка 8 исправлена), поэтому для пустой
-# базы достаточно AUTO_MIGRATE=1: entrypoint применит `alembic upgrade head`
+# собирается (PROJECT.md, ловушка 8 исправлена), поэтому для пустой базы
+# достаточно AUTO_MIGRATE=1: entrypoint применит `alembic upgrade head`
 # с повторами, дожидаясь готовности БД.
 services:
   api:
@@ -48,9 +53,12 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      # :? — вместо пустой строки compose остановится и скажет, чего не хватает.
+      # По умолчанию значение берётся из .env, поэтому без --env-file .env.prod
+      # получится "POSTGRES_USER не задан..." вместо молчаливого blank.
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER не задан. Заполните .env.prod и запускайте с --env-file .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан. Заполните .env.prod и запускайте с --env-file .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB не задан. Заполните .env.prod и запускайте с --env-file .env.prod}
     # Порт наружу не публикуем: база нужна только контейнеру api
     volumes:
       # Отдельный том: dev-данные и прод-данные не должны пересекаться

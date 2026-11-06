@@ -43,9 +43,14 @@ Dev-стек (`docker compose up`) не меняется; для прода — 
 
 ```bash
 cp .env.prod.example .env.prod      # заполнить SECRET_KEY и пароли
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml exec api python create_admin.py
+# --env-file обязателен: без него у db пустые POSTGRES_*, и она не стартует
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec api python create_admin.py
 ```
+
+Для пустой базы поставьте `AUTO_MIGRATE=1` в `.env.prod` — миграции применятся
+при старте. Для локальной проверки по http нужен `SESSION_COOKIE_SECURE=false`,
+иначе браузер не пришлёт cookie и вход не сработает.
 
 Отличия: multi-stage образ (`dockerfile.prod`) без `.env`/`.git`/`.venv`,
 запуск от `app` (uid 10001), без `--reload` и bind-монтов, порт БД наружу не

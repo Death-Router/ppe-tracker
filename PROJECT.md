@@ -606,9 +606,27 @@ __pycache__` внутри `ppe-tracker-api:prod`). Для вложенных н�
 
 ```bash
 cp .env.prod.example .env.prod      # SECRET_KEY, пароли; файл в .gitignore
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml exec api python create_admin.py
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec api python create_admin.py
 ```
+
+**`--env-file .env.prod` обязателен, это не украшение.** `env_file: .env.prod`
+у `api` кладёт переменные только **внутрь** контейнера api; `${...}` в самом
+yml compose подставляет из `.env` или из `--env-file`. Без флага у `db`
+остаются пустые `POSTGRES_USER`/`PASSWORD`/`DB`, Postgres не создаёт
+пользователя, `db` уходит в `unhealthy`, а `api` не стартует из-за
+`depends_on: service_healthy` — при этом в выводе только три строчки
+`variable is not set`. Теперь эти переменные помечены `${POSTGRES_USER:?...}`,
+и compose останавливается с внятным текстом.
+
+Для пустой базы — `AUTO_MIGRATE=1`: миграции применятся на старте
+(`миграции применены (попытка 1)` в логах api). Для проверки по http —
+`SESSION_COOKIE_SECURE=false`, иначе браузер не пришлёт cookie и вход молча
+не сработает.
+
+Проверено на реальном запуске 6 ноября 2026: `up -d --build` с нуля,
+все 29 миграций на старте, `api` и `db` — `healthy`, `/healthz` → 200,
+`/login` → 200, `/docs` → 404 (значит `ENVIRONMENT=production` применился).
 
 Отличия от dev:
 
