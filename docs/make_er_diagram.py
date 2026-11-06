@@ -589,7 +589,9 @@ def route_links(
         lo, hi = bounds(j)
         members.sort(key=lambda i: (links[i].yc + links[i].yp) / 2)
 
-        def cost(order: tuple[int, ...]) -> int:
+        # lo/hi фиксируем значениями по умолчанию: иначе замыкание смотрит
+        # на переменные цикла и ruff справедливо ругается (B023)
+        def cost(order: tuple[int, ...], lo: float = lo, hi: float = hi) -> int:
             count = len(order)
             xs = {idx: lo + (hi - lo) * (rank + 1) / (count + 1)
                   for rank, idx in enumerate(order)}
@@ -607,10 +609,8 @@ def route_links(
                             total += 1
             return total
 
-        if len(members) <= 7:
-            best = min(permutations(members), key=cost)
-        else:
-            best = tuple(members)
+        # Полный перебор только для коротких жёлобов: факториал быстро растёт
+        best = min(permutations(members), key=cost) if len(members) <= 7 else tuple(members)
         for rank, idx in enumerate(best):
             links[idx].bus = lo + (hi - lo) * (rank + 1) / (len(best) + 1)
     return links
