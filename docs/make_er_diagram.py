@@ -404,14 +404,52 @@ def connector(shape_no: int, x1: float, y1: float, x2: float, y2: float) -> str:
 # ---------------------------------------------------------------- PDF-схема
 
 # Visio в этой среде нет, поэтому основной человекочитаемый вид — PDF:
-# координаты задаём сами, рендер предсказуем. Шрифты DejaVu — с кириллицей,
-# моноширинный нужен для ровных колонок в таблицах.
+# координаты задаём сами, рендер предсказуем. Шрифты DejaVu — с кириллицей.
 FONT_DIR = "/usr/share/fonts/truetype/dejavu"
 FONTS = {
     "text": f"{FONT_DIR}/DejaVuSans.ttf",
     "bold": f"{FONT_DIR}/DejaVuSans-Bold.ttf",
     "mono": f"{FONT_DIR}/DejaVuSansMono.ttf",
 }
+
+# Геометрия PDF (дюймы). Независима от Visio-раскладки выше.
+PDF_BOX_W = 5.6
+PDF_HEADER_H = 0.44
+PDF_ROW_H = 0.25
+PDF_PAD_H = 0.06
+PDF_GUTTER = 1.1        # жёлоб между колонками: в нём идут шины связей
+PDF_MARGIN_X = 1.1      # левое/правое поле: тоже жёлоб для связей внутри колонки
+PDF_TOP = 1.85
+PDF_TABLE_GAP = 0.45
+PDF_BOTTOM = 0.5
+
+# Колонки слева направо; внутри колонки таблицы идут сверху вниз.
+# Связь допускается только между соседними колонками или внутри одной.
+PDF_COLUMNS: list[list[str]] = [
+    ["users", "departments", "positions", "alembic_version"],
+    ["employees", "position_ppe_norms", "typical_norms"],
+    ["employee_ppe_sizes", "employee_ppe_issues", "ppe_items"],
+    ["ppe_size_groups", "ppe_sizes", "ppe_functions", "units"],
+]
+
+# Смысловые группы: цвет шапки таблицы
+PDF_GROUPS: list[tuple[str, str, list[str]]] = [
+    ("Организация и доступ", "#5B2C8A", ["users", "departments", "positions"]),
+    ("Сотрудники и выдачи", "#1F5FA8",
+     ["employees", "employee_ppe_sizes", "employee_ppe_issues"]),
+    ("Нормы", "#0E7C7B", ["position_ppe_norms", "typical_norms"]),
+    ("Справочники СИЗ", "#B25E09",
+     ["ppe_items", "ppe_functions", "ppe_size_groups", "ppe_sizes", "units"]),
+    ("Служебные", "#6B7280", ["alembic_version"]),
+]
+
+# Цвет линии связи задаёт родительская таблица: все связи к ней одного цвета
+LINK_COLORS = ["#E4572E", "#2E86AB", "#2FA36B", "#9B5DE5",
+               "#E09F1F", "#D81B60", "#00897B", "#7A5C45"]
+
+PAGE_BG = "#F5F4F9"
+MUTED = "#6B6880"
+BAND = "#F6F4FA"
 
 
 def register_fonts() -> None:
@@ -422,499 +460,416 @@ def register_fonts() -> None:
         pdfmetrics.registerFont(TTFont(name, path))
 
 
-def pdf_boxes(tables: dict[str, Table]) -> dict[str, tuple[float, float, float, float]]:
-    """Прямоугольники таблиц: (лево, верх, ширина, высота) в дюймах сверху."""
-    return {name: (LAYOUT[name][0], LAYOUT[name][1], BOX_W, table.height)
-            for name, table in tables.items()}
+Box = tuple[float, float, float, float]  # лево, верх, ширина, высота (дюймы сверху)
 
 
-def spread(index: int, count: int, low: float = 0.26, high: float = 0.74) -> float:
-    """Доля высоты/ширины стороны таблицы для точки выхода или входа.
-
-    Нужна, чтобы две связи, идущие с одной стороны, не выходили из одной точки.
-    """
-    if count <= 1:
-        return (low + high) / 2
-    return low + (high - low) * index / (count - 1)
+def pdf_table_height(table: Table) -> float:
+    return PDF_HEADER_H + PDF_PAD_H * 2 + PDF_ROW_H * len(table.columns)
 
 
-def point_on_side(box: tuple[float, float, float, float], side: str, frac: float):
-    """Точка на границе прямоугольника: (лево, верх, ширина, высота) + сторона."""
-    left, top, width, height = box
-    if side == "right":
-        return left + width, top + height * frac
-    if side == "left":
-        return left, top + height * frac
-    if side == "bottom":
-        return left + width * frac, top + height
-    return left + width * frac, top
+def pdf_row_y(box: Box, index: int) -> float:
+    """Вертикальный центр строки поля (дюймы сверху)."""
+    return box[1] + PDF_HEADER_H + PDF_PAD_H + (index + 0.5) * PDF_ROW_H
 
 
-def build_links(
-    tables: dict[str, Table], relations: list[tuple[str, str, str, str]]
-) -> list[list[tuple[float, float, float, float]]]:
-    """Маршруты связей: для каждой связи — список ортогональных сегментов.
-
-    Правила:
-    * точки выхода и входа разнесены по стороне таблицы — линии не выходят
-      из одной точки;
-    * прямой маршрут выбирается только если он не проходит сквозь другие
-      таблицы; иначе связь идёт по «шине» в жёлобе между колонками, и каждой
-      шине достаётся своё смещение — линии не накладываются;
-    * самоссылка рисуется петлёй у правого края.
-    """
-    boxes = pdf_boxes(tables)
-
-    plans: list[dict] = []
-    for child, _child_col, parent, _parent_col in relations:
-        if child == parent:
-            plans.append({"child": child, "parent": parent, "kind": "self"})
-            continue
-
-        cx, ctop, cw, _ch = boxes[child]
-        px, ptop, pw, _ph = boxes[parent]
-
-        if px >= cx + cw:
-            out_side, in_side = "right", "left"
-        elif px + pw <= cx:
-            out_side, in_side = "left", "right"
-        elif ptop >= ctop:
-            out_side, in_side = "bottom", "top"
-        else:
-            out_side, in_side = "top", "bottom"
-
-        plans.append({
-            "child": child,
-            "parent": parent,
-            "kind": "h" if out_side in ("left", "right") else "v",
-            "out_side": out_side,
-            "in_side": in_side,
-        })
-
-    # Точки выхода и входа разносим по стороне: сортируем по тому, где
-    # находится партнёр, чтобы линии не менялись местами без нужды
-    out_usage: dict[tuple[str, str], list[int]] = {}
-    in_usage: dict[tuple[str, str], list[int]] = {}
-    for index, plan in enumerate(plans):
-        if plan["kind"] == "self":
-            continue
-        out_usage.setdefault((plan["child"], plan["out_side"]), []).append(index)
-        in_usage.setdefault((plan["parent"], plan["in_side"]), []).append(index)
-
-    def partner_center(plan: dict) -> tuple[float, float]:
-        _px, ptop, _pw, ph = boxes[plan["parent"]]
-        _cx, ctop, _cw, ch = boxes[plan["child"]]
-        return ptop + ph / 2, ctop + ch / 2
-
-    for (_table, side), indexes in out_usage.items():
-        horizontal = side in ("left", "right")
-        indexes.sort(key=lambda i: partner_center(plans[i])[0 if horizontal else 1])
-        for position, index in enumerate(indexes):
-            plans[index]["out_frac"] = spread(position, len(indexes))
-
-    for (_table, side), indexes in in_usage.items():
-        horizontal = side in ("left", "right")
-        indexes.sort(key=lambda i: partner_center(plans[i])[1 if horizontal else 0])
-        for position, index in enumerate(indexes):
-            plans[index]["in_frac"] = spread(position, len(indexes))
-
-    for plan in plans:
-        if plan["kind"] == "self":
-            continue
-        plan["x_out"], plan["y_out"] = point_on_side(
-            boxes[plan["child"]], plan["out_side"], plan["out_frac"]
-        )
-        plan["x_in"], plan["y_in"] = point_on_side(
-            boxes[plan["parent"]], plan["in_side"], plan["in_frac"]
+def pdf_layout(tables: dict[str, Table]):
+    """Прямоугольники таблиц, номер колонки, x колонок, размер страницы."""
+    placed = [name for column in PDF_COLUMNS for name in column]
+    missing = sorted(set(tables) - set(placed))
+    if missing:
+        raise ValueError(
+            "Таблицы без места в PDF_COLUMNS: " + ", ".join(missing)
         )
 
+    col_x = [PDF_MARGIN_X + i * (PDF_BOX_W + PDF_GUTTER) for i in range(len(PDF_COLUMNS))]
+    page_w = col_x[-1] + PDF_BOX_W + PDF_MARGIN_X
 
-    def crosses_table(seg: tuple[float, float, float, float], skip: set[str]) -> bool:
-        """Пересекает ли отрезок какую-то таблицу (кроме своих)."""
-        x1, y1, x2, y2 = seg
-        lo_x, hi_x = sorted((x1, x2))
-        lo_y, hi_y = sorted((y1, y2))
-        for name, (bx, btop, bw, bh) in boxes.items():
-            if name in skip:
+    boxes: dict[str, Box] = {}
+    col_of: dict[str, int] = {}
+    bottom = 0.0
+    for index, names in enumerate(PDF_COLUMNS):
+        top = PDF_TOP
+        for name in names:
+            if name not in tables:
                 continue
-            if (bx < hi_x - 0.02 and bx + bw > lo_x + 0.02
-                    and btop < hi_y - 0.02 and btop + bh > lo_y + 0.02):
-                return True
-        return False
+            height = pdf_table_height(tables[name])
+            boxes[name] = (col_x[index], top, PDF_BOX_W, height)
+            col_of[name] = index
+            top += height + PDF_TABLE_GAP
+        bottom = max(bottom, top - PDF_TABLE_GAP)
+    return boxes, col_of, col_x, page_w, bottom + PDF_BOTTOM
 
-    # Прямой маршрут (три сегмента) пробуем для каждой связи; если он задевает
-    # чужую таблицу — связь переводим на шину
-    for plan in plans:
-        if plan["kind"] == "self":
-            continue
 
-        x_out, y_out, x_in, y_in = plan["x_out"], plan["y_out"], plan["x_in"], plan["y_in"]
-        skip = {plan["child"], plan["parent"]}
+@dataclass
+class PdfLink:
+    child: str
+    parent: str
+    optional: bool          # FK допускает NULL: у родителя рисуем «кружок»
+    yc: float               # строка FK у дочерней таблицы
+    yp: float               # строка PK у родительской
+    xc: float               # край дочерней таблицы, откуда выходит линия
+    xp: float               # край родительской таблицы, куда входит линия
+    c_dir: int              # +1: линия уходит вправо от края, -1: влево
+    p_dir: int
+    gutter: int             # номер жёлоба: 0 — левое поле, n — правое
+    bus: float = 0.0        # x вертикального участка
+    color: str = "#000000"
 
-        if plan["kind"] == "h":
-            mid = (x_out + x_in) / 2
-            trial = [(x_out, y_out, mid, y_out),
-                     (mid, y_out, mid, y_in),
-                     (mid, y_in, x_in, y_in)]
-            plan["mid"] = mid
+    @property
+    def points(self) -> list[tuple[float, float]]:
+        return [(self.xc, self.yc), (self.bus, self.yc),
+                (self.bus, self.yp), (self.xp, self.yp)]
+
+
+def route_links(
+    tables: dict[str, Table],
+    relations: list[tuple[str, str, str, str]],
+    boxes: dict[str, Box],
+    col_of: dict[str, int],
+    col_x: list[float],
+    page_w: float,
+) -> list[PdfLink]:
+    """Ортогональные маршруты: от строки FK до строки PK по шине в жёлобе.
+
+    Линия не заходит на таблицы: горизонтали лежат в жёлобе между колонками,
+    вертикаль — на своей «шине». Порядок шин в жёлобе подбирается перебором
+    так, чтобы число пересечений было минимальным.
+    """
+    from itertools import permutations
+
+    parents = sorted({parent for _c, _cc, parent, _pc in relations})
+    color_of = {name: LINK_COLORS[i % len(LINK_COLORS)] for i, name in enumerate(parents)}
+
+    links: list[PdfLink] = []
+    attach: list[tuple[str, str]] = []  # у какого края жёлоба «растёт» горизонталь
+    for child, child_col, parent, parent_col in relations:
+        ci, pi = col_of[child], col_of[parent]
+        if abs(ci - pi) > 1:
+            raise ValueError(
+                f"Связь {child} → {parent} идёт через колонку: переставьте таблицы "
+                "в PDF_COLUMNS, чтобы связанные таблицы были рядом."
+            )
+        cbox, pbox = boxes[child], boxes[parent]
+        names_c = [c.name for c in tables[child].columns]
+        names_p = [c.name for c in tables[parent].columns]
+        yc = pdf_row_y(cbox, names_c.index(child_col))
+        yp = pdf_row_y(pbox, names_p.index(parent_col))
+        optional = not tables[child].columns[names_c.index(child_col)].not_null
+
+        if ci == pi:
+            if ci == 0:     # внутри первой колонки — по левому полю
+                xc, xp, c_dir, p_dir, gutter = cbox[0], pbox[0], -1, -1, 0
+                sides = ("hi", "hi")
+            else:           # иначе по жёлобу справа
+                xc, xp = cbox[0] + cbox[2], pbox[0] + pbox[2]
+                c_dir, p_dir, gutter = 1, 1, ci + 1
+                sides = ("lo", "lo")
+        elif pi > ci:
+            xc, xp, c_dir, p_dir, gutter = cbox[0] + cbox[2], pbox[0], 1, -1, pi
+            sides = ("lo", "hi")
         else:
-            mid_y = (y_out + y_in) / 2
-            trial = [(x_out, y_out, x_out, mid_y),
-                     (x_out, mid_y, x_in, mid_y),
-                     (x_in, mid_y, x_in, y_in)]
-            plan["mid"] = mid_y
+            xc, xp, c_dir, p_dir, gutter = cbox[0], pbox[0] + pbox[2], -1, 1, ci
+            sides = ("hi", "lo")
 
-        plan["need_bus"] = any(crosses_table(seg, skip) for seg in trial)
+        links.append(PdfLink(child, parent, optional, yc, yp, xc, xp,
+                             c_dir, p_dir, gutter, color=color_of[parent]))
+        attach.append(sides)
 
-    # Прямые маршруты в одном и том же зазоре разносем по середине, иначе их
-    # вертикальные (или горизонтальные) участки совпадут и линии сольются
-    direct_groups: dict[tuple[float, float, str], list[int]] = {}
-    for index, plan in enumerate(plans):
-        if plan["kind"] == "self" or plan["need_bus"]:
+    n = len(col_x)
+
+    def bounds(j: int) -> tuple[float, float]:
+        lo = 0.25 if j == 0 else col_x[j - 1] + PDF_BOX_W
+        hi = col_x[0] if j == 0 else (page_w - 0.25 if j == n else col_x[j])
+        return lo, hi
+
+    for j in range(n + 1):
+        members = [i for i, link in enumerate(links) if link.gutter == j]
+        if not members:
             continue
-        key = (round(plan["x_out"], 2), round(plan["x_in"], 2), plan["kind"])
-        direct_groups.setdefault(key, []).append(index)
+        lo, hi = bounds(j)
+        members.sort(key=lambda i: (links[i].yc + links[i].yp) / 2)
 
-    for (_x_out, _x_in, _kind), indexes in direct_groups.items():
-        if len(indexes) < 2:
-            continue
-        indexes.sort(key=lambda i: plans[i]["y_out"])
-        for position, index in enumerate(indexes):
-            plans[index]["mid"] += (position - (len(indexes) - 1) / 2) * 0.09
+        def cost(order: tuple[int, ...]) -> int:
+            count = len(order)
+            xs = {idx: lo + (hi - lo) * (rank + 1) / (count + 1)
+                  for rank, idx in enumerate(order)}
+            total = 0
+            for a in order:
+                top, bottom = sorted((links[a].yc, links[a].yp))
+                for b in order:
+                    if a == b or links[a].parent == links[b].parent:
+                        continue
+                    for y, side in ((links[b].yc, attach[b][0]),
+                                    (links[b].yp, attach[b][1])):
+                        edge = lo if side == "lo" else hi
+                        left, right = sorted((edge, xs[b]))
+                        if top < y < bottom and left < xs[a] < right:
+                            total += 1
+            return total
 
-    # Шины: жёлоб между колонками. Смещение каждой следующей шины в том же
-    # жёлобе увеличиваем, но не выходим за половину зазора
-    columns = sorted({round(box[0], 2) for box in boxes.values()})
-
-    def gap_of(left: float, sign: float) -> float:
-        if sign > 0:
-            right = [c for c in columns if c > left]
-            return (right[0] - (left + BOX_W)) if right else (PAGE_W - (left + BOX_W))
-        lefts = [c for c in columns if c < left]
-        return (left - (lefts[-1] + BOX_W)) if lefts else left
-
-    bus_groups: dict[tuple[float, float], list[int]] = {}
-    for index, plan in enumerate(plans):
-        if plan["kind"] == "self" or not plan.get("need_bus"):
-            continue
-        left = boxes[plan["child"]][0]
-        sign = 1.0 if left + BOX_W / 2 > PAGE_W / 2 else -1.0
-        edge = left + BOX_W if sign > 0 else left
-        bus_groups.setdefault((round(edge, 2), sign), []).append(index)
-
-    for ((edge, sign), indexes) in bus_groups.items():
-        indexes.sort(key=lambda i: plans[i]["y_out"])
-        gap = gap_of(edge - BOX_W if sign > 0 else edge, sign)
-        count = len(indexes)
-        for position, index in enumerate(indexes):
-            # Равномерно по жёлобу: при двух связях — 1/3 и 2/3 зазора
-            offset = gap * (position + 1) / (count + 1)
-            plans[index]["bus"] = edge + sign * offset
-            plans[index]["bus_sign"] = sign
-            plans[index]["bus_limit"] = edge + sign * (gap - 0.06)
-
-    def make_links() -> list[list[tuple[float, float, float, float]]]:
-        result: list[list[tuple[float, float, float, float]]] = []
-        for plan in plans:
-            if plan["kind"] == "self":
-                left, top, width, height = boxes[plan["child"]]
-                edge = left + width
-                y_out = top + height * 0.28
-                y_in = top + height * 0.72
-                result.append([(edge, y_out, edge + 0.42, y_out),
-                               (edge + 0.42, y_out, edge + 0.42, y_in),
-                               (edge + 0.42, y_in, edge, y_in)])
-                continue
-
-            x_out, y_out = plan["x_out"], plan["y_out"]
-            x_in, y_in = plan["x_in"], plan["y_in"]
-
-            if plan["need_bus"]:
-                bus = plan["bus"]
-                result.append([(x_out, y_out, bus, y_out),
-                               (bus, y_out, bus, y_in),
-                               (bus, y_in, x_in, y_in)])
-            elif plan["kind"] == "h":
-                mid = plan["mid"]
-                result.append([(x_out, y_out, mid, y_out),
-                               (mid, y_out, mid, y_in),
-                               (mid, y_in, x_in, y_in)])
-            else:
-                mid_y = plan["mid"]
-                result.append([(x_out, y_out, x_out, mid_y),
-                               (x_out, mid_y, x_in, mid_y),
-                               (x_in, mid_y, x_in, y_in)])
-        return result
-
-    def is_horizontal(seg: tuple[float, float, float, float]) -> bool:
-        return abs(seg[1] - seg[3]) < 1e-9
-
-    def overlapping(links: list[list[tuple[float, float, float, float]]]) -> set[int]:
-        """Связи, чьи линии накладываются друг на друга (идят по одной прямой)."""
-        flat = [(index, seg) for index, link in enumerate(links) for seg in link]
-        found: set[int] = set()
-        for first in range(len(flat)):
-            for second in range(first + 1, len(flat)):
-                i, a = flat[first]
-                j, b = flat[second]
-                if i == j:
-                    continue
-                if is_horizontal(a) and is_horizontal(b) and abs(a[1] - b[1]) < 0.01:
-                    a1, a2 = sorted((a[0], a[2]))
-                    b1, b2 = sorted((b[0], b[2]))
-                    if min(a2, b2) - max(a1, b1) > 0.02:
-                        found.update((i, j))
-                elif (not is_horizontal(a) and not is_horizontal(b)
-                        and abs(a[0] - b[0]) < 0.01):
-                    a1, a2 = sorted((a[1], a[3]))
-                    b1, b2 = sorted((b[1], b[3]))
-                    if min(a2, b2) - max(a1, b1) > 0.02:
-                        found.update((i, j))
-        return found
-
-    links = make_links()
-
-    # Пары линий, случайно попавшие на одну прямую (например, прямая связь и
-    # шина в том же жёлобе), разводим сдвигом шины
-    for _attempt in range(12):
-        clashes = overlapping(links)
-        if not clashes:
-            break
-        moved = False
-        for index in clashes:
-            plan = plans[index]
-            if "bus" not in plan:
-                continue
-            sign = plan["bus_sign"]
-            candidate = plan["bus"] + sign * 0.05
-            if sign * (candidate - plan["bus_limit"]) > 0:
-                candidate = plan["bus"] - sign * 0.05
-            plan["bus"] = candidate
-            moved = True
-        if not moved:
-            break
-        links = make_links()
+        if len(members) <= 7:
+            best = min(permutations(members), key=cost)
+        else:
+            best = tuple(members)
+        for rank, idx in enumerate(best):
+            links[idx].bus = lo + (hi - lo) * (rank + 1) / (len(best) + 1)
     return links
 
-def build_pdf(tables: dict[str, Table], relations: list[tuple[str, str, str, str]]) -> None:
-    """Рисует схему в PDF: связи с «мостиками» на пересечениях, таблицы поверх."""
-    import math
 
+def build_pdf(tables: dict[str, Table], relations: list[tuple[str, str, str, str]]) -> None:
+    """Рисует схему в PDF: фон, связи, таблицы, заголовок и легенду."""
     from reportlab.lib.colors import HexColor
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.pdfgen import canvas
 
     register_fonts()
+    boxes, col_of, col_x, page_w, page_h = pdf_layout(tables)
+    links = route_links(tables, relations, boxes, col_of, col_x, page_w)
 
-    width_pt, height_pt = PAGE_W * 72, PAGE_H * 72
-    pdf = canvas.Canvas(PDF, pagesize=(width_pt, height_pt))
+    pdf = canvas.Canvas(PDF, pagesize=(page_w * 72, page_h * 72))
     pdf.setTitle("PPE Tracker — схема базы данных")
+    pdf.setAuthor("PPE Tracker")
 
-    def y(top: float) -> float:
-        return height_pt - top * 72
+    def Y(top: float) -> float:
+        return (page_h - top) * 72
 
-    boxes = pdf_boxes(tables)
-    links = build_links(tables, relations)
+    def X(x: float) -> float:
+        return x * 72
 
-    # --- геометрия связей: пересечения и «мостики» ------------------------
-    bridge = 0.08  # радиус полуокружности, дюймы
-    kappa = 0.5523  # коэффициент аппроксимации четверти круга кривой Безье
+    group_of = {name: (title, color) for title, color, names in PDF_GROUPS for name in names}
 
-    def horizontal(seg: tuple[float, float, float, float]) -> bool:
-        return abs(seg[1] - seg[3]) < 1e-9
+    def fill(color: str) -> None:
+        pdf.setFillColor(HexColor(color))
 
-    def crossing(a, b):
-        """Точка пересечения двух ортогональных сегментов (или None)."""
-        if horizontal(a) == horizontal(b):
-            return None
-        h, v = (a, b) if horizontal(a) else (b, a)
-        hx1, hx2 = sorted((h[0], h[2]))
-        vy1, vy2 = sorted((v[1], v[3]))
-        if hx1 < v[0] < hx2 and vy1 < h[1] < vy2:
-            return v[0], h[1]
-        return None
+    def stroke(color: str) -> None:
+        pdf.setStrokeColor(HexColor(color))
 
-    def free_side(x: float, y: float) -> float:
-        """Куда рисовать мост: 1 — вправо, -1 — влево (где свободнее)."""
-        def blocked(direction: float) -> bool:
-            probe = x + direction * (bridge + 0.03)
-            for _name, (bx, btop, bw, bh) in boxes.items():
-                if bx <= probe <= bx + bw and btop <= y <= btop + bh:
-                    return True
-            return any(abs(vx - probe) < 0.07 for vx in vertical_xs)
+    def text(x: float, y_center: float, value: str, font: str, size: float,
+             color: str, align: str = "left") -> None:
+        pdf.setFont(font, size)
+        fill(color)
+        baseline = Y(y_center) - size * 0.34
+        if align == "right":
+            pdf.drawRightString(X(x), baseline, value)
+        elif align == "center":
+            pdf.drawCentredString(X(x), baseline, value)
+        else:
+            pdf.drawString(X(x), baseline, value)
 
-        right_ok = not blocked(1.0)
-        left_ok = not blocked(-1.0)
-        if right_ok == left_ok:
-            return 1.0
-        return 1.0 if right_ok else -1.0
+    def badge(x: float, y_center: float, label: str, color: str, width: float = 0.3) -> None:
+        fill(color)
+        pdf.roundRect(X(x), Y(y_center) - 6.2, width * 72, 12.4, 3, stroke=0, fill=1)
+        text(x + width / 2, y_center, label, "bold", 7.2, "#FFFFFF", "center")
 
-    def merge_marks(values: list[float]) -> list[float]:
-        """Схлопывает близкие пересечения: два моста подряд не рисуются."""
-        merged: list[float] = []
-        for value in sorted(values):
-            if merged and value - merged[-1] < bridge * 2.2:
-                continue
-            merged.append(value)
-        return merged
+    # --- фон -----------------------------------------------------------
+    fill(PAGE_BG)
+    pdf.rect(0, 0, page_w * 72, page_h * 72, stroke=0, fill=1)
 
-    vertical_xs = sorted({round(seg[0], 3) for link in links for seg in link
-                          if not horizontal(seg)})
+    # --- маркеры связей: «много» у дочерней, «один» у родительской ------------
+    def many_marker(x: float, y_: float, direction: int) -> None:
+        tip = x + direction * 0.16
+        pdf.line(X(tip), Y(y_), X(x), Y(y_ - 0.085))
+        pdf.line(X(tip), Y(y_), X(x), Y(y_ + 0.085))
 
-    def stroke_link(segments: list[tuple[float, float, float, float]],
-                    crossings: list[list[float]]) -> None:
-        pdf.setStrokeColor(HexColor(ACCENT))
-        pdf.setLineWidth(1.2)
+    def one_marker(x: float, y_: float, direction: int, optional: bool) -> None:
+        bar = x + direction * 0.11
+        pdf.line(X(bar), Y(y_ - 0.085), X(bar), Y(y_ + 0.085))
+        if optional:
+            cx = x + direction * 0.25
+            fill(PAGE_BG)
+            pdf.circle(X(cx), Y(y_), 3.2, stroke=1, fill=1)
 
-        for seg, points in zip(segments, crossings, strict=False):
-            x1, y1, x2, y2 = seg
-            path = pdf.beginPath()
-
-            if horizontal(seg):
-                forward = x2 >= x1
-                start, end = (x1, x2) if forward else (x2, x1)
-                marks = merge_marks([p[0] for p in points])
-                path.moveTo(start * 72, y(y1))
-                position = start
-                for mark in marks:
-                    if mark - bridge <= position or mark + bridge >= end:
-                        continue
-                    path.lineTo((mark - bridge) * 72, y(y1))
-                    path.curveTo((mark - bridge) * 72, y(y1) + kappa * bridge * 72,
-                                 (mark - kappa * bridge) * 72, y(y1) + bridge * 72,
-                                 mark * 72, y(y1) + bridge * 72)
-                    path.curveTo((mark + kappa * bridge) * 72, y(y1) + bridge * 72,
-                                 (mark + bridge) * 72, y(y1) + kappa * bridge * 72,
-                                 (mark + bridge) * 72, y(y1))
-                    position = mark + bridge
-                path.lineTo(end * 72, y(y1))
-            else:
-                forward = y2 >= y1
-                start, end = (y1, y2) if forward else (y2, y1)
-                marks = merge_marks([p[1] for p in points])
-                path.moveTo(x1 * 72, y(start))
-                position = start
-                for mark in marks:
-                    if mark - bridge <= position or mark + bridge >= end:
-                        continue
-                    # Мост вбок; сторону выбираем по свободному месту рядом:
-                    # справа может быть соседняя линия или таблица
-                    side = free_side(x1, mark)
-                    path.lineTo(x1 * 72, y(mark - bridge))
-                    path.curveTo(x1 * 72 + side * kappa * bridge * 72, y(mark - bridge),
-                                 x1 * 72 + side * bridge * 72, y(mark - kappa * bridge),
-                                 x1 * 72 + side * bridge * 72, y(mark))
-                    path.curveTo(x1 * 72 + side * bridge * 72, y(mark + kappa * bridge),
-                                 x1 * 72 + side * kappa * bridge * 72, y(mark + bridge),
-                                 x1 * 72, y(mark + bridge))
-                    position = mark + bridge
-                path.lineTo(x1 * 72, y(end))
-
-            pdf.drawPath(path, stroke=1, fill=0)
-
-        # Стрелка на последнем сегменте — у родительской таблицы
-        x1, y1, x2, y2 = segments[-1]
-        angle = math.atan2(-(y2 - y1), x2 - x1)
-        for delta in (-0.42, 0.42):
-            pdf.line(x2 * 72, y(y2),
-                     x2 * 72 - 5.5 * math.cos(angle + delta),
-                     y(y2) + 5.5 * math.sin(angle + delta))
-
-    # 1. Связи первыми: таблицы рисуются поверх
-    drawn: list[tuple[float, float, float, float]] = []
-    overlaps = 0
-    crossings_total = 0
+    # --- 1. связи ------------------------------------------------------------
+    # Белое «окаймление» под линиями: на пересечении верхняя линия как бы
+    # перекрывает нижнюю. Окаймление рисуем группами по родителю, чтобы
+    # линии одной группы (общий «ствол» у родителя) не разрезали друг друга.
+    by_parent: dict[str, list[PdfLink]] = {}
     for link in links:
-        marks: list[list[float]] = []
-        for seg in link:
-            segment_marks = [list(point) for prev in drawn
-                             if (point := crossing(seg, prev)) is not None]
-            crossings_total += len(segment_marks)
-            marks.append(segment_marks)
+        by_parent.setdefault(link.parent, []).append(link)
 
-            for prev in drawn:
-                if horizontal(seg) and horizontal(prev) and abs(seg[1] - prev[1]) < 0.01:
-                    a1, a2 = sorted((seg[0], seg[2]))
-                    b1, b2 = sorted((prev[0], prev[2]))
-                    if min(a2, b2) - max(a1, b1) > 0.02:
-                        overlaps += 1
-                if (not horizontal(seg) and not horizontal(prev)
-                        and abs(seg[0] - prev[0]) < 0.01):
-                    a1, a2 = sorted((seg[1], seg[3]))
-                    b1, b2 = sorted((prev[1], prev[3]))
-                    if min(a2, b2) - max(a1, b1) > 0.02:
-                        overlaps += 1
+    def path_of(link: PdfLink):
+        path = pdf.beginPath()
+        pts = link.points
+        path.moveTo(X(pts[0][0]), Y(pts[0][1]))
+        for px, py in pts[1:]:
+            path.lineTo(X(px), Y(py))
+        return path
 
-            drawn.append(seg)
-        stroke_link(link, marks)
+    pdf.setLineJoin(1)
+    pdf.setLineCap(0)
+    for group in by_parent.values():
+        stroke(PAGE_BG)
+        pdf.setLineWidth(4.2)
+        for link in group:
+            pdf.drawPath(path_of(link), stroke=1, fill=0)
+        for link in group:
+            stroke(link.color)
+            pdf.setLineWidth(1.5)
+            pdf.drawPath(path_of(link), stroke=1, fill=0)
+            pdf.setLineWidth(1.3)
+            many_marker(link.xc, link.yc, link.c_dir)
+            one_marker(link.xp, link.yp, link.p_dir, link.optional)
 
-    print(f"  связей: {len(links)} · пересечений: {crossings_total} "
-          f"(показаны мостиками) · наложений: {overlaps}")
+    # Диагностика: пересечения допустимы, наложения линий — нет
+    segments = [(link.parent, a, b) for link in links
+                for a, b in zip(link.points, link.points[1:], strict=False)]
+    crossings = overlaps = 0
+    for i, (pa, a1, a2) in enumerate(segments):
+        for pb, b1, b2 in segments[i + 1:]:
+            if pa == pb:
+                continue
+            a_h, b_h = abs(a1[1] - a2[1]) < 1e-9, abs(b1[1] - b2[1]) < 1e-9
+            if a_h != b_h:
+                h = (a1, a2) if a_h else (b1, b2)
+                v = (b1, b2) if a_h else (a1, a2)
+                hx = sorted((h[0][0], h[1][0]))
+                vy = sorted((v[0][1], v[1][1]))
+                if hx[0] < v[0][0] < hx[1] and vy[0] < h[0][1] < vy[1]:
+                    crossings += 1
+            elif a_h and abs(a1[1] - b1[1]) < 0.01:
+                lo_a, hi_a = sorted((a1[0], a2[0]))
+                lo_b, hi_b = sorted((b1[0], b2[0]))
+                if min(hi_a, hi_b) - max(lo_a, lo_b) > 0.02:
+                    overlaps += 1
+            elif not a_h and abs(a1[0] - b1[0]) < 0.01:
+                lo_a, hi_a = sorted((a1[1], a2[1]))
+                lo_b, hi_b = sorted((b1[1], b2[1]))
+                if min(hi_a, hi_b) - max(lo_a, lo_b) > 0.02:
+                    overlaps += 1
+    print(f"  связей: {len(links)} · пересечений: {crossings} · наложений: {overlaps}")
     if overlaps:
-        print("  ВНИМАНИЕ: линии накладываются друг на друга — это недопустимо")
+        print("  ВНИМАНИЕ: линии разных связей накладываются — поправьте PDF_COLUMNS")
 
-    # 2. Таблицы
-    for name, table in tables.items():
-        left, top, w, h = boxes[name]
+    # --- 2. таблицы -------------------------------------------------------------
+    fk_targets = {(link.child, c.name) for link in links
+                  for c in tables[link.child].columns if False}  # (заполнено ниже)
+    del fk_targets
 
-        pdf.setFillColor(HexColor(BRAND))
-        pdf.setStrokeColor(HexColor(BRAND))
-        pdf.setLineWidth(0.7)
-        pdf.roundRect(left * 72, y(top + HEADER_H), w * 72, HEADER_H * 72,
-                      3, stroke=1, fill=1)
-        pdf.setFillColor(HexColor("#FFFFFF"))
-        pdf.setFont("bold", 7.6)
-        pdf.drawCentredString((left + w / 2) * 72, y(top + HEADER_H / 2 + 0.04),
-                              TABLE_TITLES.get(name, name))
+    for name, (left, top, width, height) in boxes.items():
+        table = tables[name]
+        _title, color = group_of.get(name, ("", "#6B7280"))
 
-        body_top = top + HEADER_H
-        pdf.setFillColor(HexColor("#FFFFFF"))
-        pdf.setStrokeColor(HexColor(LINE))
-        pdf.roundRect(left * 72, y(top + h), w * 72, (h - HEADER_H) * 72,
-                      3, stroke=1, fill=1)
+        fill("#DDD9E8")  # лёгкая тень
+        pdf.roundRect(X(left + 0.04), Y(top + height + 0.04), width * 72, height * 72,
+                      5, stroke=0, fill=1)
+        fill("#FFFFFF")
+        stroke(color)
+        pdf.setLineWidth(1.0)
+        pdf.roundRect(X(left), Y(top + height), width * 72, height * 72, 5, stroke=1, fill=1)
 
-        pdf.setFillColor(HexColor(INK))
-        pdf.setFont("mono", 6.4)
-        text_object = pdf.beginText((left + 0.07) * 72, y(body_top + 0.13))
-        text_object.setLeading(8.4)
-        for column in table.columns:
-            text_object.textLine(column_line(column).rstrip())
-        pdf.drawText(text_object)
+        # зебра по строкам
+        for index in range(len(table.columns)):
+            if index % 2 == 1:
+                fill(BAND)
+                row_top = top + PDF_HEADER_H + PDF_PAD_H + index * PDF_ROW_H
+                pdf.rect(X(left + 0.012), Y(row_top + PDF_ROW_H), (width - 0.024) * 72,
+                         PDF_ROW_H * 72, stroke=0, fill=1)
 
-    # 3. Заголовок и легенда — поверх всего
-    pdf.setFillColor(HexColor(BRAND))
-    pdf.setStrokeColor(HexColor(BRAND))
-    pdf.roundRect(0.5 * 72, y(0.72), 9.0 * 72, 0.42 * 72, 3, stroke=1, fill=1)
-    pdf.setFillColor(HexColor("#FFFFFF"))
-    pdf.setFont("bold", 14)
-    pdf.drawString(0.62 * 72, y(0.58), "PPE Tracker — схема базы данных")
+        # шапка
+        fill(color)
+        pdf.roundRect(X(left), Y(top + PDF_HEADER_H), width * 72, PDF_HEADER_H * 72,
+                      5, stroke=0, fill=1)
+        pdf.rect(X(left), Y(top + PDF_HEADER_H), width * 72, PDF_HEADER_H * 36,
+                 stroke=0, fill=1)
+        english, _sep, russian = TABLE_TITLES.get(name, name).partition(" · ")
+        text(left + 0.14, top + PDF_HEADER_H / 2, english, "bold", 11, "#FFFFFF")
+        if russian:
+            text(left + width - 0.14, top + PDF_HEADER_H / 2, russian, "text", 8.6,
+                 "#E9E4F5", "right")
 
-    pdf.setFillColor(HexColor(INK))
-    pdf.setFont("text", 8)
-    pdf.drawString(0.5 * 72, y(0.95),
-                   f"PostgreSQL 16 · таблиц: {len(tables)} · связей: {len(relations)} · "
-                   f"сгенерировано из information_schema {date.today().strftime('%d.%m.%Y')}")
+        # строки полей
+        for index, column in enumerate(table.columns):
+            yc = pdf_row_y((left, top, width, height), index)
+            text(left + 0.14, yc, column.name, "bold" if column.pk else "text", 8.8, INK)
+            text(left + 1.85, yc, column.type, "mono", 7.8, MUTED)
 
-    pdf.setFillColor(HexColor("#FFFFFF"))
-    pdf.setStrokeColor(HexColor(LINE))
-    pdf.roundRect(11.5 * 72, y(1.04), 8.6 * 72, 0.74 * 72, 3, stroke=1, fill=1)
-    pdf.setFillColor(HexColor(INK))
-    pdf.setFont("text", 7.4)
-    text_object = pdf.beginText(11.65 * 72, y(0.52))
-    text_object.setLeading(9.4)
-    for line in [
-        "PK — первичный ключ, U — уникальное поле, NN — NOT NULL",
-        "→ в поле — внешний ключ и правило ON DELETE",
-        "Стрелка ведёт от дочерней таблицы к родительской",
-        "Пересечение связей показано «мостиком» — полуокружностью",
-    ]:
-        text_object.textLine(line)
-    pdf.drawText(text_object)
+            bx = left + 2.62
+            marks = []
+            if column.pk:
+                marks.append(("PK", BRAND))
+            if column.fk:
+                marks.append(("FK", "#1F5FA8"))
+            if column.unique:
+                marks.append(("U", "#2FA36B"))
+            for label, badge_color in marks:
+                badge(bx, yc, label, badge_color, 0.28 if len(label) == 2 else 0.22)
+                bx += 0.32 if len(label) == 2 else 0.26
+            if column.not_null and not column.pk:
+                text(left + 3.38, yc, "NN", "text", 7, "#8A86A0")
+
+            if column.fk:
+                target = column.fk.removeprefix("→ ")
+                reference, _s, rule = target.partition(" ")
+                label = f"→ {reference.split('.')[0]}"
+                text(left + 3.7, yc, label, "text", 7.4, "#1F5FA8")
+                if rule:
+                    # Правило ставим вплотную к названию, а не к краю: иначе налезает
+                    label_w = stringWidth(label, "text", 7.4) / 72
+                    text(left + 3.7 + label_w + 0.1, yc, rule, "text", 6.2, "#9A3B3B")
+
+    # --- 3. заголовок ----------------------------------------------------------
+    fill(BRAND)
+    pdf.roundRect(X(PDF_MARGIN_X), Y(1.0), 9.2 * 72, 0.68 * 72, 6, stroke=0, fill=1)
+    text(PDF_MARGIN_X + 0.3, 0.66, "PPE Tracker — схема базы данных", "bold", 21, "#FFFFFF")
+    text(PDF_MARGIN_X, 1.28,
+         f"PostgreSQL 16 · таблиц: {len(tables)} · связей: {len(relations)} · "
+         f"сгенерировано из information_schema {date.today().strftime('%d.%m.%Y')}",
+         "text", 9, MUTED)
+
+    # --- 4. легенда -------------------------------------------------------------
+    lg_w, lg_h = 13.4, 1.4
+    lg_left = page_w - PDF_MARGIN_X - lg_w
+    lg_top = 0.32
+    fill("#FFFFFF")
+    stroke(LINE)
+    pdf.setLineWidth(0.8)
+    pdf.roundRect(X(lg_left), Y(lg_top + lg_h), lg_w * 72, lg_h * 72, 6, stroke=1, fill=1)
+
+    # группы таблиц
+    gx, gy = lg_left + 0.25, lg_top + 0.24
+    for title, color, _names in PDF_GROUPS:
+        fill(color)
+        pdf.roundRect(X(gx), Y(gy) - 4.5, 0.3 * 72, 9, 2.5, stroke=0, fill=1)
+        text(gx + 0.42, gy, title, "text", 8.6, INK)
+        gy += 0.235
+
+    # обозначения полей
+    kx = lg_left + 3.55
+    ky = lg_top + 0.24
+    for label, color, caption in (
+        ("PK", BRAND, "первичный ключ"),
+        ("FK", "#1F5FA8", "внешний ключ; справа — таблица и правило ON DELETE"),
+        ("U", "#2FA36B", "уникальное значение"),
+    ):
+        badge(kx, ky, label, color, 0.28 if len(label) == 2 else 0.22)
+        text(kx + 0.42, ky, caption, "text", 8.6, INK)
+        ky += 0.235
+    text(kx, ky, "NN", "text", 7.6, "#8A86A0")
+    text(kx + 0.42, ky, "NOT NULL (без отметки — поле допускает NULL)", "text", 8.6, INK)
+
+    # обозначения связей
+    sx = lg_left + 8.4
+    sy = lg_top + 0.24
+    stroke("#555555")
+    pdf.setLineWidth(1.3)
+    for kind, caption in (
+        ("many", "конец «вилкой» — дочерняя таблица (поле FK)"),
+        ("one", "черта — родительская таблица (поле PK)"),
+        ("opt", "кружок — связь необязательна (FK допускает NULL)"),
+    ):
+        pdf.line(X(sx), Y(sy), X(sx + 0.6), Y(sy))
+        if kind == "many":
+            many_marker(sx, sy, 1)
+        elif kind == "one":
+            one_marker(sx + 0.6, sy, -1, False)
+        else:
+            one_marker(sx + 0.6, sy, -1, True)
+        text(sx + 0.85, sy, caption, "text", 8.6, INK)
+        sy += 0.235
+    text(sx, sy, "Цвет линии — по родительской таблице", "text", 8.6, MUTED)
 
     pdf.showPage()
     pdf.save()
-
-
-
 
 
 def build_mermaid(tables: dict[str, Table], relations: list[tuple[str, str, str, str]]) -> str:
@@ -1045,6 +1000,11 @@ def main() -> int:
             "Новые таблицы без места на схеме: " + ", ".join(sorted(unknown)),
             "\nДобавьте их в LAYOUT (и, при желании, в TABLE_TITLES) и запустите снова.",
         )
+        return 1
+
+    not_in_pdf = [n for n in tables if not any(n in col for col in PDF_COLUMNS)]
+    if not_in_pdf:
+        print("Новые таблицы без места в PDF_COLUMNS: " + ", ".join(sorted(not_in_pdf)))
         return 1
 
     page_xml = build_page(tables, relations)
