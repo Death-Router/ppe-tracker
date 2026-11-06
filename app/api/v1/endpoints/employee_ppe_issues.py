@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -35,6 +37,52 @@ def issue_item_options():
 router = APIRouter(prefix="/employee_ppe_issues", tags=["Выдача СИЗ"])
 
 
+def parse_quantity(raw: str | None, label: str) -> Decimal:
+    """Разбирает количество из карточки: «2», «2,5», « 2 » — это числа.
+
+    В БД количество хранится строкой (в нормах встречаются записи вида «1 пара»),
+    но остаток по такой записи не посчитать. Поэтому строка обязана быть числом,
+    иначе честно говорим об этом, а не пропускаем отрицательный остаток.
+    """
+    text = (raw or "").replace("\u00a0", " ").replace(",", ".").strip()
+    try:
+        value = Decimal(text)
+    except InvalidOperation:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Количество «{label}» = «{raw}» — это не число. "
+                "Остаток не посчитать: укажите количество цифрами."
+            ),
+        ) from None
+
+    if value <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Количество «{label}» должно быть больше нуля",
+        )
+    return value
+
+
+def ensure_balance_not_negative(quantity: str, returned_quantity: str) -> None:
+    """Остаток = выдано − возвращено. Он не может уйти в минус.
+
+    Иначе в карточке появляется «выдано 2, возвращено 6», и по такому остатку
+    уже не понять, сколько СИЗ реально на руках.
+    """
+    issued = parse_quantity(quantity, "выдано")
+    returned = parse_quantity(returned_quantity, "возвращено")
+    if returned > issued:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Возврат больше выдачи: выдано {issued.normalize():f}, "
+                f"возвращают {returned.normalize():f}. "
+                "Остаток не может быть отрицательным."
+            ),
+        )
+
+
 @router.post("/", response_model=EmployeePpeIssueRead, status_code=status.HTTP_201_CREATED)
 async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depends(get_db)):
     # 1. Проверяем сотрудника
@@ -70,6 +118,11 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
             )
 
     # 4. Создаем запись
+    # Возврат может прийти сразу вместе с выдачей (импорт/API) — остаток
+    # проверяем тем же правилом, что и при правке
+    if issue_in.returned_quantity:
+        ensure_balance_not_negative(issue_in.quantity, issue_in.returned_quantity)
+
     db_issue = EmployeePpeIssue(
         employee_id=issue_in.employee_id,
         ppe_item_id=issue_in.ppe_item_id,
@@ -84,6 +137,10 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
     db.add(db_issue)
     await db.commit()
     await db.refresh(db_issue)
+
+    # Вкладка со списком сотрудников держит выдачи в памяти: без события
+    # новая запись появлялась только после ручного обновления страницы
+    await broadcast(0, {"event": "issue_updated", "employee_id": db_issue.employee_id})
 
     # 5. Загружаем связи для ответа
     result = await db.execute(
@@ -136,6 +193,10 @@ async def update_issue(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="У акта списания должны быть и дата, и номер",
         )
+
+    # Остаток меняется именно возвратом, поэтому проверяем его до записи
+    if db_issue.returned_quantity:
+        ensure_balance_not_negative(db_issue.quantity, db_issue.returned_quantity)
 
     db_issue.version += 1
     await db.commit()

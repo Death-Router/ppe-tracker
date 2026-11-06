@@ -168,12 +168,11 @@
                                     <th>Кол-во</th>
                                     <th>Дата выдачи</th>
                                     <th>Действует до</th>
-                                    <th>Возвращено, акт</th>
                                     <th class="col-actions">Действия</th>
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <tr><td colspan="7" class="state">Нет данных</td></tr>
+                                <tr><td colspan="6" class="state">Нет данных</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -221,7 +220,9 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="issue-quantity">Количество <span class="req">*</span></label>
-                            <input type="text" class="form-control" id="issue-quantity" name="quantity" value="1" required maxlength="50">
+                            <input type="text" class="form-control" id="issue-quantity" name="quantity" value="1"
+                                   required maxlength="3" inputmode="numeric" pattern="[0-9]{1,3}"
+                                   title="Количество — цифры, не больше трёх">
                             <div class="form-text" id="issue-quantity-hint"></div>
                         </div>
                         <!-- Графа 5 карточки: «лично/дозатор» — только для
@@ -269,7 +270,10 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="return-quantity">Возвращено, количество</label>
-                            <input type="text" class="form-control" id="return-quantity" name="returned_quantity" maxlength="50">
+                            <input type="text" class="form-control" id="return-quantity" name="returned_quantity"
+                                   maxlength="3" inputmode="numeric" pattern="[0-9]{1,3}"
+                                   title="Количество — цифры, не больше трёх">
+                            <div class="form-text" id="return-quantity-hint"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="return-act-date">Дата акта списания</label>
@@ -283,6 +287,8 @@
                     <div class="form-text mt-3">
                         Дата и количество возврата заполняются парой, акт списания — тоже
                         парой «дата + номер». Пустые поля означают, что возврата не было.
+                        Возврат не может быть больше выданного: остаток не уходит в минус.
+                        Количество — только цифры, не больше трёх.
                     </div>
                 </div>
                 <div class="modal-footer">

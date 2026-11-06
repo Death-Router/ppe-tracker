@@ -212,7 +212,7 @@
     createForm.reset();
     versionInput.value = '';
     sizesBody.innerHTML = '';
-    issuesBody.innerHTML = '<tr><td colspan="7" class="state">Нет данных</td></tr>';
+    issuesBody.innerHTML = '<tr><td colspan="6" class="state">Нет данных</td></tr>';
     createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
     // Возвращаемся на первую вкладку
     bootstrap.Tab.getOrCreateInstance(
@@ -347,10 +347,9 @@
           <td>${escapeHtml(String(i.quantity ?? '—'))}</td>
           <td>${escapeHtml(formatDate(i.issue_date))}</td>
           <td>${expiryCell(i.expiry_date)}</td>
-          <td>${returnCell(i)}</td>
           <td class="col-actions">
             <button class="btn btn-icon" data-action="return-issue" data-id="${i.id}"
-                    title="Возврат и акт списания">
+                    title="${escapeHtml(returnButtonTitle(i))}">
               <i class="bi bi-arrow-return-left"></i>
             </button>
             <button class="btn btn-icon btn-icon--danger" data-action="delete-issue"
@@ -359,11 +358,13 @@
             </button>
           </td>
         </tr>`).join('')
-      : '<tr><td colspan="7" class="state">Выдач пока нет</td></tr>';
+      : '<tr><td colspan="6" class="state">Выдач пока нет</td></tr>';
   }
 
-  // Графы 7-10 карточки: что вернули и каким актом списали
-  function returnCell(issue) {
+  // Графы 7-10 карточки: что вернули и каким актом списали. Отдельной колонки
+  // в таблице больше нет — она занимала пол-экрана, поэтому статус возврата
+  // показывается в подсказке кнопки, а сами поля правятся в модалке.
+  function returnSummary(issue) {
     const parts = [];
     if (issue.returned_date) {
       const qty = issue.returned_quantity ? ` (${issue.returned_quantity})` : '';
@@ -373,9 +374,14 @@
       const date = issue.write_off_act_date ? ` от ${formatDate(issue.write_off_act_date)}` : '';
       parts.push(`акт № ${issue.write_off_act_number}${date}`);
     }
+    return parts.join('; ');
+  }
 
-    if (!parts.length) return '<span class="cell-muted">—</span>';
-    return `<span class="badge-soft badge-purple">${escapeHtml(parts.join('; '))}</span>`;
+  // Имя функции с суффиксом Button: иначе конфликт с `returnTitle` —
+  // это DOM-элемент заголовка модалки (const в этой же области видимости)
+  function returnButtonTitle(issue) {
+    const summary = returnSummary(issue);
+    return summary ? `Возврат и акт списания: ${summary}` : 'Возврат и акт списания';
   }
 
   // --- Выдача СИЗ -------------------------------------------------------
@@ -664,10 +670,15 @@
 
     if (norm) {
       const normQuantity = String(norm.quantity ?? '1').trim();
+      // В норме количество может быть записано словами («2 пары»), а в поле
+      // допустимы только цифры — берём число и предупреждаем, что подставили
+      const digits = FormHelper.digits(normQuantity, 3);
       issueNormHint.textContent =
         `По норме: ${norm.wear_period_value} ${norm.wear_period_unit}, количество ${normQuantity}`;
-      issueQuantityInput.value = normQuantity;
-      issueQuantityHint.textContent = 'Подставлено из нормы выдачи для должности';
+      issueQuantityInput.value = digits || '1';
+      issueQuantityHint.textContent = digits === normQuantity
+        ? 'Подставлено из нормы выдачи для должности'
+        : `В норме указано «${normQuantity}» — подставлено ${digits || '1'}, проверьте количество`;
     } else {
       issueQuantityHint.textContent = 'Для должности норма не задана — количество не подставлено';
     }
@@ -773,22 +784,76 @@
 
     const fields = returnForm.elements;
     fields['returned_date'].value = dateValue(issue.returned_date);
-    fields['returned_quantity'].value = issue.returned_quantity ?? '';
+    // Старая запись могла хранить нечисловое количество («-5», «2 пары») —
+    // в поле показываем только цифры, иначе маска молча пропускала бы минус
+    fields['returned_quantity'].value = FormHelper.digits(issue.returned_quantity, 3);
     fields['write_off_act_date'].value = dateValue(issue.write_off_act_date);
     fields['write_off_act_number'].value = issue.write_off_act_number ?? '';
+
+    updateReturnHint(issue);
 
     window.FormValidation.refresh(returnForm);
     bootstrap.Modal.getOrCreateInstance(returnModalEl).show();
   }
+
+  // Остаток = выдано − возвращено. Показываем его прямо в модалке: иначе
+  // «выдано 2, возвращено 6» замечают уже после сохранения
+  function updateReturnHint(issue, returnedValue) {
+    const hint = document.getElementById('return-quantity-hint');
+    if (!hint) return;
+
+    const returned = returnedValue === undefined ? issue.returned_quantity : returnedValue;
+    const { text, isError } = Quantity.describeReturn(issue.quantity, returned);
+
+    hint.textContent = text;
+    hint.classList.toggle('text-danger', isError);
+  }
+
+  // Остаток пересчитывается на лету: сразу видно, сколько останется на руках
+  returnForm?.elements['returned_quantity']?.addEventListener('input', (event) => {
+    if (!returnIssue) return;
+    // Чистим значение здесь же: маска подключена отдельным слушателем и
+    // сработает после этого, а подсказка должна видеть уже только цифры
+    event.target.value = FormHelper.digits(event.target.value, 3);
+    updateReturnHint(returnIssue, event.target.value);
+  });
 
   returnForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!returnIssue) return;
 
     const fields = returnForm.elements;
+    const returnedRaw = fields['returned_quantity'].value.trim();
+
+    // Остаток не должен уйти в минус: проверяем до запроса, чтобы не показывать
+    // ошибку сервера там, где можно сказать точнее
+    if (returnedRaw) {
+      // Разбор и правило остатка — в Quantity: та же логика, что в подсказке
+      const { isError } = Quantity.describeReturn(returnIssue.quantity, returnedRaw);
+      const issued = Quantity.parse(returnIssue.quantity);
+      const returned = Quantity.parse(returnedRaw);
+
+      if (!Number.isFinite(issued) || issued <= 0) {
+        window.showToast(
+          `Количество выдачи «${returnIssue.quantity}» не число — остаток не проверить`,
+          'danger'
+        );
+        return;
+      }
+      if (isError) {
+        window.showToast(
+          !Number.isFinite(returned) || returned <= 0
+            ? 'Количество возврата — только цифры и больше нуля'
+            : `Возврат больше выдачи: выдано ${issued}, возвращают ${returned}. Остаток не может быть отрицательным`,
+          'danger'
+        );
+        return;
+      }
+    }
+
     const payload = {
       returned_date: fields['returned_date'].value || null,
-      returned_quantity: fields['returned_quantity'].value.trim() || null,
+      returned_quantity: returnedRaw || null,
       write_off_act_date: fields['write_off_act_date'].value || null,
       write_off_act_number: fields['write_off_act_number'].value.trim() || null,
       version: Number(returnIssue.version),
@@ -925,7 +990,22 @@
     if (data.event === 'issue_updated' && data.employee_id === editingId) {
       reloadEmployee();
     }
+    // Справочник размеров поправили в соседней вкладке: кэши устарели, а в
+    // открытой модалке выдачи остались бы прежние варианты размера
+    if (data.event === 'size_group_updated' || data.event === 'size_updated') {
+      allSizeGroupsCache = null;
+      sizesByGroup.clear();
+      const issueOpen = issueModalEl?.classList.contains('show');
+      const chosenItem = allPpeItems?.find((i) => i.id === Number(issueItemSelect?.value));
+      if (issueOpen && chosenItem) fillSizeOptions(chosenItem);
+    }
   });
+
+  // Количество — только цифры, не больше трёх: «-5» и «2,5» ломали остаток.
+  // Подключаем по id: это то же поле, что и name="returned_quantity", но
+  // ссылка не зависит от резолва элементов формы
+  FormHelper.onlyDigits(issueQuantityInput, 3);
+  FormHelper.onlyDigits(document.getElementById('return-quantity'), 3);
 
   loadDepartmentsForSelect();
   loadEmployees();
