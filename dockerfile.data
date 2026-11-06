@@ -35,4 +35,13 @@ RUN sed -i 's/\r$//' /usr/local/bin/entrypoint-data.sh \
 
 USER 10001
 
+# ENTRYPOINT переопределяется, поэтому CMD базового образа СБРАСЫВАЕТСЯ
+# (Docker: «if you specify ENTRYPOINT, CMD from the base image is reset»).
+# Без явного CMD цепочка entrypoint-data.sh -> entrypoint.sh заканчивается
+# `exec "$@"` с пустыми аргументами, и контейнер молча завершается с кодом 0:
+# в логах видно «данные залиты, маркер записан» и «миграции применены», а
+# uvicorn не запускается. Проверено: Exited (0), /healthz = 000.
+# Поэтому CMD повторяет CMD из dockerfile.prod.
 ENTRYPOINT ["/usr/local/bin/entrypoint-data.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--no-server-header"]
