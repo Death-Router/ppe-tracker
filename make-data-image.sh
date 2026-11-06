@@ -202,11 +202,23 @@ else
     #
     # --disable-triggers не нужен: FK в дампе данные не нарушают.
     # --column-inserts не нужен: COPY быстрее.
+    #
+    # Справочники размеров исключаем из дампа: их наполняют сами миграции.
+    # b7e1c93d5a24, d5a8f21c4e37 и c4d9e2b71f30 вставляют в ppe_size_groups
+    # и ppe_sizes конкретные строки с id=1,2,..., e2c74b81f9d6 их
+    # пересчитывает. В dev-базе эти же строки лежат с теми же id, поэтому
+    # COPY из дампа падал:
+    #   duplicate key value violates unique constraint "ppe_size_groups_pkey"
+    #   DETAIL: Key (id)=(1) already exists.
+    # Пропуск безопасен: на целевой базе миграции создадут ровно тот же
+    # набор справочных размеров.
     if ! docker compose -f "$COMPOSE_FILE" exec -T "$DEV_DB_SERVICE" \
             pg_dump -U "$dev_user" -d "$dev_db" \
             --data-only \
             --no-owner --no-privileges \
             --exclude-table=alembic_version \
+            --exclude-table=ppe_size_groups \
+            --exclude-table=ppe_sizes \
             > "$TMP_DIR/data/dump.sql"; then
         die "pg_dump не удался"
     fi
@@ -214,12 +226,16 @@ else
     dump_bytes=$(wc -c < "$TMP_DIR/data/dump.sql" | tr -d ' ')
     [ "$dump_bytes" -gt 1024 ] || die "дамп подозрительно мал ($dump_bytes байт) — dev-база пуста?"
 
-    # Страховки: DDL в дампе быть не должно, ссылок на alembic_version тоже.
+    # Страховки: DDL в дампе быть не должно, ссылок на alembic_version и на
+    # исключённые справочники — тоже.
     if grep -qE '^(CREATE|ALTER|DROP) ' "$TMP_DIR/data/dump.sql"; then
         die "в дампе есть DDL — --data-only не сработал"
     fi
     if grep -q 'alembic_version' "$TMP_DIR/data/dump.sql"; then
         die "в дампе остались строки alembic_version — исключение не сработало"
+    fi
+    if grep -qE '^COPY public\.(ppe_size_groups|ppe_sizes) ' "$TMP_DIR/data/dump.sql"; then
+        die "в дампе остались справочные размеры — исключение не сработало"
     fi
 
     # Права: внутри контейнера читает app (uid 10001), скрипт может работать
