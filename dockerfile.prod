@@ -39,7 +39,12 @@ COPY --chown=app:app app ./app
 # Одноразовый скрипт первого администратора: без него прод-базу не наполнить
 COPY --chown=app:app create_admin.py ./
 COPY --chown=app:app docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 0755 /usr/local/bin/entrypoint.sh
+# CRLF убивает шебанг: ядро ищет интерпретатор "/bin/sh\r" и пишет
+# "exec /usr/local/bin/entrypoint.sh: no such file or directory" — файл при этом
+# на месте. Сборка из Windows-клона с core.autocrlf=true приносит CRLF в контекст
+# (см. .gitattributes), поэтому чистим здесь, независимо от того, как файл приехал.
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+    && chmod 0755 /usr/local/bin/entrypoint.sh
 
 USER app
 

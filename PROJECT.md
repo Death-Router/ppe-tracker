@@ -640,6 +640,42 @@ docker compose -f docker-compose.prod.yml exec api python create_admin.py
 `secure`, вход и страницы (`/employees`, `/norms`, `/ppe-items`) → 200,
 API `GET /api/v1/employees/` → 200.
 
+### 11. CRLF в `entrypoint.sh`: «no such file or directory», хотя файл на месте
+
+Сборка из **Windows-клона** дала образ, который падал на любом запуске:
+
+```
+exec /usr/local/bin/entrypoint.sh: no such file or directory
+```
+
+Файл при этом лежит в образе — ядро ищет интерпретатор из шебанга и читает его
+как `/bin/sh\r`. Причина: в репозитории файл хранится с LF (`i/lf`), но на
+Windows включён глобальный `core.autocrlf=true` (`C:/Program Files/Git/etc/
+gitconfig`), поэтому рабочая копия чекаутится с CRLF, а **контекст сборки —
+это рабочая копия**. На WSL-клоне (LF) ошибка не воспроизводится: образ там
+собирался и проверялся.
+
+Проверить, не приехало ли CRLF в образ, можно без Docker:
+
+```powershell
+$b = [IO.File]::ReadAllBytes('docker/entrypoint.sh'); $b[0..9] -join ' '
+# правильно: 23 21 2F 62 69 6E 2F 73 68 0A  (…/sh + LF)
+```
+
+Лечение двойное, оба нужны:
+
+1. **`.gitattributes`** — `* text=auto eol=lf` фиксирует LF на всех машинах
+   независимо от `core.autocrlf`. Бинарные расширения помечены `binary`.
+   Рабочие копии уже существующих файлов `.gitattributes` сам не
+   перенормализует: после правки — `git add --renormalize .` (или один раз
+   переписать файл с LF).
+2. **`sed -i 's/\r$//'` в `dockerfile.prod`** перед `chmod` — страховка на
+   случай контекста, собранного в обход git (архив, копия папки).
+
+Само по себе `dockerfile.prod` с CRLF собирается нормально: Docker построчно
+читает директивы и переносы гасит. Ломаются только файлы, которые исполняет
+ядро Linux: `.sh`, а также любые shebang-скрипты.
+
 ---
 
 ## Git

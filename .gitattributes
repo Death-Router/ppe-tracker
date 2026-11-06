@@ -1,0 +1,22 @@
+# Переносы строк.
+#
+# На Windows включён глобальный core.autocrlf=true (C:/Program Files/Git/etc/
+# gitconfig), поэтому рабочие копии чекаутятся с CRLF. Для Python и HTML это
+# безвредно, но контекст сборки Docker — это рабочая копия, и в образ приехали
+# CRLF в docker/entrypoint.sh: ядро читало шебанг как "#!/bin/sh\r" и выдавало
+# "no such file or directory". Образ собирался на WSL-клоне (LF) и не падал.
+#
+# Эти правила фиксируют LF на всех машинах, независимо от core.autocrlf.
+* text=auto eol=lf
+
+# Windows-обёрткам переносы безразличны, но пусть будут LF как и всё остальное:
+# .cmd/.ps1 требуют CRLF только для старых интерпретаторов, cmd.exe читает LF.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Бинарные файлы: git не должен ни конвертировать, ни считать их текстом
+*.docx binary
+*.pdf binary
+*.vsdx binary
+*.png binary
+*.ico binary
