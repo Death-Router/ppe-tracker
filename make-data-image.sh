@@ -198,27 +198,29 @@ else
     #     таблицы, которые alembic уже создал);
     #   - построчный grep по alembic_version: обрезанный DDL, "syntax error
     #     at or near version_num".
-    # С --data-only остаются только COPY-блоки, разбора текста нет вовсе.
+    # С --data-only остаются только вставки данных, разбора текста нет.
     #
-    # --disable-triggers не нужен: FK в дампе данные не нарушают.
-    # --column-inserts не нужен: COPY быстрее.
+    # Вставки — INSERT ... ON CONFLICT DO NOTHING, а не COPY.
+    # Причина: миграции b7e1c93d5a24, d5a8f21c4e37 и c4d9e2b71f30 САМИ создают
+    # справочные размеры (ppe_size_groups, ppe_sizes) с фиксированными id=1,2,…
+    # В dev-базе эти же строки лежат с теми же id, а сверх них есть группы,
+    # добавленные вручную через интерфейс (id 7..10). COPY падал с
+    # "duplicate key ... (id)=(1) already exists", а исключение справочников
+    # из дампа роняло FK "size_group_id=(10) is not present in
+    # ppe_size_groups". ON CONFLICT DO NOTHING решает оба случая: совпадающие
+    # по id строки пропускаются, недостающие (7..10) добавляются.
     #
-    # Справочники размеров исключаем из дампа: их наполняют сами миграции.
-    # b7e1c93d5a24, d5a8f21c4e37 и c4d9e2b71f30 вставляют в ppe_size_groups
-    # и ppe_sizes конкретные строки с id=1,2,..., e2c74b81f9d6 их
-    # пересчитывает. В dev-базе эти же строки лежат с теми же id, поэтому
-    # COPY из дампа падал:
-    #   duplicate key value violates unique constraint "ppe_size_groups_pkey"
-    #   DETAIL: Key (id)=(1) already exists.
-    # Пропуск безопасен: на целевой базе миграции создадут ровно тот же
-    # набор справочных размеров.
+    # --on-conflict-do-nothing требует PostgreSQL 12+ (у нас 16).
+    # --column-inserts обязателен: ON CONFLICT неприменим к COPY.
+    # --disable-triggers не нужен: FK в дампе не нарушаются, а порядок строк
+    # в дампе уже совместим с зависимостями (departments.parent_id — самоссылка).
     if ! docker compose -f "$COMPOSE_FILE" exec -T "$DEV_DB_SERVICE" \
             pg_dump -U "$dev_user" -d "$dev_db" \
             --data-only \
+            --column-inserts \
+            --on-conflict-do-nothing \
             --no-owner --no-privileges \
             --exclude-table=alembic_version \
-            --exclude-table=ppe_size_groups \
-            --exclude-table=ppe_sizes \
             > "$TMP_DIR/data/dump.sql"; then
         die "pg_dump не удался"
     fi
@@ -226,16 +228,12 @@ else
     dump_bytes=$(wc -c < "$TMP_DIR/data/dump.sql" | tr -d ' ')
     [ "$dump_bytes" -gt 1024 ] || die "дамп подозрительно мал ($dump_bytes байт) — dev-база пуста?"
 
-    # Страховки: DDL в дампе быть не должно, ссылок на alembic_version и на
-    # исключённые справочники — тоже.
+    # Страховки: DDL в дампе быть не должно, ссылок на alembic_version тоже.
     if grep -qE '^(CREATE|ALTER|DROP) ' "$TMP_DIR/data/dump.sql"; then
         die "в дампе есть DDL — --data-only не сработал"
     fi
     if grep -q 'alembic_version' "$TMP_DIR/data/dump.sql"; then
         die "в дампе остались строки alembic_version — исключение не сработало"
-    fi
-    if grep -qE '^COPY public\.(ppe_size_groups|ppe_sizes) ' "$TMP_DIR/data/dump.sql"; then
-        die "в дампе остались справочные размеры — исключение не сработало"
     fi
 
     # Права: внутри контейнера читает app (uid 10001), скрипт может работать
