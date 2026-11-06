@@ -59,14 +59,21 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml exec api python c
 
 ```bash
 chmod +x make-data-image.sh
-./make-data-image.sh                  # ppe-tracker-api:data
-./make-data-image.sh -d dump.sql      # из готового дампа
-./make-data-image.sh -t ppe-tracker-api:2026-11-06
+./make-data-image.sh                 # чистый образ ppe-tracker-api:prod
+./make-data-image.sh --with-data     # + данные из dev-базы
+./make-data-image.sh --save          # плюс файл .tar для переноса
+./make-data-image.sh --with-data --save --gzip
+./make-data-image.sh -d dump.sql     # данные из готового дампа
 ```
 
 Дамп применяется один раз (маркер `.dump-loaded`); в непустую базу — только с
 `FORCE=1`. Внутри образа персональные данные — не публиковать в registry.
-Подробности — `PROJECT.md`, «Образ с данными из dev-базы».
+
+**Установка на другую машину (Windows или Linux) — [`INSTALL.md`](INSTALL.md).**
+Там создание образа, перенос `.tar`, запуск через Docker Desktop или Docker
+Engine на Linux, reverse-proxy с HTTPS и типовые отказы.
+
+Подробности устройства — `PROJECT.md`, «Образ с данными из dev-базы».
 
 Отличия: multi-stage образ (`dockerfile.prod`) без `.env`/`.git`/`.venv`,
 запуск от `app` (uid 10001), без `--reload` и bind-монтов, порт БД наружу не
