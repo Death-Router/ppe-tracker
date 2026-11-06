@@ -188,22 +188,23 @@ if [ -n "$DUMP_FILE" ]; then
 else
     step "Снимаю pg_dump из dev-базы"
 
-    # --clean НЕ используем. Он генерирует DROP-ы, нужные только для заливки
-    # в непустую базу, а дамп идёт только в пустую (проверка в
-    # entrypoint-data.sh). При этом --clean падает на живой dev-базе:
-    # "cannot drop constraint ppe_size_groups_pkey ... because other objects
-    # depend on it" — в dev-базе лишний внешний ключ
-    # employee_ppe_sizes_size_group_id_fkey1 (следствие того, что миграции
-    # там накатывались по одной, а не с нуля). Без --clean дамп содержит
-    # только CREATE и COPY и никаких зависимостей не трогает.
+    # Только ДАННЫЕ: --data-only. Схему в целевой базе целиком создаёт alembic
+    # (entrypoint-data.sh делает `alembic upgrade head` до заливки), поэтому
+    # любой DDL в дампе — лишний и опасный. Проверено на практике, три
+    # попытки наступили на одну и ту же ловушку:
+    #   - с --clean: "cannot drop constraint ppe_size_groups_pkey ... because
+    #     other objects depend on it" (DROP-ы ломаются о зависимости dev-базы);
+    #   - без --clean: "relation \"departments\" already exists" (дамп создаёт
+    #     таблицы, которые alembic уже создал);
+    #   - построчный grep по alembic_version: обрезанный DDL, "syntax error
+    #     at or near version_num".
+    # С --data-only остаются только COPY-блоки, разбора текста нет вовсе.
     #
-    # alembic_version исключаем ЦЕЛИКОМ (--exclude-table), а не построчно:
-    # её DDL в дампе многострочный, и прежняя фильтрация grep-ом вырезала
-    # только первую строку CREATE TABLE, оставляя "version_num character
-    # varying(32) NOT NULL" без начала — psql падал с syntax error.
-    # Версию схемы в целевой базе ведёт alembic, в дампе она не нужна.
+    # --disable-triggers не нужен: FK в дампе данные не нарушают.
+    # --column-inserts не нужен: COPY быстрее.
     if ! docker compose -f "$COMPOSE_FILE" exec -T "$DEV_DB_SERVICE" \
             pg_dump -U "$dev_user" -d "$dev_db" \
+            --data-only \
             --no-owner --no-privileges \
             --exclude-table=alembic_version \
             > "$TMP_DIR/data/dump.sql"; then
@@ -213,6 +214,10 @@ else
     dump_bytes=$(wc -c < "$TMP_DIR/data/dump.sql" | tr -d ' ')
     [ "$dump_bytes" -gt 1024 ] || die "дамп подозрительно мал ($dump_bytes байт) — dev-база пуста?"
 
+    # Страховки: DDL в дампе быть не должно, ссылок на alembic_version тоже.
+    if grep -qE '^(CREATE|ALTER|DROP) ' "$TMP_DIR/data/dump.sql"; then
+        die "в дампе есть DDL — --data-only не сработал"
+    fi
     if grep -q 'alembic_version' "$TMP_DIR/data/dump.sql"; then
         die "в дампе остались строки alembic_version — исключение не сработало"
     fi
