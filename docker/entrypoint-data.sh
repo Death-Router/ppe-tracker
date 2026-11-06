@@ -118,17 +118,22 @@ fi
 # 5. Заливаем дамп одной транзакцией: ошибка в середине не оставит базу
 # наполовину заполненной и маркер «применено».
 #
-# Подключение — через PGHOST/PGUSER/PGPASSWORD/PGDATABASE, а не через URL:
-# DATABASE_URL в окружении контейнера не существует (в приложении это
-# свойство settings.database_url), а psql пустого аргумента ищет локальный
-# сокет и падает с "No such file or directory" (проверено).
+# Подключение — через export PGHOST/PGUSER/PGPASSWORD/PGDATABASE, а не через
+# DATABASE_URL: в окружении контейнера его нет (в приложении это свойство
+# settings.database_url), а голый psql ищет локальный сокет и падает с
+# "No such file or directory" (проверено).
+#
+# export, а не префикс PGHOST=... перед psql: префиксные присваивания
+# работают, но в связке с `if !` и многострочным вызовом читаются хуже,
+# и одна опечатка в цепочке делает их недействительными молча.
+export PGHOST="$POSTGRES_HOST"
+export PGPORT="${POSTGRES_PORT:-5432}"
+export PGUSER="$POSTGRES_USER"
+export PGPASSWORD="$POSTGRES_PASSWORD"
+export PGDATABASE="$POSTGRES_DB"
+
 log "заливаю $DUMP в базу"
-if ! PGHOST="$POSTGRES_HOST" \
-     PGPORT="${POSTGRES_PORT:-5432}" \
-     PGUSER="$POSTGRES_USER" \
-     PGPASSWORD="$POSTGRES_PASSWORD" \
-     PGDATABASE="$POSTGRES_DB" \
-     psql \
+if ! psql \
         --single-transaction \
         --set ON_ERROR_STOP=1 \
         --quiet \

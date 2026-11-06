@@ -192,10 +192,18 @@ else
     # саму таблицу и строку CREATE TABLE из pg_dump тоже не нужны: её создаёт
     # alembic. Убираем строку CREATE TABLE alembic_version, иначе
     # --single-transaction упрётся в "relation already exists".
+    #
+    # --clean НЕ используем. Он генерирует DROP-ы, нужные только для заливки
+    # в непустую базу, а дамп идёт только в пустую (проверка в
+    # entrypoint-data.sh). При этом --clean падает на живой dev-базе:
+    # "cannot drop constraint ppe_size_groups_pkey ... because other objects
+    # depend on it" — в dev-базе лишний внешний ключ
+    # employee_ppe_sizes_size_group_id_fkey1 (следствие того, что миграции
+    # там накатывались по одной, а не с нуля). Без --clean дамп содержит
+    # только CREATE и COPY и никаких зависимостей не трогает.
     if ! docker compose -f "$COMPOSE_FILE" exec -T "$DEV_DB_SERVICE" \
             pg_dump -U "$dev_user" -d "$dev_db" \
             --no-owner --no-privileges \
-            --clean --if-exists \
             --exclude-table-data=alembic_version \
             > "$TMP_DIR/dump.raw.sql"; then
         die "pg_dump не удался"
