@@ -117,8 +117,18 @@ fi
 
 # 5. Заливаем дамп одной транзакцией: ошибка в середине не оставит базу
 # наполовину заполненной и маркер «применено».
+#
+# Подключение — через PGHOST/PGUSER/PGPASSWORD/PGDATABASE, а не через URL:
+# DATABASE_URL в окружении контейнера не существует (в приложении это
+# свойство settings.database_url), а psql пустого аргумента ищет локальный
+# сокет и падает с "No such file or directory" (проверено).
 log "заливаю $DUMP в базу"
-if ! psql "$DATABASE_URL" \
+if ! PGHOST="$POSTGRES_HOST" \
+     PGPORT="${POSTGRES_PORT:-5432}" \
+     PGUSER="$POSTGRES_USER" \
+     PGPASSWORD="$POSTGRES_PASSWORD" \
+     PGDATABASE="$POSTGRES_DB" \
+     psql \
         --single-transaction \
         --set ON_ERROR_STOP=1 \
         --quiet \
