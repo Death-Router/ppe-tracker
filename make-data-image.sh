@@ -97,14 +97,13 @@ command -v docker >/dev/null 2>&1 || die "нет docker в PATH"
 docker info >/dev/null 2>&1 || die "демон Docker не отвечает (запущен ли Docker Desktop?)"
 docker compose version >/dev/null 2>&1 || die "нужен docker compose v2"
 
-for f in dockerfile.prod dockerfile.data .dockerignore requirements.txt; do
+for f in dockerfile.prod dockerfile.data requirements.txt; do
     [ -f "$f" ] || die "нет $f: запускайте скрипт из корня клона"
 done
 
-# .dockerignore не должен выкидывать из контекста сборки нужное
-if grep -qx 'data' .dockerignore 2>/dev/null; then
-    die ".dockerignore содержит строку 'data' — собранный дамп не попадёт в образ"
-fi
+# Проверка «есть ли .dockerignore» — не про содержимое: образ с данными
+# собирается из ОТДЕЛЬНОГО временного контекста (там свой .dockerignore),
+# а основной контекст правил скрытия дампа не касается вовсе.
 
 ok "docker: $(docker --version | sed 's/^Docker version //; s/,.*//')"
 ok "compose: $(docker compose version --short 2>/dev/null || echo v2)"
@@ -219,6 +218,15 @@ docker build -f dockerfile.data \
     -t "$DATA_IMAGE" "$TMP_DIR" \
     || die "сборка $DATA_IMAGE не удалась"
 ok "образ с данными готов"
+
+# Проверка, что дамп действительно лёг в образ, а не потерялся в контексте:
+# COPY молча пройдёт, только если файла не было, а тот же dump.sql нужен
+# при первом старте.
+if ! docker run --rm --entrypoint sh "$DATA_IMAGE" \
+        -c 'test -s /app/data/dump.sql' >/dev/null 2>&1; then
+    die "в образе нет /app/data/dump.sql — дамп не попал в контекст сборки"
+fi
+ok "дамп на месте внутри образа"
 
 # --- 4. Итог --------------------------------------------------------------
 step "Готово"
