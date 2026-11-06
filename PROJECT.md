@@ -635,6 +635,9 @@ yml compose подставляет из `.env` или из `--env-file`. Без 
 
 ```bash
 chmod +x make-data-image.sh && ./make-data-image.sh
+#     -t ppe-tracker-api:2026-11-06   свой тег
+#     -d /tmp/dump.sql                готовый дамп вместо pg_dump
+#     --skip-dump                     только прод-образ, без данных
 # → ppe-tracker-api:prod, затем ppe-tracker-api:data
 ```
 
@@ -643,11 +646,37 @@ chmod +x make-data-image.sh && ./make-data-image.sh
 старте на **пустой** базе `docker/entrypoint-data.sh` применяет миграции,
 заливает дамп и только потом запускает uvicorn.
 
+**Проверено end-to-end 6 ноября 2026** на `postgres:16-alpine`:
+миграции (29 ревизий) → дамп → `данные залиты, маркер записан` → `READY`.
+Результат: `employees` 3, `ppe_items` 81, `ppe_size_groups` 7 (6 от
+миграций + ручные), последовательность групп сдвинута — `nextval` = 10 при
+`max(id)` = 9.
+
 **Почему дамп, а не копия `PGDATA` внутрь образа.** Каталог данных Postgres
 привязан к мажорной версии сервера, к control-файлу с system identifier и к
 правам каталога. Копия «как есть» работает только на той же версии Postgres и
 ломается при смене uid. Дамп переносится куда угодно и разворачивается на
 схеме, собранной штатными миграциями.
+
+**Разделение ответственности: схема — от alembic, данные — из дампа.**
+Это главный вывод, к которому пришлось идти через пять поломок подряд.
+Поэтому `pg_dump` идёт с флагами:
+
+```sh
+pg_dump --data-only --column-inserts --on-conflict-do-nothing \
+        --no-owner --no-privileges --exclude-table=alembic_version
+```
+
+Каждый флаг закрывает конкретную поломку, все проверены на живой базе:
+
+| Флаг / приём | Без него | Почему так |
+|---|---|---|
+| `--data-only` | `relation "departments" already exists` | дамп с DDL создаёт таблицы, которые alembic уже создал |
+| не `--clean` | `cannot drop constraint ppe_size_groups_pkey ... other objects depend on it` | DROP-ы в дампе ломаются о зависимости dev-базы |
+| `--exclude-table=alembic_version` | `syntax error at or near "version_num"` | построчный `grep` по многострочному DDL обрезал его; версию ведёт alembic |
+| `--column-inserts --on-conflict-do-nothing` | `duplicate key (id)=(1) already exists` | миграции сами создают `ppe_size_groups`/`ppe_sizes`; `ON CONFLICT` пропускает совпавшие `id` и добавляет недостающие (нужен PostgreSQL 12+) |
+| `SET session_replication_role = replica` | `size_group_id=(10) is not present in ppe_size_groups` | `pg_dump` кладёт `ppe_items` раньше справочника — FK срабатывает до заливки. Отключаем проверку на транзакцию: дамп снят с базы, где целостность соблюдалась |
+| `setval` после заливки | первая же новая запись упала бы на конфликте `id` | `INSERT` с явными `id` не двигает последовательность |
 
 **Порядок в `entrypoint-data.sh` важен:**
 
@@ -659,25 +688,40 @@ chmod +x make-data-image.sh && ./make-data-image.sh
 4. проверка «база пустая» (`SELECT count(*) FROM users`): в непустую базу
    дамп заливается только с `FORCE=1`, иначе контейнер на чужом томе молча
    сотрёт данные;
-5. `psql --single-transaction --set ON_ERROR_STOP=1` — ошибка в дампе не
-   оставит базу наполовину заполненной.
+5. `psql --single-transaction --set ON_ERROR_STOP=1` с
+   `SET session_replication_role = replica` — ошибка в дампе не оставит базу
+   наполовину заполненной, а порядок FK не важен;
+6. `DO`-блок с `setval(seq, max(id))` по каждой таблице с колонкой `id`.
 
-**`alembic_version` из дампа вырезан.** Данные этой таблицы исключены через
-`--exclude-table-data`, а её DDL убран `grep`-ом: `pg_dump --clean` иначе
-создаёт таблицу заново, и на свежемигрированной базе получается
-`relation "alembic_version" already exists`. Версия — дело alembic, а не дампа.
+**Подключение `psql` — через `export PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE`.**
+`DATABASE_URL` в окружении контейнера **не существует** (в приложении это
+свойство `settings.database_url`), а голый `psql` ищет локальный сокет и
+падает с `connection to server on socket "/var/run/postgresql/.s.PGSQL.5432"
+failed: No such file or directory`. И `postgresql+asyncpg://` — диалект
+SQLAlchemy, `libpq` его всё равно не понимает.
 
 **`--build-arg BASE_IMAGE`** в `dockerfile.data` — так образ с данными
 наследует уже собранный прод-образ, пересборка зависимостей не нужна.
 
+**`USER root` в `dockerfile.data` только для подготовки файлов.** Базовый
+образ заканчивается `USER app`, а `sed -i` создаёт временный файл рядом с
+целевым — в `/usr/local/bin`, куда у `app` нет прав: `sed: couldn't open
+temporary file ...: Permission denied`. В конце снова `USER 10001`.
+
 **Дамп — персональные данные.** Скрипт удаляет временный контекст после
-сборки (кроме `-k`); `.dockerignore` запрещает `data/` и `**/dump.sql` в
-обычном контексте. Готовый образ тоже содержит эти данные: в общий registry
+сборки (кроме `-k`); `.dockerignore` запрещает `**/dump.sql` в обычном
+контексте. Готовый образ тоже содержит эти данные: в общий registry
 его публиковать нельзя.
 
-Требование к базовому образу: `psql` из `postgresql-client`, uvicorn из
-`python:3.11-slim`-образа. Скрипт — POSIX `sh`, должен работать и из WSL, и
-на dev-машине там, где есть docker compose.
+**После правки файлов внутри образа нужен `docker build`, а не только
+`git checkout`.** `entrypoint-data.sh` и `dockerfile.data` лежат в образе
+слоем `COPY`; правка в клоне на работу контейнера не влияет. Это отличается
+от dev-стека, где `./app` смонтирован bind-mount-ом. Проверка перед
+запуском: `docker run --rm --entrypoint sh ppe-tracker-api:data -c
+'grep -c PGHOST /usr/local/bin/entrypoint-data.sh'`.
+
+Требование к базовому образу: `psql` из `postgresql-client` (добавлен в
+`dockerfile.prod`). Скрипт — POSIX `sh`, проверен `dash -n` и `shellcheck`.
 
 Отличия от dev:
 
@@ -823,6 +867,12 @@ Manager не переносится, запись `git:https://github.com` (по
   реальными нормами предприятия.
 - **Серверный поиск в справочниках** (подразделения, должности) —
   сейчас на клиенте.
+- **Образ с данными** — сделан (`make-data-image.sh`), проверен end-to-end.
+  Не проверено: открывается ли приложение на перенесённых данных в браузере
+  (списки, карточка сотрудника, выдачи).
+- **Слияние `prod` в `main`** — ветка `prod` (`feature/prod-image`) содержит
+  прод-образ, исправленную цепочку миграций и `make-data-image.sh`; в `main`
+  этого пока нет.
 
 ---
 
