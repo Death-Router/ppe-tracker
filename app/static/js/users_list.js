@@ -42,11 +42,13 @@
       allUsers = await API.get('/api/v1/users');
       allDepartments = await API.get('/api/v1/departments');
       renderTable(allUsers);
-      
-      const sortedDepts = [...allDepartments].sort((a, b) => a.name.localeCompare(b.name));
+
+      // Иерархия как в остальных формах: «↳ » по уровням вложенности,
+      // а не плоский список по алфавиту
       if (departmentSelect) {
-        departmentSelect.innerHTML = '<option value="">Не указано</option>' +
-          sortedDepts.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+        departmentSelect.innerHTML = departmentOptionsHtml(allDepartments, {
+          placeholder: 'Не указано',
+        });
       }
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${err.message}</td></tr>`;

@@ -52,6 +52,33 @@ window.fitSelectWidth = function (select) {
   select.style.width = `${Math.min(wanted, available)}px`;
 };
 
+// Иерархический список подразделений: элемент, затем его дети с уровнем.
+// Раньше эта функция копировалась в каждый скрипт, которому нужен select
+// подразделений; теперь одна реализация на всё приложение.
+window.buildDeptHierarchy = function (depts, parentId = null, level = 0) {
+  let result = [];
+  const children = depts.filter((d) => d.parent_id === parentId);
+  children.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const dept of children) {
+    result.push({ ...dept, level });
+    result = result.concat(window.buildDeptHierarchy(depts, dept.id, level + 1));
+  }
+  return result;
+};
+
+// Готовые <option> для select подразделения: «↳ » на каждом уровне вложенности,
+// как в структуре и остальных формах. placeholder — первый пункт («Не указано»).
+window.departmentOptionsHtml = function (depts, options = {}) {
+  const { placeholder = null } = options;
+  const items = window.buildDeptHierarchy(depts)
+    .map((d) => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`)
+    .join('');
+
+  if (placeholder === null) return items;
+  return `<option value="">${escapeHtml(placeholder)}</option>` + items;
+};
+
 // Подгоняем все помеченные списки и при изменении их содержимого
 window.fitAllSelects = function (root = document) {
   root.querySelectorAll('[data-fit-width]').forEach(window.fitSelectWidth);
