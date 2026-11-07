@@ -378,6 +378,8 @@ async def get_items(
 | `formatDateRu(raw, empty)` | `2026-11-05T00:00:00` → `05.11.2026`; пусто → `—` | 12 |
 | `dateInputValue(raw)` | ISO → `YYYY-MM-DD` для `input[type=date]` | 8 |
 | `todayIso()` | сегодняшняя дата по **локальному** времени (`toISOString` даёт UTC и в Москве после полуночи — вчера) | 1 |
+| `formatQuantityRu(value, unitName)` | «2 пары», «5 комплектов», «3 штуки» — по единице из справочника `units`; неизвестная единица без склонения | 1 |
+| `formatPeriodRu(value, unit)` | «1 год», «2 года», «11 лет», «3 месяца» | 1 |
 
 **Правило:** новое место берёт хелпер, а не копию. Перед тем как писать
 очередной `tbody.innerHTML = '<tr><td colspan=…` или

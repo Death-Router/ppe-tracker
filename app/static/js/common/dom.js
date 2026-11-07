@@ -131,6 +131,58 @@ window.todayIso = function () {
   return `${now.getFullYear()}-${month}-${day}`;
 };
 
+// Срок носки: «1 год», «2 года», «5 лет»; «1 месяц», «3 месяца», «11 месяцев».
+// Функция была в norms_list.js, но нигде не вызывалась — теперь общая.
+window.formatPeriodRu = function (value, unit) {
+  if (!value) return '—';
+  const num = parseInt(value, 10);
+  if (Number.isNaN(num)) return `${value} ${unit}`;
+
+  const tails = {
+    год: ['год', 'года', 'лет'],
+    месяц: ['месяц', 'месяца', 'месяцев'],
+  };
+  const tail = tails[unit];
+  if (!tail) return `${value} ${unit}`;
+
+  const lastTwo = num % 100;
+  const lastDigit = num % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return `${num} ${tail[2]}`;
+  if (lastDigit === 1) return `${num} ${tail[0]}`;
+  if (lastDigit >= 2 && lastDigit <= 4) return `${num} ${tail[1]}`;
+  return `${num} ${tail[2]}`;
+};
+
+// Количество с единицей из справочника: «2 пары», «3 штуки», «5 комплектов».
+// Склонение по трём формам; неизвестная единица отдаётся как есть.
+window.formatQuantityRu = function (value, unitName) {
+  const num = parseInt(String(value ?? ''), 10);
+  const text = unitName ? String(unitName).trim() : '';
+  if (Number.isNaN(num)) return `${value ?? ''} ${text}`.trim();
+  if (!text) return String(num);
+
+  const forms = {
+    пара: ['пара', 'пары', 'пар'],
+    штука: ['штука', 'штуки', 'штук'],
+    шт: ['штука', 'штуки', 'штук'],
+    'шт.': ['штука', 'штуки', 'штук'],
+    комплект: ['комплект', 'комплекта', 'комплектов'],
+    упаковка: ['упаковка', 'упаковки', 'упаковок'],
+    литр: ['литр', 'литра', 'литров'],
+    килограмм: ['килограмм', 'килограмма', 'килограммов'],
+    рулон: ['рулон', 'рулона', 'рулонов'],
+  };
+  const tail = forms[text.toLowerCase()];
+  if (!tail) return `${num} ${text}`;
+
+  const lastTwo = num % 100;
+  const lastDigit = num % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return `${num} ${tail[2]}`;
+  if (lastDigit === 1) return `${num} ${tail[0]}`;
+  if (lastDigit >= 2 && lastDigit <= 4) return `${num} ${tail[1]}`;
+  return `${num} ${tail[2]}`;
+};
+
 // Модалки Bootstrap: одна обёртка на всё приложение. Раньше в каждом файле
 // было `bootstrap.Modal.getOrCreateInstance(el).show()` / `.hide()` и ручной
 // поиск `.modal-title`; теперь это `ModalHelper`.

@@ -667,8 +667,13 @@
       // В норме количество может быть записано словами («2 пары»), а в поле
       // допустимы только цифры — берём число и предупреждаем, что подставили
       const digits = FormHelper.digits(normQuantity, 3);
-      issueNormHint.textContent =
-        `По норме: ${norm.wear_period_value} ${norm.wear_period_unit}, количество ${normQuantity}`;
+      // Гуманизация: «2 пары на 1 год» вместо «1 год, количество 2».
+      // Единица измерения — из справочника единиц (поле СИЗ), срок склоняется.
+      const quantityText = formatQuantityRu(digits || normQuantity, item?.unit?.name);
+      const periodText = norm.wear_period_unit === 'до износа'
+        ? 'до износа'
+        : `на ${formatPeriodRu(norm.wear_period_value, norm.wear_period_unit)}`;
+      issueNormHint.textContent = `По норме: ${quantityText} ${periodText}`;
       issueQuantityInput.value = digits || '1';
       issueQuantityHint.textContent = digits === normQuantity
         ? 'Подставлено из нормы выдачи для должности'
