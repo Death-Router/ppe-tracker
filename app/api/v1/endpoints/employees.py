@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.api import pagination
+from app.api.db import ensure_found
 from app.api.versioning import ensure_version
 from app.core.constants import height_error_message, is_height_from_grid
 from app.core.deps import get_current_active_user
@@ -234,9 +235,9 @@ async def get_employee(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    employee = await get_employee_with_relations(db, employee_id)
-    if not employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    employee = ensure_found(
+        await get_employee_with_relations(db, employee_id), "Сотрудник не найден"
+    )
     
     allowed = await get_allowed_department_ids(db, current_user)
     if allowed and employee.department_id not in allowed:
@@ -253,9 +254,7 @@ async def update_employee(
     current_user: User = Depends(get_current_active_user)
 ):
     result = await db.execute(select(Employee).where(Employee.id == employee_id))
-    db_employee = result.scalar_one_or_none()
-    if not db_employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    db_employee = ensure_found(result.scalar_one_or_none(), "Сотрудник не найден")
 
     allowed = await get_allowed_department_ids(db, current_user)
     if allowed and db_employee.department_id not in allowed:
@@ -317,9 +316,9 @@ async def update_employee(
 
     await broadcast(employee_id, {"event": "employee_updated", "employee_id": employee_id})
 
-    employee = await get_employee_with_relations(db, employee_id)
-    if employee is None:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    employee = ensure_found(
+        await get_employee_with_relations(db, employee_id), "Сотрудник не найден"
+    )
     return employee
 
 
@@ -330,9 +329,7 @@ async def delete_employee(
     current_user: User = Depends(get_current_active_user)
 ):
     result = await db.execute(select(Employee).where(Employee.id == employee_id))
-    db_employee = result.scalar_one_or_none()
-    if not db_employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    db_employee = ensure_found(result.scalar_one_or_none(), "Сотрудник не найден")
 
     allowed = await get_allowed_department_ids(db, current_user)
     if allowed and db_employee.department_id not in allowed:

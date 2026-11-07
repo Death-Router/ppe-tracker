@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.db import ensure_found
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.department import Department
@@ -48,8 +49,7 @@ async def create_department(dept_in: DepartmentCreate, db: AsyncSession = Depend
     # Проверка существования родителя
     if dept_in.parent_id:
         parent_res = await db.execute(select(Department).where(Department.id == dept_in.parent_id))
-        if not parent_res.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Вышестоящее подразделение не найдено")
+        ensure_found(parent_res.scalar_one_or_none(), "Вышестоящее подразделение не найдено")
 
     db_dept = Department(**dept_in.model_dump())
     db.add(db_dept)
@@ -82,25 +82,20 @@ async def get_departments(
 @router.get("/{dept_id}", response_model=DepartmentRead)
 async def get_department(dept_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.id == dept_id))
-    dept = result.scalar_one_or_none()
-    if not dept:
-        raise HTTPException(status_code=404, detail="Не найдено")
+    dept = ensure_found(result.scalar_one_or_none(), "Не найдено")
     return dept
 
 @router.put("/{dept_id}", response_model=DepartmentRead)
 async def update_department(dept_id: int, dept_in: DepartmentUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.id == dept_id))
-    db_dept = result.scalar_one_or_none()
-    if not db_dept:
-        raise HTTPException(status_code=404, detail="Не найдено")
+    db_dept = ensure_found(result.scalar_one_or_none(), "Не найдено")
     ensure_version(db_dept.version, dept_in.version)
     
     if dept_in.parent_id:
         if dept_in.parent_id == dept_id:
             raise HTTPException(status_code=400, detail="Подразделение не может быть родителем самому себе")
         parent_res = await db.execute(select(Department).where(Department.id == dept_in.parent_id))
-        if not parent_res.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Вышестоящее подразделение не найдено")
+        ensure_found(parent_res.scalar_one_or_none(), "Вышестоящее подразделение не найдено")
 
         # Проверка «сам себе» не ловит цикл A -> B -> A. Такой цикл вешает
         # рекурсивный обход дочерних подразделений и ломает дерево в UI.
@@ -122,9 +117,7 @@ async def update_department(dept_id: int, dept_in: DepartmentUpdate, db: AsyncSe
 @router.delete("/{dept_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_department(dept_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).where(Department.id == dept_id))
-    db_dept = result.scalar_one_or_none()
-    if not db_dept:
-        raise HTTPException(status_code=404, detail="Не найдено")
+    db_dept = ensure_found(result.scalar_one_or_none(), "Не найдено")
 
     # Раньше здесь стоял каскад на уровне ORM: одно удаление уносило дочерние
     # подразделения и все должности, не спрашивая. Проверяем явно.

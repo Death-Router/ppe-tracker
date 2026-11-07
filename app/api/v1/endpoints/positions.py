@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import pagination
-from app.api.db import commit_or_400
+from app.api.db import commit_or_400, ensure_found
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.department import Department
@@ -18,8 +18,7 @@ router = APIRouter(prefix="/positions", tags=["Справочник: Должн�
 @router.post("/", response_model=PositionRead, status_code=status.HTTP_201_CREATED)
 async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get_db)):
     cat_result = await db.execute(select(Department).where(Department.id == pos_in.department_id))
-    if not cat_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Подразделение не найдено")
+    ensure_found(cat_result.scalar_one_or_none(), "Подразделение не найдено")
 
     # Две одинаковые должности в одном подразделении — это ошибка ввода,
     # а не две разные сущности: нормы на них пришлось бы задавать дважды.
@@ -85,23 +84,18 @@ async def get_positions(
 @router.get("/{pos_id}", response_model=PositionRead)
 async def get_position(pos_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Position).where(Position.id == pos_id).options(selectinload(Position.department)))
-    pos = result.scalar_one_or_none()
-    if not pos:
-        raise HTTPException(status_code=404, detail="Не найдено")
+    pos = ensure_found(result.scalar_one_or_none(), "Не найдено")
     return pos
 
 @router.put("/{pos_id}", response_model=PositionRead)
 async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Position).where(Position.id == pos_id))
-    db_pos = result.scalar_one_or_none()
-    if not db_pos:
-        raise HTTPException(status_code=404, detail="Не найдено")
+    db_pos = ensure_found(result.scalar_one_or_none(), "Не найдено")
     ensure_version(db_pos.version, pos_in.version)
     # Без проверки несуществующий department_id ронял бы commit в 500 (FK)
     if pos_in.department_id is not None:
         dept_res = await db.execute(select(Department).where(Department.id == pos_in.department_id))
-        if not dept_res.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Подразделение не найдено")
+        ensure_found(dept_res.scalar_one_or_none(), "Подразделение не найдено")
 
     # Переименование в уже существующую должность того же подразделения
     target_name = pos_in.name if pos_in.name is not None else db_pos.name
@@ -130,9 +124,7 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
 @router.delete("/{pos_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_position(pos_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Position).where(Position.id == pos_id))
-    db_pos = result.scalar_one_or_none()
-    if not db_pos:
-        raise HTTPException(status_code=404, detail="Не найдено")
+    db_pos = ensure_found(result.scalar_one_or_none(), "Не найдено")
     try:
         await db.delete(db_pos)
         await db.commit()

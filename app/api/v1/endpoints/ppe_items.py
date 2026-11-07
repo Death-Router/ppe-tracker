@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import pagination
+from app.api.db import ensure_found, ensure_non_empty
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.employee_ppe_issue import EmployeePpeIssue
@@ -95,17 +96,13 @@ async def get_items(
 @router.get("/{item_id}", response_model=PpeItemRead)
 async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PpeItem).where(PpeItem.id == item_id).options(*item_options()))
-    item = result.scalar_one_or_none()
-    if not item:
-        raise HTTPException(status_code=404, detail="Наименование не найдено")
+    item = ensure_found(result.scalar_one_or_none(), "Наименование не найдено")
     return item
 
 @router.put("/{item_id}", response_model=PpeItemRead)
 async def update_item(item_id: int, item_in: PpeItemUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PpeItem).where(PpeItem.id == item_id))
-    db_item = result.scalar_one_or_none()
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Наименование не найдено")
+    db_item = ensure_found(result.scalar_one_or_none(), "Наименование не найдено")
 
     ensure_version(db_item.version, item_in.version)
 
@@ -123,9 +120,7 @@ async def update_item(item_id: int, item_in: PpeItemUpdate, db: AsyncSession = D
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PpeItem).where(PpeItem.id == item_id))
-    db_item = result.scalar_one_or_none()
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Наименование не найдено")
+    db_item = ensure_found(result.scalar_one_or_none(), "Наименование не найдено")
 
     # Проверяем, есть ли нормы на это СИЗ
     norm_exists = await db.execute(
@@ -178,8 +173,7 @@ async def bulk_update_items(
     result = await db.execute(select(PpeItem).where(PpeItem.id.in_(data.ids)))
     items = result.scalars().all()
     
-    if not items:
-        raise HTTPException(status_code=404, detail="СИЗ не найдены")
+    items = ensure_non_empty(items, "СИЗ не найдены")
 
     for item in items:
         if data.function_id is not None:

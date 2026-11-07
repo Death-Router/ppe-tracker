@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.db import ensure_found
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.employee import Employee
@@ -88,14 +89,11 @@ def ensure_balance_not_negative(quantity: str, returned_quantity: str) -> None:
 async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depends(get_db)):
     # 1. Проверяем сотрудника
     emp_res = await db.execute(select(Employee).where(Employee.id == issue_in.employee_id))
-    employee = emp_res.scalar_one_or_none()
-    if not employee:
-        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    employee = ensure_found(emp_res.scalar_one_or_none(), "Сотрудник не найден")
 
     # 2. Проверяем СИЗ
     item_res = await db.execute(select(PpeItem).where(PpeItem.id == issue_in.ppe_item_id))
-    if not item_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
+    ensure_found(item_res.scalar_one_or_none(), "Наименование СИЗ не найдено")
 
     # 3. Рассчитываем срок годности на основе нормы для должности сотрудника
     expiry_date = None
@@ -171,9 +169,7 @@ async def update_issue(
     записи и новую выдачу, чтобы в истории не появлялось подменённых данных.
     """
     result = await db.execute(select(EmployeePpeIssue).where(EmployeePpeIssue.id == issue_id))
-    db_issue = result.scalar_one_or_none()
-    if not db_issue:
-        raise HTTPException(status_code=404, detail="Запись не найдена")
+    db_issue = ensure_found(result.scalar_one_or_none(), "Запись не найдена")
 
     ensure_version(db_issue.version, issue_in.version)
 
@@ -214,9 +210,7 @@ async def update_issue(
 @router.delete("/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_issue(issue_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(EmployeePpeIssue).where(EmployeePpeIssue.id == issue_id))
-    db_issue = result.scalar_one_or_none()
-    if not db_issue:
-        raise HTTPException(status_code=404, detail="Запись не найдена")
+    db_issue = ensure_found(result.scalar_one_or_none(), "Запись не найдена")
 
     try:
         await db.delete(db_issue)

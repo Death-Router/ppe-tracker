@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import pagination
-from app.api.db import commit_or_400
+from app.api.db import commit_or_400, ensure_found
 from app.core.deps import get_current_active_user
 from app.core.security import get_password_hash
 from app.db.session import get_db
@@ -65,9 +65,7 @@ async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db), _
 @router.put("/{user_id}", response_model=UserRead)
 async def update_user(user_id: int, user_in: UserUpdate, db: AsyncSession = Depends(get_db), _ = Depends(require_admin)):
     result = await db.execute(select(User).where(User.id == user_id))
-    db_user = result.scalar_one_or_none()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    db_user = ensure_found(result.scalar_one_or_none(), "Пользователь не найден")
     
     update_data = user_in.model_dump(exclude_unset=True)
     if update_data.get('password'):
@@ -85,9 +83,7 @@ async def update_user(user_id: int, user_in: UserUpdate, db: AsyncSession = Depe
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), _ = Depends(require_admin)):
     result = await db.execute(select(User).where(User.id == user_id))
-    db_user = result.scalar_one_or_none()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    db_user = ensure_found(result.scalar_one_or_none(), "Пользователь не найден")
     
     # Нельзя удалить самого себя (или последнего админа)
     if db_user.username == "admin":

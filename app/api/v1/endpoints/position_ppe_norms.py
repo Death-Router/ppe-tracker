@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import pagination
-from app.api.db import commit_or_400
+from app.api.db import commit_or_400, ensure_found, ensure_non_empty
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.position import Position
@@ -55,8 +55,7 @@ async def ensure_typical_norm_exists(
         return
 
     result = await db.execute(select(TypicalNorm.id).where(TypicalNorm.id == typical_norm_id))
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Пункт типовых норм не найден")
+    ensure_found(result.scalar_one_or_none(), "Пункт типовых норм не найден")
 
 
 class CopyNormsRequest(BaseModel):
@@ -69,12 +68,10 @@ class CopyNormsRequest(BaseModel):
 @router.post("/", response_model=PositionPpeNormRead, status_code=status.HTTP_201_CREATED)
 async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends(get_db)):
     pos_res = await db.execute(select(Position).where(Position.id == norm_in.position_id))
-    if not pos_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Должность не найдена")
+    ensure_found(pos_res.scalar_one_or_none(), "Должность не найдена")
         
     item_res = await db.execute(select(PpeItem).where(PpeItem.id == norm_in.ppe_item_id))
-    if not item_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Наименование СИЗ не найдено")
+    ensure_found(item_res.scalar_one_or_none(), "Наименование СИЗ не найдено")
 
     await ensure_typical_norm_exists(db, norm_in.typical_norm_id)
 
@@ -93,9 +90,7 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
             ),
         ) from exc
         
-    norm = await get_norm_with_relations(db, db_norm.id)
-    if norm is None:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
+    norm = ensure_found(await get_norm_with_relations(db, db_norm.id), "Норма не найдена")
 
     # Матрица норм другой должности в соседней вкладке должна обновиться
     await broadcast(0, {"event": "norm_updated", "id": db_norm.id})
@@ -218,8 +213,7 @@ async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db))
     )
     found_targets = set(targets_res.scalars().all())
     missing_targets = sorted(set(data.target_position_ids) - found_targets)
-    if not found_targets:
-        raise HTTPException(status_code=404, detail="Должности-получатели не найдены")
+    ensure_non_empty(found_targets, "Должности-получатели не найдены")
 
     # Что уже есть у получателей: полный набор значимых полей, а не только
     # пара «должность + СИЗ». Пара не уникальна — у неё есть альтернативы,
@@ -277,18 +271,14 @@ async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db))
 @router.get("/{norm_id}", response_model=PositionPpeNormRead)
 async def get_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id).options(*norm_options()))
-    norm = result.scalar_one_or_none()
-    if not norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
+    norm = ensure_found(result.scalar_one_or_none(), "Норма не найдена")
     return norm
 
 
 @router.put("/{norm_id}", response_model=PositionPpeNormRead)
 async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
+    db_norm = ensure_found(result.scalar_one_or_none(), "Норма не найдена")
     ensure_version(db_norm.version, norm_in.version)
     
     update_data = norm_in.model_dump(exclude_unset=True, exclude={"version"})
@@ -303,9 +293,7 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
     
     await broadcast(0, {"event": "norm_updated", "id": norm_id})
 
-    norm = await get_norm_with_relations(db, norm_id)
-    if norm is None:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
+    norm = ensure_found(await get_norm_with_relations(db, norm_id), "Норма не найдена")
     return norm
 
 
@@ -325,8 +313,7 @@ async def bulk_delete_norms(data: BulkDeleteRequest, db: AsyncSession = Depends(
 
     result = await db.execute(select(PositionPpeNorm.id).where(PositionPpeNorm.id.in_(data.ids)))
     found = set(result.scalars().all())
-    if not found:
-        raise HTTPException(status_code=404, detail="Нормы не найдены")
+    ensure_non_empty(found, "Нормы не найдены")
 
     try:
         await db.execute(delete(PositionPpeNorm).where(PositionPpeNorm.id.in_(found)))
@@ -348,9 +335,7 @@ async def bulk_delete_norms(data: BulkDeleteRequest, db: AsyncSession = Depends(
 @router.delete("/{norm_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PositionPpeNorm).where(PositionPpeNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Норма не найдена")
+    db_norm = ensure_found(result.scalar_one_or_none(), "Норма не найдена")
     try:
         await db.delete(db_norm)
         await db.commit()

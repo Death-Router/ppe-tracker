@@ -335,6 +335,9 @@ PpeSizeGroup → PpeSize (значения размеров)
 |---|---|---|
 | `app/api/versioning.py::ensure_version(current, client)` | 409 «Данные устарели», если запись изменилась с момента чтения | 9 |
 | `app/api/db.py::commit_or_400(db, detail)` | commit; при нарушении ограничения БД — rollback и 400 с текстом сущности | 12 |
+| `app/api/db.py::ensure_found(obj, detail)` | 404, если выборка ничего не нашла (`None`); текст — у сущности | 40 |
+| `app/api/db.py::ensure_non_empty(items, detail)` | то же для списков: пустой результат — 404, а не пустой ответ | 4 |
+| `app/api/db.py::fetch_or_404(db, Model, id, detail, options=…)` | объект по первичному ключу с нужными `selectinload` | для новых мест |
 | `pagination.PageDep` (`Depends(pagination.params)`) | `page`/`page_size` с проверкой границ: `page=0` и `page_size=201` дают 422 | 5 |
 | `pagination.apply(stmt, params)` | `limit`/`offset`; `order_by` остаётся у вызывающего | 5 |
 | `pagination.page_of(items, total, params)` | конверт `{items, total, page, page_size, pages}` | 5 |
@@ -375,7 +378,6 @@ async def get_items(
 `if db_x.version != x_in.version`, проверить `js/common/dom.js` и `app/api/`.
 
 **Что ещё осталось скопированным** (осознанно, правка шире задачи):
-`if not obj: raise HTTPException(404)` в каждом endpoint'е,
 `catch → showToast → finally FormValidation.refresh()` в формах (12 мест),
 локальные `show/hideModal` в карточках.
 

@@ -4,7 +4,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.db import commit_or_400
+from app.api.db import commit_or_400, ensure_found
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.position_ppe_norm import PositionPpeNorm
@@ -88,9 +88,7 @@ async def update_typical_norm(
     norm_id: int, norm_in: TypicalNormUpdate, db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(select(TypicalNorm).where(TypicalNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Пункт норм не найден")
+    db_norm = ensure_found(result.scalar_one_or_none(), "Пункт норм не найден")
 
     ensure_version(db_norm.version, norm_in.version)
 
@@ -112,9 +110,7 @@ async def update_typical_norm(
 @router.delete("/{norm_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_typical_norm(norm_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(TypicalNorm).where(TypicalNorm.id == norm_id))
-    db_norm = result.scalar_one_or_none()
-    if not db_norm:
-        raise HTTPException(status_code=404, detail="Пункт норм не найден")
+    db_norm = ensure_found(result.scalar_one_or_none(), "Пункт норм не найден")
 
     # Ссылку из норм не обнуляем молча: пункт — основание выдачи, в карточке
     # он должен остаться. На уровне БД то же самое делает ON DELETE RESTRICT

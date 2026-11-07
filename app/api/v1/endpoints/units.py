@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.db import commit_or_400
+from app.api.db import commit_or_400, ensure_found
 from app.db.session import get_db
 from app.models.unit import Unit
 from app.schemas.unit import UnitCreate, UnitRead, UnitUpdate
@@ -33,9 +33,7 @@ async def get_units(db: AsyncSession = Depends(get_db)):
 @router.put("/{unit_id}", response_model=UnitRead)
 async def update_unit(unit_id: int, unit_in: UnitUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Unit).where(Unit.id == unit_id))
-    db_unit = result.scalar_one_or_none()
-    if not db_unit:
-        raise HTTPException(status_code=404, detail="Единица не найдена")
+    db_unit = ensure_found(result.scalar_one_or_none(), "Единица не найдена")
     
     update_data = unit_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -50,9 +48,7 @@ async def update_unit(unit_id: int, unit_in: UnitUpdate, db: AsyncSession = Depe
 @router.delete("/{unit_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Unit).where(Unit.id == unit_id))
-    db_unit = result.scalar_one_or_none()
-    if not db_unit:
-        raise HTTPException(status_code=404, detail="Единица не найдена")
+    db_unit = ensure_found(result.scalar_one_or_none(), "Единица не найдена")
     try:
         await db.delete(db_unit)
         await db.commit()

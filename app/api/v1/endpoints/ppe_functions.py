@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.db import commit_or_400
+from app.api.db import commit_or_400, ensure_found
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.ppe_function import PpeFunction
@@ -32,9 +32,7 @@ async def get_functions(db: AsyncSession = Depends(get_db)):
 @router.put("/{func_id}", response_model=PpeFunctionRead)
 async def update_function(func_id: int, func_in: PpeFunctionUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PpeFunction).where(PpeFunction.id == func_id))
-    db_func = result.scalar_one_or_none()
-    if not db_func:
-        raise HTTPException(status_code=404, detail="Функция не найдена")
+    db_func = ensure_found(result.scalar_one_or_none(), "Функция не найдена")
     ensure_version(db_func.version, func_in.version)
     
     update_data = func_in.model_dump(exclude_unset=True, exclude={"version"})
@@ -49,9 +47,7 @@ async def update_function(func_id: int, func_in: PpeFunctionUpdate, db: AsyncSes
 @router.delete("/{func_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_function(func_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PpeFunction).where(PpeFunction.id == func_id))
-    db_func = result.scalar_one_or_none()
-    if not db_func:
-        raise HTTPException(status_code=404, detail="Функция не найдена")
+    db_func = ensure_found(result.scalar_one_or_none(), "Функция не найдена")
     try:
         await db.delete(db_func)
         await db.commit()

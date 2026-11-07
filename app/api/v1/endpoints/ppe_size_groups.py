@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.db import commit_or_400
+from app.api.db import commit_or_400, ensure_found
 from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.ppe_size_group import PpeSizeGroup
@@ -32,9 +32,7 @@ async def get_groups(db: AsyncSession = Depends(get_db)):
 @router.put("/{group_id}", response_model=PpeSizeGroupRead)
 async def update_group(group_id: int, group_in: PpeSizeGroupUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PpeSizeGroup).where(PpeSizeGroup.id == group_id))
-    db_group = result.scalar_one_or_none()
-    if not db_group:
-        raise HTTPException(status_code=404, detail="Группа не найдена")
+    db_group = ensure_found(result.scalar_one_or_none(), "Группа не найдена")
     ensure_version(db_group.version, group_in.version)
     
     update_data = group_in.model_dump(exclude_unset=True, exclude={"version"})
@@ -59,9 +57,7 @@ async def update_group(group_id: int, group_in: PpeSizeGroupUpdate, db: AsyncSes
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_group(group_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PpeSizeGroup).where(PpeSizeGroup.id == group_id))
-    db_group = result.scalar_one_or_none()
-    if not db_group:
-        raise HTTPException(status_code=404, detail="Группа не найдена")
+    db_group = ensure_found(result.scalar_one_or_none(), "Группа не найдена")
     try:
         await db.delete(db_group)
         await db.commit()
