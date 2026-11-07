@@ -1,9 +1,9 @@
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.db import commit_or_400
 from app.db.session import get_db
 from app.models.ppe_size import PpeSize
 from app.models.ppe_size_group import PpeSizeGroup
@@ -20,11 +20,7 @@ async def create_size(size_in: PpeSizeCreate, db: AsyncSession = Depends(get_db)
 
     db_size = PpeSize(**size_in.model_dump())
     db.add(db_size)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такой размер уже существует для этой группы") from exc
+    await commit_or_400(db, "Такой размер уже существует для этой группы")
     
     await db.refresh(db_size)
     await broadcast(

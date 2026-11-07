@@ -324,6 +324,39 @@ PpeSizeGroup → PpeSize (значения размеров)
   ломает основной запрос;
 - `login`/`logout` события не шлют — это состояние сессии, а не данных.
 
+### Общие хелперы: сначала искать здесь, потом писать
+
+Повторяющийся код вынесен, чтобы правка в одном месте не требовала обхода
+десяти файлов.
+
+**Backend:**
+
+| Хелпер | Что делает | Было копий |
+|---|---|---|
+| `app/api/versioning.py::ensure_version(current, client)` | 409 «Данные устарели», если запись изменилась с момента чтения | 9 |
+| `app/api/db.py::commit_or_400(db, detail)` | commit; при нарушении ограничения БД — rollback и 400 с текстом сущности | 12 |
+
+**Frontend (`app/static/js/common/dom.js`):**
+
+| Хелпер | Что делает | Было копий |
+|---|---|---|
+| `escapeHtml(value)` | экранирование `& < > " '` | было в каждом файле |
+| `fitSelectWidth(select)` / `fitAllSelects()` | ширина select по самому длинному пункту | 1 |
+| `buildDeptHierarchy(depts)` | дерево подразделений с полем `level` | 3 |
+| `departmentOptionsHtml(depts, { placeholder })` | `<option>` с префиксом `↳ ` по уровням | 2 |
+| `onRowAction(tbody, handlers)` | делегирование кликов по `[data-action]` | 7 |
+| `tableState(tbody, colspan, text, { error })` | строка-заглушка «пока нет / ошибка», текст экранируется | 20 |
+
+**Правило:** новое место берёт хелпер, а не копию. Перед тем как писать
+очередной `tbody.innerHTML = '<tr><td colspan=…` или
+`if db_x.version != x_in.version`, проверить `js/common/dom.js` и `app/api/`.
+
+**Что ещё осталось скопированным** (осознанно, правка шире задачи):
+`page`/`page_size` + `Page.build` в пяти списках (можно dependency
+`pagination.params()`), `if not obj: raise HTTPException(404)` в каждом
+endpoint'е, `catch → showToast → finally FormValidation.refresh()` в формах
+(12 мест), локальные `show/hideModal` в карточках.
+
 ---
 
 ## Известные ловушки

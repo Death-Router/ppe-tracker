@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import pagination
+from app.api.db import commit_or_400
 from app.core.deps import get_current_active_user
 from app.core.security import get_password_hash
 from app.db.session import get_db
@@ -66,11 +66,7 @@ async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db), _
         is_active=user_in.is_active
     )
     db.add(db_user)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка при создании пользователя") from exc
+    await commit_or_400(db, "Ошибка при создании пользователя")
     
     await db.refresh(db_user)
     await broadcast(0, {"event": "user_updated", "id": db_user.id})

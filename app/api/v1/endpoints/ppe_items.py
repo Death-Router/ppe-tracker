@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import pagination
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.position_ppe_norm import PositionPpeNorm
@@ -118,8 +119,7 @@ async def update_item(item_id: int, item_in: PpeItemUpdate, db: AsyncSession = D
     if not db_item:
         raise HTTPException(status_code=404, detail="Наименование не найдено")
 
-    if db_item.version != item_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
+    ensure_version(db_item.version, item_in.version)
 
     update_data = item_in.model_dump(exclude_unset=True, exclude={"version"})
     for field, value in update_data.items():

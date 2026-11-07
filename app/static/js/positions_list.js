@@ -4,15 +4,9 @@
   const createDeptSelect = document.getElementById('create-dept');
   const searchInput = document.getElementById('search-input');
 
-  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
-  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
-  tbody.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-action]');
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
-    const name = btn.dataset.name || '';
-    if (btn.dataset.action === 'delete') window.deletePos(id, name);
-    if (btn.dataset.action === 'edit') window.openEditModal(id);
+  onRowAction(tbody, {
+    delete: (id, name) => window.deletePos(id, name),
+    edit: (id) => window.openEditModal(id),
   });
 
   let allPositions = [];
@@ -62,7 +56,7 @@
       renderTable(data.items);
       Pager.render(document.getElementById('pager'), data, loadData);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tableState(tbody, 3, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
@@ -91,7 +85,7 @@
 
   function renderTable(positions) {
     if (!positions.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state">Должностей пока нет</td></tr>`;
+      tableState(tbody, 3, 'Должностей пока нет');
       return;
     }
     tbody.innerHTML = positions.map(p => {

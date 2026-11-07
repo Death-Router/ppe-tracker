@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import pagination
+from app.api.db import commit_or_400
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.department import Department
 from app.models.position import Position
@@ -35,14 +37,7 @@ async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get
 
     db_pos = Position(**pos_in.model_dump())
     db.add(db_pos)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail="В этом подразделении уже есть должность с таким названием",
-        ) from exc
+    await commit_or_400(db, "В этом подразделении уже есть должность с таким названием")
     await db.refresh(db_pos)
     await broadcast(0, {"event": "position_updated", "id": db_pos.id})
     result = await db.execute(select(Position).where(Position.id == db_pos.id).options(selectinload(Position.department)))
@@ -109,8 +104,7 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
     db_pos = result.scalar_one_or_none()
     if not db_pos:
         raise HTTPException(status_code=404, detail="Не найдено")
-    if db_pos.version != pos_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
+    ensure_version(db_pos.version, pos_in.version)
     # Без проверки несуществующий department_id ронял бы commit в 500 (FK)
     if pos_in.department_id is not None:
         dept_res = await db.execute(select(Department).where(Department.id == pos_in.department_id))
@@ -136,14 +130,7 @@ async def update_position(pos_id: int, pos_in: PositionUpdate, db: AsyncSession 
     for field, value in pos_in.model_dump(exclude_unset=True, exclude={"version"}).items():
         setattr(db_pos, field, value)
     db_pos.version += 1
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail="В этом подразделении уже есть должность с таким названием",
-        ) from exc
+    await commit_or_400(db, "В этом подразделении уже есть должность с таким названием")
     await broadcast(0, {"event": "position_updated", "id": pos_id})
     result = await db.execute(select(Position).where(Position.id == pos_id).options(selectinload(Position.department)))
     return result.scalar_one()

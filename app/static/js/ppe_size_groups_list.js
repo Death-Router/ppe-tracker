@@ -15,16 +15,9 @@
   let editingId = null;
   let editingVersion = null;
 
-  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
-  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
-  tbody.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-action]');
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
-    const name = btn.dataset.name || '';
-    if (btn.dataset.action === 'delete') window.deleteGroup(id, name);
-    if (btn.dataset.action === 'sizes') window.openSizesModal(id, name);
-
+  onRowAction(tbody, {
+    delete: (id, name) => window.deleteGroup(id, name),
+    sizes: (id, name) => window.openSizesModal(id, name),
   });
 
   async function loadGroups() {
@@ -32,13 +25,13 @@
       const groups = await API.get('/api/v1/ppe_size_groups');
       renderTable(groups);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${err.message}</td></tr>`;
+      tableState(tbody, 3, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
   function renderTable(groups) {
     if (!groups.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state">Групп пока нет</td></tr>`;
+      tableState(tbody, 3, 'Групп пока нет');
       return;
     }
     tbody.innerHTML = groups.map(g => `

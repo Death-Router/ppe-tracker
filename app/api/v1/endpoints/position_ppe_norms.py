@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import pagination
+from app.api.db import commit_or_400
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.position import Position
 from app.models.position_ppe_norm import PositionPpeNorm
@@ -272,11 +274,7 @@ async def copy_norms(data: CopyNormsRequest, db: AsyncSession = Depends(get_db))
             existing.add(key)
             created += 1
 
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка копирования норм") from exc
+    await commit_or_400(db, "Ошибка копирования норм")
 
     await broadcast(0, {"event": "norm_updated", "id": 0})
 
@@ -303,8 +301,7 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
     db_norm = result.scalar_one_or_none()
     if not db_norm:
         raise HTTPException(status_code=404, detail="Норма не найдена")
-    if db_norm.version != norm_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
+    ensure_version(db_norm.version, norm_in.version)
     
     update_data = norm_in.model_dump(exclude_unset=True, exclude={"version"})
     if "typical_norm_id" in update_data:
@@ -314,14 +311,7 @@ async def update_norm(norm_id: int, norm_in: PositionPpeNormUpdate, db: AsyncSes
         setattr(db_norm, field, value)
     db_norm.version += 1
     
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail="Не удалось сохранить изменения нормы. Обновите страницу и повторите.",
-        ) from exc
+    await commit_or_400(db, "Не удалось сохранить изменения нормы. Обновите страницу и повторите.")
     
     await broadcast(0, {"event": "norm_updated", "id": norm_id})
 

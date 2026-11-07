@@ -51,13 +51,13 @@
         });
       }
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${err.message}</td></tr>`;
+      tableState(tbody, 5, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
   function renderTable(users) {
     if (!users.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="state">Пользователей пока нет</td></tr>`;
+      tableState(tbody, 5, 'Пользователей пока нет');
       return;
     }
     tbody.innerHTML = users.map(u => {

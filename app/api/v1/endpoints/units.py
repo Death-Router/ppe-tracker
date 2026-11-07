@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.db import commit_or_400
 from app.db.session import get_db
 from app.models.unit import Unit
 from app.schemas.unit import UnitCreate, UnitRead, UnitUpdate
@@ -18,11 +19,7 @@ async def create_unit(unit_in: UnitCreate, db: AsyncSession = Depends(get_db)):
     
     db_unit = Unit(**unit_in.model_dump())
     db.add(db_unit)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка при создании единицы") from exc
+    await commit_or_400(db, "Ошибка при создании единицы")
     
     await db.refresh(db_unit)
     await broadcast(0, {"event": "unit_updated", "id": db_unit.id})
@@ -44,11 +41,7 @@ async def update_unit(unit_id: int, unit_in: UnitUpdate, db: AsyncSession = Depe
     for field, value in update_data.items():
         setattr(db_unit, field, value)
     
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая единица уже существует") from exc
+    await commit_or_400(db, "Такая единица уже существует")
     
     await db.refresh(db_unit)
     await broadcast(0, {"event": "unit_updated", "id": unit_id})

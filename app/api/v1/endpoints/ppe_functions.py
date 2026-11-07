@@ -3,6 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.db import commit_or_400
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.ppe_function import PpeFunction
 from app.schemas.ppe_function import PpeFunctionCreate, PpeFunctionRead, PpeFunctionUpdate
@@ -17,11 +19,7 @@ async def create_function(func_in: PpeFunctionCreate, db: AsyncSession = Depends
         raise HTTPException(status_code=400, detail="Такая функция уже существует")
     db_func = PpeFunction(**func_in.model_dump())
     db.add(db_func)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая функция уже существует") from exc
+    await commit_or_400(db, "Такая функция уже существует")
     await db.refresh(db_func)
     await broadcast(0, {"event": "function_updated", "id": db_func.id})
     return db_func
@@ -37,8 +35,7 @@ async def update_function(func_id: int, func_in: PpeFunctionUpdate, db: AsyncSes
     db_func = result.scalar_one_or_none()
     if not db_func:
         raise HTTPException(status_code=404, detail="Функция не найдена")
-    if db_func.version != func_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
+    ensure_version(db_func.version, func_in.version)
     
     update_data = func_in.model_dump(exclude_unset=True, exclude={"version"})
     for field, value in update_data.items():

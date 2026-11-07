@@ -22,15 +22,9 @@
 
   let allItems = [];
 
-  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
-  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
-  tbody.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-action]');
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
-    const name = btn.dataset.name || '';
-    if (btn.dataset.action === 'delete') window.deleteItem(id, name);
-    if (btn.dataset.action === 'edit') window.openEditModal(id);
+  onRowAction(tbody, {
+    delete: (id, name) => window.deleteItem(id, name),
+    edit: (id) => window.openEditModal(id),
   });
   let selectedIds = new Set();
 
@@ -66,7 +60,7 @@
       renderTable(data.items);
       Pager.render(document.getElementById('pager'), data, loadItems);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tableState(tbody, 4, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
@@ -128,7 +122,7 @@
 
   function renderTable(items) {
     if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="state">Ничего не найдено</td></tr>`;
+      tableState(tbody, 4, 'Ничего не найдено');
       return;
     }
     tbody.innerHTML = items.map(i => {

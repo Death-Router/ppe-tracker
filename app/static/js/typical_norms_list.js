@@ -24,17 +24,16 @@
       items = await API.get(url);
       renderTable(items);
     } catch (err) {
-      tbody.innerHTML =
-        `<tr><td colspan="3" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tableState(tbody, 3, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
   function renderTable(list) {
     if (!list.length) {
       const text = searchTerm
-        ? `По запросу «${escapeHtml(searchTerm)}» ничего не найдено`
+        ? `По запросу «${searchTerm}» ничего не найдено`
         : 'Справочник пуст — добавьте пункты приложения к Положению';
-      tbody.innerHTML = `<tr><td colspan="3" class="state">${text}</td></tr>`;
+      tableState(tbody, 3, text);
       return;
     }
 
@@ -54,15 +53,10 @@
     `).join('');
   }
 
-  tbody.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-action]');
-    if (!btn) return;
-
-    const id = Number(btn.dataset.id);
-    if (btn.dataset.action === 'edit') window.editTypicalNorm(id);
-    if (btn.dataset.action === 'delete') {
-      window.deleteTypicalNorm(id, btn.dataset.clause || '');
-    }
+  onRowAction(tbody, {
+    edit: (id) => window.editTypicalNorm(id),
+    // пункт передаём отдельным data-атрибутом — он нужен в подтверждении
+    delete: (id, _name, btn) => window.deleteTypicalNorm(id, btn.dataset.clause || ''),
   });
 
   if (searchInput) {

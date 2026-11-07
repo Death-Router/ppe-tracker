@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.api import pagination
+from app.api.versioning import ensure_version
 from app.core.constants import height_error_message, is_height_from_grid
 from app.core.deps import get_current_active_user
 from app.db.session import get_db
@@ -271,8 +272,7 @@ async def update_employee(
     if allowed and db_employee.department_id not in allowed:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
-    if db_employee.version != employee_in.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
+    ensure_version(db_employee.version, employee_in.version)
 
     update_data = employee_in.model_dump(exclude_unset=True, exclude={"version", "ppe_sizes"})
 

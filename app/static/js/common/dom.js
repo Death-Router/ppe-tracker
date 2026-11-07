@@ -79,6 +79,33 @@ window.departmentOptionsHtml = function (depts, options = {}) {
   return `<option value="">${escapeHtml(placeholder)}</option>` + items;
 };
 
+// Кнопки в строках помечаются data-атрибутами (data-action, data-id,
+// data-name), а не onclick: строка с кавычкой в названии ломала разметку и
+// позволяла внедрить код (данные приходят из Excel-импорта).
+//
+// Делегирование кликов по кнопкам строки таблицы. Раньше в каждом списке был
+// одинаковый пролог: closest('[data-action]'), Number(dataset.id),
+// dataset.name, затем цепочка if по action.
+// handlers: { action: (id, name, button) => … }
+window.onRowAction = function (tbody, handlers) {
+  if (!tbody) return;
+  tbody.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn || !tbody.contains(btn)) return;
+    const handler = handlers[btn.dataset.action];
+    if (handler) handler(Number(btn.dataset.id), btn.dataset.name || '', btn);
+  });
+};
+
+// Строка-заглушка на всю таблицу: «пока нет», «ничего не найдено», ошибка.
+// Текст экранируется здесь, передавайте «сырое» значение.
+window.tableState = function (tbody, colspan, text, options = {}) {
+  if (!tbody) return;
+  const { error = false } = options;
+  const cls = error ? 'state state--error' : 'state';
+  tbody.innerHTML = `<tr><td colspan="${colspan}" class="${cls}">${escapeHtml(text)}</td></tr>`;
+};
+
 // Подгоняем все помеченные списки и при изменении их содержимого
 window.fitAllSelects = function (root = document) {
   root.querySelectorAll('[data-fit-width]').forEach(window.fitSelectWidth);

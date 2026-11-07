@@ -31,7 +31,7 @@
       renderTable(data.items);
       Pager.render(pagerEl, data, loadEmployees);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tableState(tbody, 5, `Ошибка: ${err.message}`, { error: true });
       if (pagerEl) pagerEl.innerHTML = '';
     }
   }
@@ -50,9 +50,9 @@
   function renderTable(employees) {
     if (!employees.length) {
       const text = searchTerm
-        ? `По запросу «${escapeHtml(searchTerm)}» ничего не найдено`
+        ? `По запросу «${searchTerm}» ничего не найдено`
         : 'Сотрудников пока нет';
-      tbody.innerHTML = `<tr><td colspan="5" class="state">${text}</td></tr>`;
+      tableState(tbody, 5, text);
       return;
     }
     tbody.innerHTML = employees.map(e => {
@@ -212,7 +212,7 @@
     createForm.reset();
     versionInput.value = '';
     sizesBody.innerHTML = '';
-    issuesBody.innerHTML = '<tr><td colspan="6" class="state">Нет данных</td></tr>';
+    tableState(issuesBody, 6, 'Нет данных');
     createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
     // Возвращаемся на первую вкладку
     bootstrap.Tab.getOrCreateInstance(
@@ -340,8 +340,12 @@
     const issues = emp.ppe_issues ?? emp.issues ?? [];
     issueById = new Map(issues.map((i) => [String(i.id), i]));
 
-    issuesBody.innerHTML = issues.length
-      ? issues.map((i) => `<tr>
+    if (!issues.length) {
+      tableState(issuesBody, 6, 'Выдач пока нет');
+      return;
+    }
+
+    issuesBody.innerHTML = issues.map((i) => `<tr>
           <td>${escapeHtml(i.ppe_item?.name ?? '—')}</td>
           <td>${escapeHtml(i.size_value ?? '—')}</td>
           <td>${escapeHtml(String(i.quantity ?? '—'))}</td>
@@ -357,8 +361,7 @@
               <i class="bi bi-trash"></i>
             </button>
           </td>
-        </tr>`).join('')
-      : '<tr><td colspan="6" class="state">Выдач пока нет</td></tr>';
+        </tr>`).join('');
   }
 
   // Графы 7-10 карточки: что вернули и каким актом списали. Отдельной колонки

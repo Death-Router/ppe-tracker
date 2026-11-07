@@ -33,7 +33,7 @@
           hierarchy.map(d => `<option value="${d.id}">${'↳ '.repeat(d.level)}${escapeHtml(d.name)}</option>`).join('');
       }
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tableState(tbody, 3, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
@@ -78,7 +78,7 @@
 
   function renderTable(hierarchy) {
     if (!hierarchy.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state">Подразделений пока нет</td></tr>`;
+      tableState(tbody, 3, 'Подразделений пока нет');
       return;
     }
 

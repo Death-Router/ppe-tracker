@@ -140,7 +140,7 @@
 
       await loadPage(currentPage);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="state state--error">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+      tableState(tbody, 5, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
@@ -177,19 +177,14 @@
     return '…' + str.slice(-maxLength);
   }
 
-  // Кнопки строк: id через data-атрибут (в onclick кавычки в названии ломали
-  // разметку), обработчик один на всю таблицу
-  tbody.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-action]');
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
-    if (btn.dataset.action === 'edit') window.editNorm(id);
-    if (btn.dataset.action === 'delete') window.deleteNorm(id);
+  onRowAction(tbody, {
+    edit: (id) => window.editNorm(id),
+    delete: (id) => window.deleteNorm(id),
   });
 
   function renderTable(norms) {
     if (!norms.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="state">Норм пока нет</td></tr>`;
+      tableState(tbody, 5, 'Норм пока нет');
       return;
     }
     tbody.innerHTML = norms.map(n => {

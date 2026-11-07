@@ -3,6 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.db import commit_or_400
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.ppe_size_group import PpeSizeGroup
 from app.schemas.ppe_size_group import PpeSizeGroupCreate, PpeSizeGroupRead, PpeSizeGroupUpdate
@@ -17,11 +19,7 @@ async def create_group(group_in: PpeSizeGroupCreate, db: AsyncSession = Depends(
         raise HTTPException(status_code=400, detail="Такая группа уже существует")
     db_group = PpeSizeGroup(**group_in.model_dump())
     db.add(db_group)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая группа уже существует") from exc
+    await commit_or_400(db, "Такая группа уже существует")
     await db.refresh(db_group)
     await broadcast(0, {"event": "size_group_updated", "id": db_group.id})
     return db_group
@@ -37,8 +35,7 @@ async def update_group(group_id: int, group_in: PpeSizeGroupUpdate, db: AsyncSes
     db_group = result.scalar_one_or_none()
     if not db_group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
-    if db_group.version != group_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
+    ensure_version(db_group.version, group_in.version)
     
     update_data = group_in.model_dump(exclude_unset=True, exclude={"version"})
 
@@ -54,11 +51,7 @@ async def update_group(group_id: int, group_in: PpeSizeGroupUpdate, db: AsyncSes
     for field, value in update_data.items():
         setattr(db_group, field, value)
     db_group.version += 1
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Такая группа уже существует") from exc
+    await commit_or_400(db, "Такая группа уже существует")
     await db.refresh(db_group)
     await broadcast(0, {"event": "size_group_updated", "id": group_id})
     return db_group

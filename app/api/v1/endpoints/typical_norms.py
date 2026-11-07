@@ -4,6 +4,8 @@ from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.db import commit_or_400
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.position_ppe_norm import PositionPpeNorm
 from app.models.typical_norm import TypicalNorm
@@ -90,8 +92,7 @@ async def update_typical_norm(
     if not db_norm:
         raise HTTPException(status_code=404, detail="Пункт норм не найден")
 
-    if db_norm.version != norm_in.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
+    ensure_version(db_norm.version, norm_in.version)
 
     update_data = norm_in.model_dump(exclude_unset=True, exclude={"version"})
     if "clause" in update_data:
@@ -101,14 +102,7 @@ async def update_typical_norm(
         setattr(db_norm, field, value)
     db_norm.version += 1
 
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Пункт с таким номером уже есть в справочнике",
-        ) from exc
+    await commit_or_400(db, "Пункт с таким номером уже есть в справочнике")
 
     await db.refresh(db_norm)
     await broadcast(0, {"event": "typical_norm_updated", "id": norm_id})

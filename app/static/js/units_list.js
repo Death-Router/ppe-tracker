@@ -7,14 +7,8 @@
 
   let editingId = null;
 
-  // Имя/название передаём через data-атрибуты: в onclick строка с кавычкой
-  // ломала разметку и позволяла внедрить код (данные приходят из Excel-импорта).
-  tbody.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-action]');
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
-    const name = btn.dataset.name || '';
-    if (btn.dataset.action === 'delete') window.deleteUnit(id, name);
+  onRowAction(tbody, {
+    delete: (id, name) => window.deleteUnit(id, name),
   });
 
   async function loadUnits() {
@@ -22,13 +16,13 @@
       const units = await API.get('/api/v1/units');
       renderTable(units);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state state--error">Ошибка: ${err.message}</td></tr>`;
+      tableState(tbody, 3, `Ошибка: ${err.message}`, { error: true });
     }
   }
 
   function renderTable(units) {
     if (!units.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="state">Единиц измерения пока нет</td></tr>`;
+      tableState(tbody, 3, 'Единиц измерения пока нет');
       return;
     }
     tbody.innerHTML = units.map(u => `

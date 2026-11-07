@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.department import Department
 from app.models.employee import Employee
@@ -92,8 +93,7 @@ async def update_department(dept_id: int, dept_in: DepartmentUpdate, db: AsyncSe
     db_dept = result.scalar_one_or_none()
     if not db_dept:
         raise HTTPException(status_code=404, detail="Не найдено")
-    if db_dept.version != dept_in.version:
-        raise HTTPException(status_code=409, detail="Данные устарели")
+    ensure_version(db_dept.version, dept_in.version)
     
     if dept_in.parent_id:
         if dept_in.parent_id == dept_id:

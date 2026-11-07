@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.versioning import ensure_version
 from app.db.session import get_db
 from app.models.employee import Employee
 from app.models.employee_ppe_issue import EmployeePpeIssue
@@ -174,8 +175,7 @@ async def update_issue(
     if not db_issue:
         raise HTTPException(status_code=404, detail="Запись не найдена")
 
-    if db_issue.version != issue_in.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Данные устарели")
+    ensure_version(db_issue.version, issue_in.version)
 
     update_data = issue_in.model_dump(exclude_unset=True, exclude={"version"})
     for field, value in update_data.items():
