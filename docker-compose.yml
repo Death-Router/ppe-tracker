@@ -7,6 +7,8 @@ services:
       - ./app:/app/app
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
+      # Фото сотрудников: файлы на хосте, в БД — только имена (см. PHOTO_DIR)
+      - ./data:/app/data
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file:
       - .env

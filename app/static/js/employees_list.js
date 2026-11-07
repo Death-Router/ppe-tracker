@@ -47,6 +47,15 @@
     });
   }
 
+  // Кэш браузера сбрасываем по времени загрузки: адрес меняется после замены
+  // фото, поэтому браузер не показывает старое из кэша
+  function photoUrl(employee) {
+    const version = employee?.photo?.uploaded_at
+      ? `?v=${encodeURIComponent(employee.photo.uploaded_at)}`
+      : '';
+    return `/api/v1/employees/${employee.id}/photo${version}`;
+  }
+
   function renderTable(employees) {
     if (!employees.length) {
       const text = searchTerm
@@ -57,9 +66,13 @@
     }
     tbody.innerHTML = employees.map(e => {
       const fio = `${e.last_name} ${e.first_name} ${e.middle_name ?? ''}`.trim();
+      // Фото грузим лениво: в списке 20 строк, и каждая — отдельный запрос
+      const avatar = e.photo
+        ? `<img class="avatar" src="${photoUrl(e)}" alt="" loading="lazy">`
+        : '<span class="avatar avatar--empty"><i class="bi bi-person"></i></span>';
       return `
       <tr data-employee-id="${e.id}">
-        <td>${escapeHtml(fio)}</td>
+        <td><div class="cell-person">${avatar}<span>${escapeHtml(fio)}</span></div></td>
         <td class="cell-mono">${escapeHtml(e.personnel_number)}</td>
         <td>${escapeHtml(e.department_rel?.name ?? '—')}</td>
         <td>${escapeHtml(e.position_rel?.name ?? '—')}</td>
@@ -239,6 +252,80 @@
     }
   });
 
+  // --- Фото сотрудника ---------------------------------------------------
+  // Файл хранится на томе, байты отдаёт API с проверкой прав. Загружать можно
+  // только существующему сотруднику: фото привязано к id.
+  const photoPreview = document.getElementById('emp-photo-preview');
+  const photoEmpty = document.getElementById('emp-photo-empty');
+  const photoInput = document.getElementById('emp-photo-input');
+  const photoUploadBtn = document.getElementById('emp-photo-upload');
+  const photoDeleteBtn = document.getElementById('emp-photo-delete');
+  const photoHint = document.getElementById('emp-photo-hint');
+
+  const PHOTO_HINT = 'JPEG, PNG или WebP до 5 МБ';
+  const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const PHOTO_MAX_MB = 5;
+
+  function renderPhoto(employee) {
+    const hasPhoto = Boolean(employee?.photo);
+
+    if (hasPhoto) {
+      photoPreview.src = photoUrl(employee);
+      photoPreview.classList.remove('d-none');
+      photoEmpty.classList.add('d-none');
+      photoDeleteBtn.classList.remove('d-none');
+    } else {
+      photoPreview.removeAttribute('src');
+      photoPreview.classList.add('d-none');
+      photoEmpty.classList.remove('d-none');
+      photoDeleteBtn.classList.add('d-none');
+    }
+
+    // Новому сотруднику фото некуда привязать — сначала сохраните карточку
+    const canUpload = Boolean(employee);
+    photoUploadBtn.disabled = !canUpload;
+    photoHint.textContent = canUpload ? PHOTO_HINT : 'Сохраните карточку, затем загрузите фото';
+    photoHint.classList.remove('text-danger');
+  }
+
+  async function uploadPhoto(file) {
+    if (!file || !editingId) return;
+
+    // Проверяем до запроса: сервер ответит 400, но так пользователь узнает сразу
+    if (!PHOTO_TYPES.includes(file.type)) {
+      window.showToast('Фото должно быть в формате JPEG, PNG или WebP', 'danger');
+      return;
+    }
+    if (file.size > PHOTO_MAX_MB * 1024 * 1024) {
+      window.showToast(`Файл больше ${PHOTO_MAX_MB} МБ`, 'danger');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    photoUploadBtn.disabled = true;
+    try {
+      const resp = await fetch(`/api/v1/employees/${editingId}/photo`, {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-Token': API.csrfToken() },
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || 'Не удалось загрузить фото');
+
+      if (currentEmployee) currentEmployee.photo = data;
+      renderPhoto(currentEmployee);
+      loadEmployees();
+      window.showToast('Фото загружено', 'success');
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      photoUploadBtn.disabled = !editingId;
+      if (photoInput) photoInput.value = '';
+    }
+  }
+
   window.openCreateEmployee = () => {
     editingId = null;
     currentEmployee = null;
@@ -246,6 +333,7 @@
     saveBtn.textContent = 'Создать';
     setEditOnlyTabs(false);
     resetModal();
+    renderPhoto(null);
     ModalHelper.show(modalEl);
   };
 
@@ -261,6 +349,7 @@
       );
       saveBtn.textContent = 'Сохранить';
       resetModal();
+      renderPhoto(emp);
 
       const FIELDS = [
         'personnel_number', 'personal_card_number', 'last_name', 'first_name',
@@ -729,6 +818,7 @@
       const emp = await API.get(`/api/v1/employees/${editingId}`);
       currentEmployee = emp;
       renderIssues(emp);
+      renderPhoto(emp);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -981,6 +1071,35 @@
   // ссылка не зависит от резолва элементов формы
   FormHelper.onlyDigits(issueQuantityInput, 3);
   FormHelper.onlyDigits(document.getElementById('return-quantity'), 3);
+
+  // Кнопки фото: выбор файла и удаление. Загрузка идёт отдельным fetch с
+  // FormData — API.request рассчитан на JSON.
+  photoUploadBtn?.addEventListener('click', () => photoInput?.click());
+  photoInput?.addEventListener('change', () => uploadPhoto(photoInput.files?.[0]));
+
+  photoDeleteBtn?.addEventListener('click', async () => {
+    if (!editingId || !confirm('Удалить фото сотрудника?')) return;
+
+    photoDeleteBtn.disabled = true;
+    try {
+      const resp = await fetch(`/api/v1/employees/${editingId}/photo`, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': API.csrfToken() },
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || 'Не удалось удалить фото');
+      }
+      if (currentEmployee) currentEmployee.photo = null;
+      renderPhoto(currentEmployee);
+      loadEmployees();
+      window.showToast('Фото удалено', 'success');
+    } catch (err) {
+      window.showToast(`Ошибка: ${err.message}`, 'danger');
+    } finally {
+      photoDeleteBtn.disabled = false;
+    }
+  });
 
   loadDepartmentsForSelect();
   loadEmployees();

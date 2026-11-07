@@ -446,11 +446,21 @@ docker exec ppe-db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-own
     > backup_$(date +%F).sql
 ```
 
+**Фото сотрудников в дамп не входят** — они лежат на томе. Копируйте их вместе
+с базой:
+
+```bash
+docker run --rm -v ppe_photos:/data -v "$PWD":/backup alpine \
+    tar czf /backup/photos_$(date +%F).tar.gz -C /data .
+```
+
 Восстановление:
 
 ```bash
 docker exec -i ppe-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
     < backup_2026-11-06.sql
+docker run --rm -v ppe_photos:/data -v "$PWD":/backup alpine \
+    tar xzf /backup/photos_2026-11-06.tar.gz -C /data
 ```
 
 Файлы резервных копий содержат персональные данные — храните соответственно.

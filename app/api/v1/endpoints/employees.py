@@ -1,4 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import UTC, datetime
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,19 +19,26 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.api import pagination
-from app.api.db import ensure_found
+from app.api.db import commit_or_400, ensure_found
 from app.api.versioning import ensure_version
 from app.core.constants import height_error_message, is_height_from_grid
 from app.core.deps import get_current_active_user
+from app.core.photos import delete_photo_file, photo_path, store_employee_photo
 from app.db.session import get_db
 from app.models.department import Department
 from app.models.employee import Employee
+from app.models.employee_photo import EmployeePhoto
 from app.models.employee_ppe_issue import EmployeePpeIssue
 from app.models.employee_ppe_size import EmployeePpeSize
 from app.models.ppe_item import PpeItem
 from app.models.ppe_size_group import PpeSizeGroup
 from app.models.user import User
-from app.schemas.employee import EmployeeCreate, EmployeeRead, EmployeeUpdate
+from app.schemas.employee import (
+    EmployeeCreate,
+    EmployeePhotoMeta,
+    EmployeeRead,
+    EmployeeUpdate,
+)
 from app.utils.broadcast import broadcast
 
 router = APIRouter(prefix="/employees", tags=["Сотрудники"])
@@ -41,6 +61,9 @@ def employee_options():
         issue_item.selectinload(PpeItem.unit),
         selectinload(Employee.department_rel),
         selectinload(Employee.position_rel),
+        # Без этого схема EmployeeRead.photo уходила в ленивую загрузку
+        # и давала MissingGreenlet при сериализации карточки
+        selectinload(Employee.photo),
     ]
 
 
@@ -213,7 +236,9 @@ async def get_employees(
 
     if not paginated:
         result = await db.execute(base.options(*employee_options()))
-        return result.scalars().all()
+        # Через схему, а не ORM: иначе FastAPI отдаёт все атрибуты, включая
+        # служебные поля фото (filename, sha256) — они клиенту не нужны
+        return [EmployeeRead.model_validate(item) for item in result.scalars().all()]
 
     total = (
         await db.execute(select(func.count()).select_from(base.subquery()))
@@ -328,12 +353,20 @@ async def delete_employee(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    result = await db.execute(select(Employee).where(Employee.id == employee_id))
+    result = await db.execute(
+        select(Employee)
+        .where(Employee.id == employee_id)
+        .options(selectinload(Employee.photo))
+    )
     db_employee = ensure_found(result.scalar_one_or_none(), "Сотрудник не найден")
 
     allowed = await get_allowed_department_ids(db, current_user)
     if allowed and db_employee.department_id not in allowed:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    # Имя файла запоминаем до удаления: FK с CASCADE уберёт запись
+    # employee_photos, но файл на томе сам не исчезнет
+    photo_filename = db_employee.photo.filename if db_employee.photo else None
 
     try:
         await db.delete(db_employee)
@@ -342,4 +375,130 @@ async def delete_employee(
         await db.rollback()
         raise HTTPException(status_code=400, detail="Ошибка удаления") from exc
 
+    if photo_filename:
+        delete_photo_file(photo_filename)
+
     await broadcast(0, {"event": "employee_updated", "employee_id": employee_id})
+
+
+# --- Фото сотрудника -------------------------------------------------------
+# Файл лежит в каталоге PHOTO_DIR (том данных), в БД — только метаданные.
+# Отдача идёт через API, а не из /static: фото — персональные данные, и
+# отдавать его без проверки прав нельзя. Кэш — приватный, ETag по содержимому.
+
+
+async def get_employee_for_photo(db: AsyncSession, employee_id: int) -> Employee:
+    """Сотрудник с фото — без выдач и размеров: здесь они не нужны."""
+    result = await db.execute(
+        select(Employee)
+        .where(Employee.id == employee_id)
+        .options(selectinload(Employee.photo))
+    )
+    return ensure_found(result.scalar_one_or_none(), "Сотрудник не найден")
+
+
+async def ensure_employee_access(
+    db: AsyncSession, employee: Employee, user: User
+) -> None:
+    """Та же проверка подразделений, что у карточки сотрудника."""
+    allowed = await get_allowed_department_ids(db, user)
+    if allowed and employee.department_id not in allowed:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+
+@router.get(
+    "/{employee_id}/photo",
+    response_class=Response,
+    responses={200: {"content": {"image/jpeg": {}}}, 304: {"description": "Не изменилось"}},
+)
+async def get_employee_photo(
+    employee_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Фото сотрудника. Повторный запрос с тем же ETag — 304."""
+    employee = await get_employee_for_photo(db, employee_id)
+    await ensure_employee_access(db, employee, current_user)
+
+    if employee.photo is None:
+        raise HTTPException(status_code=404, detail="У сотрудника нет фото")
+
+    path = photo_path(employee.photo.filename)
+    if not path.exists():
+        # Файл мог не переехать вместе с базой: том с фото подключается отдельно
+        raise HTTPException(
+            status_code=404,
+            detail="Файл фото не найден: проверьте, что том с фото подключён",
+        )
+
+    etag = f'"{employee.photo.sha256}"'
+    headers = {"ETag": etag, "Cache-Control": "private, max-age=300"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+
+    return FileResponse(path, media_type=employee.photo.mime_type, headers=headers)
+
+
+@router.post("/{employee_id}/photo", response_model=EmployeePhotoMeta)
+async def upload_employee_photo(
+    employee_id: int,
+    file: UploadFile = File(..., description="JPEG, PNG или WebP"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Загрузить (или заменить) фото. Файл приводится к портрету 400×500 в JPEG."""
+    employee = await get_employee_for_photo(db, employee_id)
+    await ensure_employee_access(db, employee, current_user)
+
+    filename, mime, size, sha256 = await store_employee_photo(file)
+    old_filename = employee.photo.filename if employee.photo else None
+
+    if employee.photo is None:
+        photo = EmployeePhoto(
+            employee_id=employee_id,
+            filename=filename,
+            mime_type=mime,
+            size_bytes=size,
+            sha256=sha256,
+        )
+        db.add(photo)
+    else:
+        photo = employee.photo
+        photo.filename = filename
+        photo.mime_type = mime
+        photo.size_bytes = size
+        photo.sha256 = sha256
+        photo.uploaded_at = datetime.now(UTC)
+
+    await commit_or_400(db, "Не удалось сохранить фото")
+    await db.refresh(photo)
+
+    # Старый файл удаляем только после успешной записи метаданных
+    if old_filename:
+        delete_photo_file(old_filename)
+
+    await broadcast(0, {"event": "employee_updated", "employee_id": employee_id})
+    return photo
+
+
+@router.delete("/{employee_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_employee_photo(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Удалить фото. Идемпотентно: если фото нет — тоже 204."""
+    employee = await get_employee_for_photo(db, employee_id)
+    await ensure_employee_access(db, employee, current_user)
+
+    if employee.photo is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    filename = employee.photo.filename
+    await db.delete(employee.photo)
+    await commit_or_400(db, "Не удалось удалить фото")
+    delete_photo_file(filename)
+
+    await broadcast(0, {"event": "employee_updated", "employee_id": employee_id})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

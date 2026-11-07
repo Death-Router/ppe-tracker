@@ -21,6 +21,7 @@ if config.config_file_name is not None:
 # ничего не давал, потому что пакет пустой.
 from app.models.department import Department  # noqa: F401
 from app.models.employee import Employee  # noqa: F401
+from app.models.employee_photo import EmployeePhoto  # noqa: F401
 from app.models.employee_ppe_issue import EmployeePpeIssue  # noqa: F401
 from app.models.employee_ppe_size import EmployeePpeSize  # noqa: F401
 from app.models.position import Position  # noqa: F401

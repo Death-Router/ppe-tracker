@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -18,6 +18,19 @@ class EmployeePpeSizeRead(BaseModel):
     size_group_id: int
     size_value: str
     size_group: PpeSizeGroupRead | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmployeePhotoMeta(BaseModel):
+    """Метаданные фото сотрудника.
+
+    Сами байты отдаёт отдельный эндпоинт `/employees/{id}/photo`, поэтому в
+    карточке приходит только мета: по ней клиент решает, показывать ли превью
+    и с каким `uploaded_at` сбрасывать кэш.
+    """
+
+    uploaded_at: datetime
+    size_bytes: int
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -69,6 +82,8 @@ class EmployeeRead(EmployeeBase):
     ppe_issues: list[EmployeePpeIssueRead] = []
     department_rel: DepartmentRead | None = None
     position_rel: PositionRead | None = None
+    # None — фото нет; байты отдельным запросом, см. /employees/{id}/photo
+    photo: EmployeePhotoMeta | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

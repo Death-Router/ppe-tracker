@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     MAX_IMPORT_FILE_MB: int = 10
     MAX_IMPORT_ROWS: int = 5000
 
+    # Фото сотрудников: каталог (на томе) и предел размера загружаемого файла.
+    # Путь относительный — в контейнере это /app/data/photos (WORKDIR /app).
+    PHOTO_DIR: str = "data/photos"
+    PHOTO_MAX_MB: int = 5
+
     # Собираем URL для подключения
     @property
     def database_url(self) -> str:

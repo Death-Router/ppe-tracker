@@ -773,6 +773,68 @@ input[type="radio"] {
 }
 
 /* --------------------------------------------------------------------------
+   12a. Фото сотрудника
+   -------------------------------------------------------------------------- */
+.photo-block {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-start;
+}
+
+.photo-preview-wrap {
+    flex: 0 0 auto;
+}
+
+.photo-preview {
+    display: block;
+    width: 120px;
+    height: 150px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--brand-tint);
+}
+
+.photo-preview--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: var(--brand);
+    opacity: 0.35;
+}
+
+.photo-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+/* Аватар в списке сотрудников: круг слева от ФИО */
+.cell-person {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.avatar {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--brand-tint);
+}
+
+.avatar--empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand);
+    border: 1px solid var(--line);
+}
+
+/* --------------------------------------------------------------------------
    13. Адаптивность
    -------------------------------------------------------------------------- */
 @media (max-width: 768px) {

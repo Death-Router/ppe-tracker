@@ -44,6 +44,9 @@ RUN apt-get update \
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app
+# Каталог фото сотрудников: named volume наследует владельца этого каталога,
+# поэтому приложение может писать в том без root
+RUN mkdir -p /app/data/photos && chown -R app:app /app/data
 # Одноразовый скрипт первого администратора: без него прод-базу не наполнить
 COPY --chown=app:app create_admin.py ./
 COPY --chown=app:app docker/entrypoint.sh /usr/local/bin/entrypoint.sh

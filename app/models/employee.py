@@ -8,6 +8,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.department import Department
+    from app.models.employee_photo import EmployeePhoto
     from app.models.employee_ppe_issue import EmployeePpeIssue
     from app.models.employee_ppe_size import EmployeePpeSize
     from app.models.position import Position
@@ -38,5 +39,9 @@ class Employee(Base):
 
     ppe_sizes: Mapped[list["EmployeePpeSize"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
     ppe_issues: Mapped[list["EmployeePpeIssue"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    # Одно фото на сотрудника; файл лежит в PHOTO_DIR, здесь только метаданные
+    photo: Mapped["EmployeePhoto | None"] = relationship(
+        back_populates="employee", cascade="all, delete-orphan", uselist=False
+    )
     department_rel: Mapped["Department"] = relationship(back_populates="employees")
     position_rel: Mapped["Position"] = relationship(back_populates="employees")
