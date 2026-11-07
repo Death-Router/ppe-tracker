@@ -224,6 +224,8 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:$Port:8000"
+    volumes:
+      - ppe_photos:/app/data/photos
     depends_on:
       db:
         condition: service_healthy
@@ -253,6 +255,7 @@ services:
 
 volumes:
   ppe_pgdata:
+  ppe_photos:
 "@
 $compose = $compose -replace '`\$\{', '${' -replace '`\$', '$'
 # PowerShell 5.1 читает файл без BOM как ANSI; 7+ — как UTF-8. Без BOM на
@@ -326,6 +329,9 @@ Write-Host "  docker compose down          # остановить (данные 
 Write-Host ""
 Write-Host "Резервная копия базы:"
 Write-Host "  docker exec ppe-db sh -c 'pg_dump -U `$POSTGRES_USER -d `$POSTGRES_DB --no-owner' > backup_$(Get-Date -Format 'yyyy-MM-dd').sql"
+Write-Host ""
+Write-Host "Резервная копия фото (отдельно от дампа: файлы лежат на томе):"
+Write-Host "  docker exec ppe-api tar czf - -C /app/data/photos . > photos_$(Get-Date -Format 'yyyy-MM-dd').tar.gz"
 Write-Host ""
 
 if (-not $Clean) {

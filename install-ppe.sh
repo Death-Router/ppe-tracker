@@ -245,6 +245,10 @@ services:
     ports:
       # Только локально: наружу — через reverse-proxy с HTTPS
       - "127.0.0.1:$PORT:8000"
+    volumes:
+      # Фото сотрудников: файлы на томе, в БД только имена. Без тома фото
+      # лежат в слое контейнера и пропадают при первом же обновлении образа.
+      - ppe_photos:/app/data/photos
     depends_on:
       db:
         condition: service_healthy
@@ -276,6 +280,8 @@ services:
 
 volumes:
   ppe_pgdata:
+  # Фото сотрудников: персональные данные, бэкапятся отдельно от дампа
+  ppe_photos:
 EOF
 ok "$COMPOSE_FILE создан"
 
@@ -347,6 +353,9 @@ printf 'Резервная копия базы:\n'
 printf '  docker exec ppe-db sh -c %s > backup_$(date +%%F).sql\n' \
     "'pg_dump -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" --no-owner'"
 printf '\n'
+printf 'Резервная копия фото (отдельно от дампа: файлы лежат на томе):\n'
+# shellcheck disable=SC2016  # $(date) должен раскрыться у пользователя
+printf '  docker exec ppe-api tar czf - -C /app/data/photos . > photos_$(date +%%F).tar.gz\n'
 
 if [ "$CLEAN" != "1" ]; then
     warn "в образе персональные данные сотрудников — не публикуйте образ в registry"
