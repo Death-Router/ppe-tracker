@@ -231,6 +231,11 @@ ADMIN_PASSWORD=$AdminPass
 
 # --- compose --------------------------------------------------------------
 Write-Step "Пишу docker-compose.yml"
+# Порт в шаблоне записан как ${Port} — обязательно в фигурных скобках.
+# Внутри here-строки PowerShell читает "$Port:8000" как имя переменной
+# "Port:8000" (её нет, значение пустое), строка превращается в "127.0.0.1:"
+# и compose падает с "no port specified: 127.0.0.1:<empty>". Проверено
+# на PowerShell 7: "127.0.0.1:$Port:8000" -> "127.0.0.1:".
 $compose = @"
 # Создано install-ppe.ps1. Правьте осторожно: при повторной установке с
 # -Force файл перезаписывается.
@@ -241,7 +246,7 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "127.0.0.1:$Port:8000"
+      - "127.0.0.1:${Port}:8000"
     volumes:
       - ppe_photos:/app/data/photos
     depends_on:
@@ -280,6 +285,17 @@ $compose = $compose -replace '`\$\{', '${' -replace '`\$', '$'
 # 5.1 кириллица в комментариях превратилась бы в мусор, поэтому пишем BOM.
 Set-Content -LiteralPath $composeFile -Value $compose -Encoding UTF8
 Write-Ok "$composeFile создан"
+
+# Проверка сразу, а не на docker compose up: битый span в шаблоне (например,
+# пустой порт) всплывает уже при up, и сообщение там невнятное
+# ("no port specified: 127.0.0.1:<empty>"). config называет причину.
+$composeCheck = & docker compose -f $composeFile config -q 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $composeCheck | ForEach-Object { Write-Host $_ }
+    Write-Err "docker-compose.yml некорректен — см. сообщение выше"
+    exit 1
+}
+Write-Ok "docker-compose.yml проверен (docker compose config)"
 
 # --- Запуск ---------------------------------------------------------------
 Write-Step "Поднимаю контейнеры"

@@ -261,7 +261,7 @@ services:
     env_file: .env
     ports:
       # Только локально: наружу — через reverse-proxy с HTTPS
-      - "127.0.0.1:$PORT:8000"
+      - "127.0.0.1:${PORT}:8000"
     volumes:
       # Фото сотрудников: файлы на томе, в БД только имена. Без тома фото
       # лежат в слое контейнера и пропадают при первом же обновлении образа.
@@ -301,6 +301,15 @@ volumes:
   ppe_photos:
 EOF
 ok "$COMPOSE_FILE создан"
+
+# Проверка сразу, а не на docker compose up: битый шаблон (например, пустой
+# порт из-за подстановки переменной) всплывает уже при up и ругается невнятно
+# ("no port specified: 127.0.0.1:<empty>"). config называет причину.
+if ! compose_check=$(docker compose -f "$COMPOSE_FILE" config -q 2>&1); then
+    printf '%s\n' "$compose_check" >&2
+    die "docker-compose.yml некорректен — см. сообщение выше"
+fi
+ok "$COMPOSE_FILE проверен (docker compose config)"
 
 # --- Запуск ---------------------------------------------------------------
 step "Поднимаю контейнеры"
