@@ -1,7 +1,13 @@
 (() => {
   const tbody = document.querySelector('#users-table tbody');
   const form = document.getElementById('user-form');
-  const modalTitle = document.querySelector('#createModal .modal-title');
+  // Модалку берём от самой формы, а не по id: одна и та же разметка живёт
+  // на двух страницах с разными id (#createModal на /users,
+  // #createUserModal на /settings). Жёсткий селектор `#createModal` на
+  // настройках давал null и ошибку «Cannot set properties of null» при
+  // открытии и редактировании пользователя.
+  const modalElement = form?.closest('.modal') || document.getElementById('createModal');
+  const modalTitle = modalElement?.querySelector('.modal-title') || null;
   const userIdInput = document.getElementById('user-id');
   const passwordInput = document.getElementById('password');
   const passwordHint = document.getElementById('password-hint');
@@ -13,6 +19,18 @@
 
   // Если на странице нет таблицы пользователей, просто выходим
   if (!tbody) return;
+
+  function showModal() {
+    if (modalElement) bootstrap.Modal.getOrCreateInstance(modalElement).show();
+  }
+
+  function hideModal() {
+    if (modalElement) bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+  }
+
+  function setModalTitle(text) {
+    if (modalTitle) modalTitle.textContent = text;
+  }
 
   let allUsers = [];
   let allDepartments = [];
@@ -59,13 +77,13 @@
 
   window.openCreateModal = () => {
     editingId = null;
-    modalTitle.textContent = 'Новый пользователь';
+    setModalTitle('Новый пользователь');
     userIdInput.value = '';
     form.reset();
     passwordInput.required = true;
     passwordHint.classList.add('d-none');
     window.FormValidation.refresh(form);
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).show();
+    showModal();
   };
 
   window.editUser = async (id) => {
@@ -74,7 +92,7 @@
       if (!user) throw new Error('Пользователь не найден');
       
       editingId = id;
-      modalTitle.textContent = 'Редактирование пользователя';
+      setModalTitle('Редактирование пользователя');
       userIdInput.value = id;
       
       form.elements['username'].value = user.username;
@@ -88,7 +106,7 @@
       window.FormValidation.refresh(form);
       form.elements['is_active'].checked = user.is_active;
       
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).show();
+      showModal();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -119,7 +137,7 @@
         await API.post('/api/v1/users/', payload);
         window.showToast('Пользователь создан', 'success');
       }
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('createModal')).hide();
+      hideModal();
       loadData();
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');

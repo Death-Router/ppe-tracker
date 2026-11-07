@@ -1033,6 +1033,30 @@ $ast.ParamBlock.Extent.Text
 `.env` рядом с compose). Проверка — `docker compose config` и сравнение
 `POSTGRES_PASSWORD` в секциях `api` и `db`.
 
+### 14. Одна форма — две страницы: модалку ищите от формы, а не по id
+
+Модалка пользователя продублирована в разметке: `users/list.html` (страница
+`/users`) и `settings.html` (вкладка «Пользователи»). Id разные:
+
+| Страница | Модалка | Заголовок | Кнопка «+» |
+|---|---|---|---|
+| `/users` | `#createModal` | `#modal-title` | `#btn-create` |
+| `/settings` | `#createUserModal` | `#user-modal-title` | нет id, только `data-bs-target` |
+
+Скрипт один — `users_list.js`, и он искал `document.querySelector('#createModal
+.modal-title')`. На настройках это `null`, поэтому «Редактировать» падало с
+`Cannot set properties of null (setting 'textContent')`, а модалка не
+открывалась. Кнопка «+» открывалась самим Bootstrap, но без сброса формы.
+
+Правило: **модалку брать от формы** — `form.closest('.modal')`, заголовок —
+`.modal-title` внутри неё; обращения оборачивать в функции с проверкой на
+`null`. Так разметку можно менять, не трогая скрипт.
+
+Проверять такие расхождения можно аудитом: собрать из скриптов
+`getElementById('…')`/`querySelector('#…')` и сверить с `id="…"` в шаблоне
+той страницы, где скрипт подключён (учитывая `{% include %}`). Именно так
+нашлась эта ошибка: 1 страница из всех.
+
 ---
 
 ## Git
