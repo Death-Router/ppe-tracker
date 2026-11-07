@@ -242,6 +242,19 @@ if ((Test-Path -LiteralPath $envFile) -and -not $Force) {
     }
 }
 
+# Тома compose привязаны к имени проекта, а оно по умолчанию совпадает с именем
+# каталога. Две разные папки с именем ppe (C:\ppe и F:\Dev\docker\ppe) дают
+# ОДИН проект «ppe» — и общие тома. Тогда новый .env с новым паролем
+# встречается с томом, созданным прежней установкой, и база отвечает
+# «password authentication failed for user "ppe"».
+$existingVolumes = @(docker volume ls --format '{{.Name}}' 2>$null |
+    Where-Object { $_ -match '_ppe_(pgdata|photos)$' })
+if ($existingVolumes.Count -gt 0) {
+    Write-Warn "найдены существующие тома: $($existingVolumes -join ', ')"
+    Write-Warn "если это прежняя установка с другим паролем, база не пустит приложение."
+    Write-Warn "варианты: сохранить старый .env (ответить n) или пересоздать базу: docker compose -f <compose> down -v"
+}
+
 if (-not $keepEnv) {
     Write-Step "Генерирую секреты и .env"
     if (-not $AdminPass) { $AdminPass = New-Secret 18 }
@@ -385,8 +398,22 @@ try {
             Write-Step "Состояние контейнеров"
             docker compose ps
             Write-Step "Последние строки лога api"
-            docker compose logs --tail 40 api
+            $logTail = docker compose logs --tail 40 api 2>&1 | Out-String
+            Write-Host $logTail.TrimEnd()
             Write-Warn "полный лог: docker compose -f `"$composeFile`" logs -f api"
+
+            # Самая частая причина: том базы остался от прежней установки с
+            # другим паролем (проект compose называется по имени каталога, и
+            # две папки «ppe» делят один том). Говорим, что делать, а не «ищите
+            # в логах». Данные не теряются: образ с данными зальёт дамп заново.
+            if ($logTail -match 'password authentication failed') {
+                Write-Step "Причина: пароль базы не совпадает с томом"
+                Write-Warn "том базы создан раньше, с другим POSTGRES_PASSWORD."
+                Write-Warn "лечение (данные базы и фото будут созданы заново из образа):"
+                Write-Warn "  docker compose -f `"$composeFile`" down -v"
+                Write-Warn "  затем запустить установщик ещё раз"
+                Write-Warn "или вернуть прежний пароль в .env (POSTGRES_PASSWORD) и повторить"
+            }
             Write-Err "установка не завершена: приложение не поднялось (причина выше)"
             exit 1
         }

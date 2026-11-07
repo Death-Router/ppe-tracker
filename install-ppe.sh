@@ -205,6 +205,17 @@ if [ -f "$ENV_FILE" ] && [ "$FORCE" != "1" ]; then
 fi
 KEEP_ENV=${KEEP_ENV:-0}
 
+# Тома compose привязаны к имени проекта, а оно по умолчанию — имя каталога.
+# Две папки с именем ppe делят один проект и одни тома: новый .env с новым
+# паролем встречается с томом прежней установки, и база отвечает
+# «password authentication failed for user». Предупреждаем заранее.
+existing_volumes=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E '_ppe_(pgdata|photos)$' || true)
+if [ -n "$existing_volumes" ]; then
+    warn "найдены существующие тома: $(printf '%s' "$existing_volumes" | tr '\n' ' ')"
+    warn "если это прежняя установка с другим паролем, база не пустит приложение."
+    warn "варианты: сохранить старый .env (ответить n) или пересоздать базу: docker compose -f <compose> down -v"
+fi
+
 if [ "$KEEP_ENV" = "0" ]; then
     step "Генерирую секреты и .env"
     [ -n "$ADMIN_PASS" ] || ADMIN_PASS=$(gen_secret 18)
@@ -342,8 +353,21 @@ if [ "$ready" != "1" ]; then
         step "Состояние контейнеров"
         docker compose ps || true
         step "Последние строки лога api"
-        docker compose logs --tail 40 api || true
+        log_tail=$(docker compose logs --tail 40 api 2>&1 || true)
+        printf '%s\n' "$log_tail"
         warn "полный лог: docker compose -f $COMPOSE_FILE logs -f api"
+
+        # Самая частая причина: том базы остался от прежней установки с другим
+        # паролем (проект compose называется по имени каталога). Подсказываем
+        # лечение; данные не теряются — образ с данными зальёт дамп заново.
+        if printf '%s' "$log_tail" | grep -q 'password authentication failed'; then
+            step "Причина: пароль базы не совпадает с томом"
+            warn "том базы создан раньше, с другим POSTGRES_PASSWORD."
+            warn "лечение (данные базы и фото будут созданы заново из образа):"
+            warn "  docker compose -f $COMPOSE_FILE down -v"
+            warn "  затем запустить установщик ещё раз"
+            warn "или вернуть прежний пароль в .env (POSTGRES_PASSWORD) и повторить"
+        fi
         die "установка не завершена: приложение не поднялось (причина выше)"
     fi
 fi
