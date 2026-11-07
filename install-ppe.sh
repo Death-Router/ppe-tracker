@@ -164,11 +164,24 @@ fi
 
 # --- Загрузка образа ------------------------------------------------------
 step "Загружаю образ"
-docker load -i "$IMAGE" || die "docker load не удался"
+# Тег берём из вывода load, а не из `docker image ls`: на машине может уже
+# лежать другой ppe-tracker-api:* (например, :data от прошлой сборки), и
+# первая строка списка — не обязательно только что загруженный образ.
+LOAD_OUT=$(docker load -i "$IMAGE" 2>&1) || {
+    printf '%s\n' "$LOAD_OUT" >&2
+    die "docker load не удался"
+}
 ok "образ загружен"
 
-IMAGE_NAME=$(docker image ls --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
+IMAGE_NAME=$(printf '%s\n' "$LOAD_OUT" \
+    | sed -n 's/^Loaded image: //p' \
     | grep -E '^ppe-tracker-api:' | head -1)
+if [ -z "$IMAGE_NAME" ]; then
+    # docker load без тегов печатает "Loaded image ID: sha256:..." — тогда
+    # остаётся поиск по списку образов
+    IMAGE_NAME=$(docker image ls --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
+        | grep -E '^ppe-tracker-api:' | head -1)
+fi
 [ -n "$IMAGE_NAME" ] || die "в загруженном архиве нет образа ppe-tracker-api"
 ok "тег: $IMAGE_NAME"
 
@@ -216,6 +229,10 @@ AUTO_MIGRATE=1
 POSTGRES_USER=ppe
 POSTGRES_PASSWORD=$PG_PASS
 POSTGRES_DB=ppe_db
+# Хост базы внутри compose. Нужен образу с данными: entrypoint-data.sh
+# подключается psql по этим переменным, а не через settings приложения.
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
 
 ADMIN_USERNAME=$ADMIN_USER
 ADMIN_PASSWORD=$ADMIN_PASS

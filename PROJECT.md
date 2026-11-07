@@ -796,8 +796,8 @@ yml compose подставляет из `.env` или из `--env-file`. Без 
 ```bash
 chmod +x make-data-image.sh && ./make-data-image.sh            # чистый :prod
 ./make-data-image.sh --with-data                               # + данные :data
-./make-data-image.sh --with-data --save                        # + .tar
-./make-data-image.sh --with-data --save --gzip                 # + .tar.gz
+./make-data-image.sh --save                                    # + архив .tar.gz
+./make-data-image.sh --with-data --save                        # то же с данными
 ./make-data-image.sh --with-data -d /tmp/dump.sql              # из готового дампа
 ./make-data-image.sh -t ppe-tracker-api:2026-11-06             # свой тег образа с данными
 ```
@@ -1040,7 +1040,7 @@ docker compose exec -T api alembic revision --autogenerate -m "..."   # влад
 
 | Файл | Для кого |
 |---|---|
-| `make-data-image.sh` | машина с исходниками: собрать образ и упаковать в `.tar` |
+| `make-data-image.sh` | машина с исходниками: собрать образ и упаковать в `.tar.gz` (образ + установщики) |
 | `install-ppe.sh` | целевая машина: WSL, Ubuntu, любой Linux, Git Bash |
 | `install-ppe.ps1` | целевая машина: Windows без Git Bash |
 | `INSTALL.md` | человек: шаги, параметры, типовые отказы |
@@ -1049,8 +1049,23 @@ docker compose exec -T api alembic revision --autogenerate -m "..."   # влад
 
 По умолчанию — **чистый** образ `ppe-tracker-api:prod`: схемы и данных нет,
 всё создаётся при первом старте. С `--with-data` — образ `:data` со слоем
-дампа из dev-базы. `--save [ФАЙЛ]` упаковывает результат в `.tar`, `--gzip`
-сжимает. Dev-база поднимается **только** в режиме с данными.
+дампа из dev-базы. `--save [ФАЙЛ]` собирает **один архив `.tar.gz`**, в корне
+которого лежат образ и установщики:
+
+```text
+ppe-tracker-install-<tag>.tar.gz
+├── ppe-tracker-api-<tag>.tar.gz   образ (docker save | gzip)
+├── install-ppe.sh                 установщик Linux / WSL / Git Bash
+├── install-ppe.ps1                установщик Windows PowerShell
+└── INSTALL.txt                    три шага на месте
+```
+
+Сжатие не отключается: ключ `--gzip` принимается ради старых команд и
+игнорируется с предупреждением. Смысл архива — «распаковал и запустил»:
+установщик ищет образ рядом с собой, поэтому на целевой машине не нужно
+помнить имена файлов и порядок команд.
+
+Dev-база поднимается **только** в режиме с данными.
 
 Неочевидное: в чистом режиме скрипт не вызывает `docker compose` вовсе,
 поэтому работает и там, где нет `.env`.
@@ -1165,7 +1180,7 @@ $ast.ParamBlock.Extent.Text
 
 ```bash
 # в чистой папке, не задевая рабочий C:\ppe
-sh install-ppe.sh ppe-tracker-api-prod.tar -d /tmp/ppe-check --force || true
+sh install-ppe.sh ppe-tracker-api-prod.tar.gz -d /tmp/ppe-check --force || true
 
 # полный diff — только чтобы увидеть структуру целиком. Отличий будет много
 # и почти все ожидаемые, поэтому вывод читают, а не считают ошибкой.

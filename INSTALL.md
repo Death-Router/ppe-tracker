@@ -43,7 +43,9 @@ Docker не запущен. На Windows запустите Docker Desktop и д
 ./make-data-image.sh --save
 ```
 
-Результат: `ppe-tracker-api:prod` и файл `ppe-tracker-api-prod.tar` (~570 МБ).
+Результат: образ `ppe-tracker-api:prod` и архив `ppe-tracker-install-prod.tar.gz`
+(~140 МБ). Внутри архива — сам образ и установщики, поэтому на другой машине
+достаточно распаковать и запустить установщик.
 
 ### 2.2 С данными из dev-базы
 
@@ -54,13 +56,15 @@ Docker не запущен. На Windows запустите Docker Desktop и д
 ./make-data-image.sh --with-data --save
 ```
 
-Результат: `ppe-tracker-api:data` и файл `ppe-tracker-api-data.tar`.
+Результат: образ `ppe-tracker-api:data` и архив
+`ppe-tracker-install-data.tar.gz` (образ + `install-ppe.sh`, `install-ppe.ps1`,
+`INSTALL.txt`).
 
-Со сжатием — файл примерно втрое меньше (`.tar.gz`):
+Архив **всегда** сжат (`.tar.gz`): ключ `--gzip` больше не нужен, старые
+команды с ним работают — он игнорируется с предупреждением.
 
-```bash
-./make-data-image.sh --with-data --save --gzip
-```
+⚠️ **Образ с данными содержит персональные сведения сотрудников.** Не
+публикуйте его в общий registry и передавайте только по защищённому каналу.
 
 ⚠️ **Образ с данными содержит персональные сведения сотрудников.** Не
 публикуйте его в общий registry и передавайте только по защищённому каналу.
@@ -88,21 +92,32 @@ docker save ppe-tracker-api:prod -o ppe-tracker-api-prod.tar
 
 ## 3. Перенос файла
 
-Формат `docker save` одинаковый на Windows и Linux — файл переносится как
-есть: флешка, сетевой диск, `scp`. Сжимать для переноса не обязательно.
+Скрипт `--save` отдаёт **один** файл: `ppe-tracker-install-<tag>.tar.gz`. Внутри
+лежат и образ, и установщики, поэтому переносится он как есть: флешка,
+сетевой диск, `scp`.
 
 ```bash
 # Linux → Linux, если есть ssh
-scp ppe-tracker-api-prod.tar user@server:/opt/ppe/
+scp ppe-tracker-install-data.tar.gz user@server:/opt/ppe/
 ```
 
-Если файл сжат, на целевой машине сначала распаковать:
+На целевой машине — распаковать (Windows 10/11: `tar` входит в систему):
 
 ```bash
-gzip -d ppe-tracker-api-data.tar.gz        # станет .tar
+tar -xzf ppe-tracker-install-data.tar.gz -C /opt/ppe
 ```
 
-На Windows: `.gz` открывается архиватором, результат — файл `.tar`.
+Появятся три файла рядом:
+
+```text
+ppe-tracker-api-data.tar.gz   образ (сжатый, установщик распакует сам)
+install-ppe.sh                установщик Linux / WSL / Git Bash
+install-ppe.ps1               установщик Windows PowerShell
+INSTALL.txt                   те же три шага, что ниже
+```
+
+Дальше — установщик из раздела 4 или 5; параметры указывать не нужно, образ
+он ищет рядом с собой.
 
 ---
 
@@ -110,7 +125,8 @@ gzip -d ppe-tracker-api-data.tar.gz        # станет .tar
 
 ### 4.1 Загрузить образ
 
-В PowerShell:
+Через установщик это не нужно — он делает `docker load` сам (раздел 4.0).
+Вручную, если установщик не используется:
 
 ```powershell
 docker load -i C:\путь\ppe-tracker-api-prod.tar
@@ -233,21 +249,20 @@ docker exec ppe-api python create_admin.py
 `push-ppe.cmd`):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
-    -Image .\ppe-tracker-api-data.tar -Dir C:\ppe
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 -Dir C:\ppe
 ```
 
-Для чистого образа — добавить `-Clean`, тогда скрипт ещё и заведёт
-администратора:
+Для чистого образа достаточно запустить скрипт: он сам увидит тег `:prod` и
+включит режим `-Clean` (заведёт администратора). Явно, с паролем:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
-    -Image .\ppe-tracker-api-prod.tar -Clean -AdminPass 'СложныйПароль1'
+    -Clean -AdminPass 'СложныйПароль1'
 ```
 
 | Параметр | По умолчанию | Назначение |
 |---|---|---|
-| `-Image` | ищет `.tar` рядом со скриптом | файл образа |
+| `-Image` | ищет `ppe-tracker-api-*.tar.gz` рядом со скриптом | файл образа |
 | `-Dir` / `-d` | `C:\ppe` | каталог установки |
 | `-Port` / `-p` | `8000` | порт на `127.0.0.1` |
 | `-Clean` | — | образ без данных: завести администратора |
@@ -259,9 +274,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
 флага: `-` в PowerShell против `--` в POSIX-шелле (`-Clean` ↔ `--clean`,
 `-AdminLogin` ↔ `--admin-login`, `-AdminPass` ↔ `--admin-pass`,
 `-Force` ↔ `--force`, короткие `-d`/`-p`/`-login`/`-pass` — те же).
-Единственное исключение — образ: в PowerShell это `-Image .\файл.tar`, а в
+Единственное исключение — образ: в PowerShell это `-Image .\файл.tar.gz`, а в
 `.sh` он передаётся позиционным аргументом
-(`sh install-ppe.sh файл.tar`), потому что второй «файловый» параметр там
+(`sh install-ppe.sh файл.tar.gz`), потому что второй «файловый» параметр там
 не нужен.
 
 Скрипт идемпотентен: повторный запуск не трогает данные, а существующий
@@ -278,8 +293,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
 `install-ppe.sh` — то же самое для POSIX-шелла (WSL, Ubuntu, любой Linux):
 
 ```bash
-sh install-ppe.sh ppe-tracker-api-data.tar -d /opt/ppe
-sh install-ppe.sh ppe-tracker-api-prod.tar -d /opt/ppe --clean
+sh install-ppe.sh -d /opt/ppe                       # образ ищется рядом
+sh install-ppe.sh ppe-tracker-api-data.tar.gz -d /opt/ppe
+sh install-ppe.sh ppe-tracker-api-prod.tar.gz -d /opt/ppe --clean
 ```
 
 Параметры: `-d` каталог, `-p` порт, `--clean`, `--admin-login`,
@@ -288,8 +304,10 @@ sh install-ppe.sh ppe-tracker-api-prod.tar -d /opt/ppe --clean
 
 ### 5.1 Загрузить образ
 
+Через установщик не нужно — он делает `docker load` сам. Вручную:
+
 ```bash
-docker load -i /opt/ppe/ppe-tracker-api-prod.tar
+docker load -i /opt/ppe/ppe-tracker-api-prod.tar.gz
 docker images ppe-tracker-api
 ```
 
@@ -430,12 +448,15 @@ docker run --rm --network <сеть> --env-file .env -e FORCE=1 \
 
 ```bash
 # на машине с исходниками
-./make-data-image.sh --save              # новый файл .tar
+./make-data-image.sh --save              # новый архив .tar.gz
 
-# на целевой
-docker load -i ppe-tracker-api-prod.tar
-docker compose up -d                     # пересоздаст api на новом образе
+# на целевой: распаковать рядом с прошлым архивом и запустить установщик
+tar -xzf ppe-tracker-install-prod.tar.gz -C <папка установки>
+sh install-ppe.sh                        # перезапишет образ и пересоздаст api
 ```
+
+Если установщик не используется — `docker load` из образа внутри архива и
+`docker compose up -d` (пересоздаст `api` на новом образе).
 
 Миграции применятся автоматически при старте (`AUTO_MIGRATE=1`). Данные
 остаются в томе `ppe_pgdata` — обновление образа их не трогает.

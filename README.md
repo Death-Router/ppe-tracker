@@ -61,8 +61,8 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml exec api python c
 chmod +x make-data-image.sh
 ./make-data-image.sh                 # чистый образ ppe-tracker-api:prod
 ./make-data-image.sh --with-data     # + данные из dev-базы
-./make-data-image.sh --save          # плюс файл .tar для переноса
-./make-data-image.sh --with-data --save --gzip
+./make-data-image.sh --save          # плюс архив .tar.gz: образ + установщики
+./make-data-image.sh --with-data --save
 ./make-data-image.sh -d dump.sql     # данные из готового дампа
 ```
 
@@ -70,8 +70,9 @@ chmod +x make-data-image.sh
 `FORCE=1`. Внутри образа персональные данные — не публиковать в registry.
 
 **Установка на другую машину (Windows или Linux) — [`INSTALL.md`](INSTALL.md).**
-Там создание образа, перенос `.tar`, запуск через Docker Desktop или Docker
-Engine на Linux, reverse-proxy с HTTPS и типовые отказы.
+Там создание архива, перенос `.tar.gz` (образ + установщики), запуск через
+Docker Desktop или Docker Engine на Linux, reverse-proxy с HTTPS и типовые
+отказы.
 
 Подробности устройства — `PROJECT.md`, «Образ с данными из dev-базы».
 

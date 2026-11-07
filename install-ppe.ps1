@@ -144,12 +144,26 @@ if (-not (Test-Path -LiteralPath $Dir)) {
 
 # --- Загрузка -------------------------------------------------------------
 Write-Step "Загружаю образ"
-& docker load -i $Image
-if ($LASTEXITCODE -ne 0) { Write-Err "docker load не удался"; exit 1 }
+$loadOut = & docker load -i $Image 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $loadOut | ForEach-Object { Write-Host $_ }
+    Write-Err "docker load не удался"
+    exit 1
+}
 Write-Ok "образ загружен"
 
-$imageName = (docker image ls --format '{{.Repository}}:{{.Tag}}' |
-    Where-Object { $_ -like 'ppe-tracker-api:*' } | Select-Object -First 1)
+# Тег берём из вывода load: на машине может лежать другой ppe-tracker-api:*
+# (например, :data от прошлой сборки), и первая строка списка образов —
+# не обязательно только что загруженный образ.
+$loadText = ($loadOut | Out-String)
+$imageName = $null
+if ($loadText -match 'Loaded image:\s*(ppe-tracker-api:[^\s]+)') {
+    $imageName = $Matches[1]
+}
+if (-not $imageName) {
+    $imageName = (docker image ls --format '{{.Repository}}:{{.Tag}}' |
+        Where-Object { $_ -like 'ppe-tracker-api:*' } | Select-Object -First 1)
+}
 if (-not $imageName) { Write-Err "в архиве нет образа ppe-tracker-api"; exit 1 }
 Write-Ok "тег: $imageName"
 
@@ -195,6 +209,10 @@ AUTO_MIGRATE=1
 POSTGRES_USER=ppe
 POSTGRES_PASSWORD=$pgPass
 POSTGRES_DB=ppe_db
+# Хост базы внутри compose. Нужен образу с данными: entrypoint-data.sh
+# подключается psql по этим переменным, а не через settings приложения.
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
 
 ADMIN_USERNAME=$AdminLogin
 ADMIN_PASSWORD=$AdminPass

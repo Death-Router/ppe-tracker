@@ -3,15 +3,17 @@
 #
 # По умолчанию собирается ЧИСТЫЙ образ: схема развернётся миграциями при
 # первом старте, данных нет. С переносом данных из dev-базы — флаг --with-data.
-# Флаг --save упаковывает результат в .tar (или .tar.gz), который загружается
-# на другой машине одной командой: docker load -i файл.tar
+# Флаг --save собирает архив .tar.gz для переноса: внутри образ (docker save,
+# уже сжатый) и установщики install-ppe.sh / install-ppe.ps1 + INSTALL.txt —
+# всё в корне архива, поэтому на целевой машине достаточно распаковать и
+# запустить установщик.
 #
 # Запуск из корня клона:
 #
 #   ./make-data-image.sh                          # чистый образ
 #   ./make-data-image.sh --with-data              # + данные из dev-базы
-#   ./make-data-image.sh --save                   # чистый + файл для переноса
-#   ./make-data-image.sh --with-data --save --gzip
+#   ./make-data-image.sh --save                   # чистый + архив для переноса
+#   ./make-data-image.sh --with-data --save       # то же с данными
 #   ./make-data-image.sh --with-data -d dump.sql  # данные из готового дампа
 #
 # Требования: docker (Докер Desktop на Windows или нативный Docker на Linux).
@@ -34,7 +36,7 @@ WITH_DATA=0
 KEEP_DUMP=0
 SAVE=0
 SAVE_PATH=
-GZIP=0
+GZIP_DEPRECATED=0
 
 usage() {
     cat <<'EOF'
@@ -52,9 +54,8 @@ make-data-image.sh — собрать образ PPE Tracker и упаковат
   -k, --keep-dump      не удалять временный каталог с дампом после сборки
 
 Перенос на другую машину:
-  -s, --save [ФАЙЛ]    упаковать образ в tar (docker save); без пути —
-                       ppe-tracker-api-<tag>.tar рядом со скриптом
-      --gzip           сжать файл: .tar.gz (по умолчанию без сжатия)
+  -s, --save [ФАЙЛ]    собрать архив .tar.gz (образ + установщики); без пути —
+                       ppe-tracker-install-<tag>.tar.gz рядом со скриптом
 
 Прочее:
   -h, --help           эта справка
@@ -62,6 +63,17 @@ make-data-image.sh — собрать образ PPE Tracker и упаковат
 Что происходит:
   чистый образ:  docker build -f dockerfile.prod  →  ppe-tracker-api:prod
   с данными:     плюс pg_dump dev-базы и слой с дампом  →  ...:data
+
+Архив для переноса (.tar.gz, сжатие не отключается) содержит в корне:
+  ppe-tracker-api-<tag>.tar.gz   образ (docker save | gzip)
+  install-ppe.sh                 установщик для Linux / WSL / Git Bash
+  install-ppe.ps1                установщик для Windows PowerShell
+  INSTALL.txt                    три шага на месте
+На целевой машине: tar -xzf <архив> -C <папка>, затем запустить установщик —
+образ он найдёт рядом с собой.
+
+Ключ --gzip больше не нужен (архив всегда сжат); принимается для
+совместимости старых команд и игнорируется.
 
 Внутри образа с данными дамп лежит в /app/data/dump.sql и применяется при
 первом старте на ПУСТОЙ базе; повторно не накатывается (маркер .dump-loaded).
@@ -80,7 +92,7 @@ while [ $# -gt 0 ]; do
         -d|--dump)      DUMP_FILE=${2:?--dump требует значения}; WITH_DATA=1; shift 2 ;;
         -k|--keep-dump) KEEP_DUMP=1; shift ;;
         --with-data)    WITH_DATA=1; shift ;;
-        --gzip)         GZIP=1; shift ;;
+        --gzip)         GZIP_DEPRECATED=1; shift ;;
         -s|--save)
             # Путь необязателен: следующий аргумент берём, только если это
             # не опция и он похож на файл (а не на тег образа)
@@ -113,6 +125,10 @@ env_value() {
     sed -n "s/^$1=//p" .env 2>/dev/null | tr -d '\r' | tail -1
 }
 
+if [ "$GZIP_DEPRECATED" = "1" ]; then
+    warn "--gzip больше не нужен: архив всегда .tar.gz (ключ проигнорирован)"
+fi
+
 # --- Проверки окружения ---------------------------------------------------
 step "Проверяю окружение"
 
@@ -126,6 +142,16 @@ if [ "$WITH_DATA" = "1" ]; then
     [ -f dockerfile.data ] || die "нет dockerfile.data (нужен для --with-data)"
     [ -f docker/entrypoint-data.sh ] || die "нет docker/entrypoint-data.sh"
 fi
+if [ "$SAVE" = "1" ]; then
+    # Архив собирается только из этих файлов: без них установка на целевой
+    # машине превратится в ручное копирование команд из INSTALL.md
+    for f in install-ppe.sh install-ppe.ps1; do
+        [ -f "$f" ] || die "нет $f: он кладётся в корень архива --save"
+    done
+    for tool in tar gzip; do
+        command -v "$tool" >/dev/null 2>&1 || die "нет $tool в PATH (нужен для --save)"
+    done
+fi
 
 ok "docker: $(docker --version | sed 's/^Docker version //; s/,.*//')"
 if [ "$WITH_DATA" = "1" ]; then
@@ -136,6 +162,7 @@ fi
 
 # --- 1. Dev-база (только с данными) ---------------------------------------
 TMP_DIR=
+STAGE_DIR=
 cleanup() {
     if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then
         if [ "$KEEP_DUMP" = "1" ]; then
@@ -145,6 +172,11 @@ cleanup() {
             # ему нечего делать: удаляем целиком, а не только затираем.
             rm -rf "$TMP_DIR"
         fi
+    fi
+    # Стейджинг архива: копия образа ~200 МБ (сжатая). Без уборки она
+    # остаётся в /tmp после каждого запуска.
+    if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
+        rm -rf "$STAGE_DIR"
     fi
 }
 trap cleanup EXIT
@@ -288,27 +320,92 @@ else
     IMAGE_TO_SAVE=$DATA_IMAGE
 fi
 
-# --- 3. Упаковка для переноса --------------------------------------------
+# --- 3. Архив для переноса ------------------------------------------------
+# Один файл .tar.gz, в корне которого лежат и образ, и установщики: на
+# целевой машине не нужно ничего искать и досочинять — распаковал и запустил.
 SAVED_FILE=
 if [ "$SAVE" = "1" ]; then
+    # Имя образа без репозитория: ppe-tracker-api:data -> ppe-tracker-api-data,
+    # тег отдельно — он идёт в имя архива (data / prod / свой).
+    IMAGE_BASENAME=$(printf '%s' "$IMAGE_TO_SAVE" | tr ':/' '--')
+    IMAGE_TAG=${IMAGE_TO_SAVE##*:}
+    IMAGE_FILE="$IMAGE_BASENAME.tar.gz"
+
     if [ -z "$SAVE_PATH" ]; then
-        # Имя из тега образа: ppe-tracker-api:data -> ppe-tracker-api-data
-        SAVE_PATH="$(printf '%s' "$IMAGE_TO_SAVE" | tr ':/' '--')"
-        [ "$GZIP" = "1" ] && SAVE_PATH="$SAVE_PATH.tar.gz" || SAVE_PATH="$SAVE_PATH.tar"
+        SAVE_PATH="ppe-tracker-install-$IMAGE_TAG.tar.gz"
+    else
+        # Путь задан вручную. Сжатие больше не опция, поэтому расширение
+        # приводим к .tar.gz, а не молча пишем несжатый файл с чужим именем.
+        case "$SAVE_PATH" in
+            *.tar.gz) ;;
+            *.tgz)    SAVE_PATH="${SAVE_PATH%.tgz}.tar.gz" ;;
+            *.tar)    SAVE_PATH="$SAVE_PATH.gz" ;;
+            *)        SAVE_PATH="$SAVE_PATH.tar.gz" ;;
+        esac
     fi
 
-    step "Упаковываю $IMAGE_TO_SAVE в $SAVE_PATH"
-    # docker save/gzip пишут в файл напрямую: образ ~570 МБ, через pipe
-    # пришлось бы держать его в памяти оболочки
-    if [ "$GZIP" = "1" ]; then
-        docker save "$IMAGE_TO_SAVE" | gzip > "$SAVE_PATH" || die "упаковка не удалась"
-    else
-        docker save "$IMAGE_TO_SAVE" -o "$SAVE_PATH" || die "упаковка не удалась"
-    fi
+    STAGE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ppe-bundle.XXXXXX") \
+        || die "не удалось создать временный каталог"
+
+    step "Сохраняю образ $IMAGE_TO_SAVE"
+    # Без промежуточного .tar: pipe пишет сразу в архив, диск не нужен
+    # дважды (образ ~570 МБ в распакованном виде).
+    docker save "$IMAGE_TO_SAVE" | gzip > "$STAGE_DIR/$IMAGE_FILE" \
+        || die "docker save | gzip не удался"
+    gzip -t "$STAGE_DIR/$IMAGE_FILE" 2>/dev/null \
+        || die "полученный $IMAGE_FILE не читается как gzip"
+    ok "образ упакован: $IMAGE_FILE ($(( $(wc -c < "$STAGE_DIR/$IMAGE_FILE" | tr -d ' ') / 1048576 )) МБ)"
+
+    step "Кладу в корень архива установщики"
+    for f in install-ppe.sh install-ppe.ps1; do
+        cp "$f" "$STAGE_DIR/$f" || die "не удалось скопировать $f"
+    done
+    # Бит +x в архиве: на Linux установщик запускают как ./install-ppe.sh
+    chmod 0755 "$STAGE_DIR/install-ppe.sh"
+    ok "install-ppe.sh, install-ppe.ps1"
+
+    # Короткая памятка рядом с файлами: INSTALL.md в архив не входит, а
+    # порядок действий из трёх шагов нужен именно здесь.
+    cat > "$STAGE_DIR/INSTALL.txt" <<EOF
+PPE Tracker — установка из архива
+=================================
+
+1. Распаковать архив (файлы появятся рядом):
+     tar -xzf $(basename "$SAVE_PATH") -C <папка установки>
+   На Windows 10/11 команда tar входит в систему.
+
+2. Запустить установщик:
+     Linux / WSL:  sh install-ppe.sh
+     Windows:      powershell -NoProfile -ExecutionPolicy Bypass -File .\\install-ppe.ps1
+   Образ ($IMAGE_FILE) установщик найдёт рядом с собой сам.
+
+3. Открыть http://127.0.0.1:8000 и войти под учёткой, которую напечатает
+   установщик (пароль генерируется на месте и лежит в .env установки).
+
+Подробности, параметры и типовые отказы — INSTALL.md в репозитории.
+EOF
+    ok "INSTALL.txt"
+
+    step "Собираю архив $SAVE_PATH"
+    # Файлы перечисляем поимённо, без записи "./" для самого каталога: иначе
+    # при распаковке в существующую папку tar применил бы к ней права
+    # стейджинга (mktemp создаёт 0700) и неожиданно закрыл к ней доступ.
+    tar -czf "$SAVE_PATH" -C "$STAGE_DIR" \
+        install-ppe.sh install-ppe.ps1 INSTALL.txt "$IMAGE_FILE" \
+        || die "tar не удался"
+
+    # Проверка содержимого: пустой или частичный архив обнаружится здесь,
+    # а не на целевой машине.
+    tar -tzf "$SAVE_PATH" >/dev/null 2>&1 || die "архив $SAVE_PATH не читается"
+    for need in install-ppe.sh install-ppe.ps1 INSTALL.txt "$IMAGE_FILE"; do
+        tar -tzf "$SAVE_PATH" | grep -qx "$need" \
+            || die "в архиве нет $need"
+    done
+    ok "в архиве: $IMAGE_FILE, install-ppe.sh, install-ppe.ps1, INSTALL.txt"
 
     size=$(wc -c < "$SAVE_PATH" | tr -d ' ')
-    [ "$size" -gt 104857600 ] || die "файл подозрительно мал ($size байт)"
-    ok "файл готов: $SAVE_PATH ($((size / 1048576)) МБ)"
+    [ "$size" -gt 104857600 ] || die "архив подозрительно мал ($size байт)"
+    ok "архив готов: $SAVE_PATH ($((size / 1048576)) МБ)"
     SAVED_FILE=$SAVE_PATH
 fi
 
@@ -319,18 +416,8 @@ docker image ls --format '    {{.Repository}}:{{.Tag}}  {{.DiskUsage}}' 2>/dev/n
 
 if [ -n "$SAVED_FILE" ]; then
     printf '\n'
-    ok "файл для переноса: $SAVED_FILE"
-    if [ "$GZIP" = "1" ]; then
-        ok "распаковка на целевой машине: gzip -d $SAVED_FILE"
-    fi
-fi
-
-# Инструкция печатается обычными if, а не $( ... && printf ... ): при set -e
-# подстановка с ложным первым условием возвращает ненулевой код и может
-# оборвать скрипт прямо на печати итога.
-LOAD_PATH=
-if [ -n "$SAVED_FILE" ]; then
-    LOAD_PATH=$(printf '%s' "$SAVED_FILE" | sed 's/\.gz$//')
+    ok "архив для переноса: $SAVED_FILE"
+    ok "внутри: образ .tar.gz, install-ppe.sh, install-ppe.ps1, INSTALL.txt"
 fi
 
 printf '\n'
@@ -342,24 +429,22 @@ else
 fi
 printf '\n'
 
-printf 'Перенос на другую машину (Windows или Linux — формат один и тот же):\n\n'
-if [ -n "$LOAD_PATH" ]; then
-    printf '  1. скопировать файл: %s\n' "$SAVED_FILE"
+if [ -n "$SAVED_FILE" ]; then
+    printf 'Перенос на другую машину (Windows или Linux — формат один и тот же):\n\n'
+    printf '  1. скопировать архив: %s\n' "$SAVED_FILE"
+    printf '  2. распаковать:       tar -xzf %s -C <папка установки>\n' \
+        "$(basename "$SAVED_FILE")"
+    printf '  3. запустить установщик из этой папки:\n'
+    printf '       Linux / WSL:  sh install-ppe.sh\n'
+    printf '       Windows:      powershell -NoProfile -ExecutionPolicy Bypass -File .\\install-ppe.ps1\n'
+    printf '     Образ ищется рядом со скриптом, параметры не нужны.\n'
+    printf '\n'
 else
-    printf '  1. скопировать файл, созданный с флагом --save\n'
+    printf 'Файл для переноса не создавался (флаг --save не указан).\n'
+    printf 'Только образ: docker save %s -o образ.tar\n\n' "$IMAGE_TO_SAVE"
 fi
-printf '  2. загрузить образ:\n'
-if [ -z "$LOAD_PATH" ]; then
-    printf '       docker load -i ppe-tracker-api-*.tar\n'
-elif [ "$GZIP" = "1" ]; then
-    printf '       gzip -d %s\n' "$SAVED_FILE"
-    printf '       docker load -i %s\n' "$LOAD_PATH"
-else
-    printf '       docker load -i %s\n' "$LOAD_PATH"
-fi
-printf '  3. проверить:  docker images %s\n\n' "$IMAGE_TO_SAVE"
 
-printf 'Запуск на целевой машине — пустая база и авто-миграции:\n\n'
+printf 'То же самое вручную, без установщика (пустая база и авто-миграции):\n\n'
 printf '  docker compose --env-file .env.prod -f docker-compose.prod.yml up -d db\n'
 printf '  docker run -d --name ppe-api --network ppe-tracker_default \\\n'
 printf '      -e SECRET_KEY=... -e POSTGRES_USER=... -e POSTGRES_PASSWORD=... \\\n'

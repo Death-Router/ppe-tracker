@@ -131,7 +131,7 @@ fi
 # export, а не префикс PGHOST=... перед psql: префиксные присваивания
 # работают, но в связке с `if !` и многострочным вызовом читаются хуже,
 # и одна опечатка в цепочке делает их недействительными молча.
-export PGHOST="$POSTGRES_HOST"
+export PGHOST="${POSTGRES_HOST:-db}"
 export PGPORT="${POSTGRES_PORT:-5432}"
 export PGUSER="$POSTGRES_USER"
 export PGPASSWORD="$POSTGRES_PASSWORD"
