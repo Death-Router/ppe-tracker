@@ -75,21 +75,27 @@
                                  друг под другом. Файл лежит на томе, отдаётся через API
                                  (персональные данные — без прямой раздачи из /static) -->
                             <div class="photo-row">
-                                <div class="photo-preview-wrap">
-                                    <img id="emp-photo-preview" class="photo-preview d-none" alt="Фото сотрудника">
-                                    <div id="emp-photo-empty" class="photo-preview photo-preview--empty">
-                                        <i class="bi bi-person"></i>
+                                <div class="photo-col">
+                                    <div class="photo-preview-wrap">
+                                        <img id="emp-photo-preview" class="photo-preview d-none" alt="Фото сотрудника">
+                                        <div id="emp-photo-empty" class="photo-preview photo-preview--empty">
+                                            <i class="bi bi-person"></i>
+                                        </div>
+                                        <!-- Значки появляются при наведении на фото (и всегда
+                                             видны на тач-устройствах, см. app.css) -->
+                                        <div class="photo-overlay">
+                                            <button type="button" class="photo-icon" id="emp-photo-upload"
+                                                    title="Загрузить фото" aria-label="Загрузить фото">
+                                                <i class="bi bi-camera"></i>
+                                            </button>
+                                            <button type="button" class="photo-icon photo-icon--danger d-none"
+                                                    id="emp-photo-delete" title="Удалить фото" aria-label="Удалить фото">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="photo-actions">
                                     <input type="file" id="emp-photo-input"
                                            accept="image/jpeg,image/png,image/webp" hidden>
-                                    <button type="button" class="btn btn-sm btn-brand w-100" id="emp-photo-upload">
-                                        <i class="bi bi-camera"></i> Загрузить фото
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-brand-orange w-100 d-none" id="emp-photo-delete">
-                                        <i class="bi bi-trash"></i> Удалить
-                                    </button>
                                     <div class="form-text" id="emp-photo-hint">
                                         JPEG, PNG или WebP до 5 МБ
                                     </div>

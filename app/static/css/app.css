@@ -782,12 +782,82 @@ input[type="radio"] {
     margin-bottom: var(--space-4);
 }
 
-/* Колонка кнопок справа от фото: «Загрузить» и под ней «Удалить» */
-.photo-actions {
-    flex: 0 0 150px;
+/* Колонка фото: снимок и подсказка под ним */
+.photo-col {
+    flex: 0 0 auto;
+    width: 120px;
     display: flex;
     flex-direction: column;
+    gap: var(--space-1);
+}
+
+.photo-preview-wrap {
+    position: relative;
+    width: 120px;
+}
+
+/* Значки «Загрузить»/«Удалить» появляются при наведении на фото */
+.photo-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: var(--space-2);
+    border-radius: var(--radius);
+    background: rgba(36, 50, 68, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.photo-preview-wrap:hover .photo-overlay,
+.photo-preview-wrap:focus-within .photo-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.photo-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--brand);
+    font-size: 1rem;
+    line-height: 1;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.photo-icon:hover,
+.photo-icon:focus-visible {
+    transform: scale(1.08);
+}
+
+/* Удаление — оранжевый по дизайн-системе */
+.photo-icon--danger {
+    background: var(--accent);
+    color: #fff;
+}
+
+.photo-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* На устройствах без наведения (тач) значки видны сразу */
+@media (hover: none) {
+    .photo-overlay {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 /* ФИО справа от кнопок: лейбл отдельной колонкой слева от поля */
@@ -810,10 +880,6 @@ input[type="radio"] {
    по центру поля, а не стоит над ним */
 .fio-row .form-label {
     margin-bottom: 0;
-}
-
-.photo-preview-wrap {
-    flex: 0 0 auto;
 }
 
 .photo-preview {
@@ -880,15 +946,14 @@ input[type="radio"] {
         width: auto;
     }
 
-    /* На узком экране фото, кнопки и ФИО — в столбик */
+    /* На узком экране фото и ФИО — в столбик */
     .photo-row {
         flex-direction: column;
         gap: var(--space-3);
     }
 
-    .photo-actions {
+    .photo-col {
         flex: 0 0 auto;
-        width: 100%;
-        max-width: 200px;
+        width: 120px;
     }
 }
