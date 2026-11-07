@@ -1142,6 +1142,44 @@ $ast.ParamBlock.Extent.Text
 `.env` рядом с compose). Проверка — `docker compose config` и сравнение
 `POSTGRES_PASSWORD` в секциях `api` и `db`.
 
+### Меняешь compose или Dockerfile — проверь шаблоны в `install-ppe.*`
+
+Шаблоны `docker-compose.yml` **продублированы** в двух местах:
+
+| Где | Для чего |
+|---|---|
+| `docker-compose.prod.yml`, `docker-compose.yml` | запуск из клона |
+| here-строка в `install-ppe.sh` и `install-ppe.ps1` | установка на чужую машину: файл генерируется на месте |
+
+Сценарий, на котором это уже сработало: в `3722940` появились фото
+сотрудников — `docker-compose.prod.yml` получил том
+`ppe_photos:/app/data/photos`, `dockerfile.prod` — каталог `/app/data/photos`
+с нужным владельцем. Шаблоны в `install-ppe.*` об этом не знали. Установка
+через скрипт создавала compose **без тома**, и приложение тихо теряло фото
+при первом же пересоздании контейнера (то есть при каждом обновлении
+образа). Симптом отложенный: фото грузятся, видны неделю, потом исчезают.
+
+**Правило: изменил `docker-compose*.yml` или `dockerfile.prod` — сравни
+с шаблонами в `install-ppe.sh` и `install-ppe.ps1`.** Проверка после
+правки — сгенерировать конфиг и сравнить с эталоном:
+
+```bash
+# в чистой папке, не задевая рабочий C:\ppe
+sh install-ppe.sh ppe-tracker-api-prod.tar -d /tmp/ppe-check --force || true
+diff <(sed 's/[[:space:]]*$//' docker-compose.prod.yml) \
+     <(sed 's/[[:space:]]*$//' /tmp/ppe-check/docker-compose.yml)
+```
+
+Отличия в `image`, `ports` и `restart` ожидаемы; **отличий в `volumes`
+быть не должно**.
+
+Тот же риск у `entrypoint-data.sh`: он рассчитывает, что маркер дампа и
+сам дамп лежат в `/app/data`. Если `/app/data` уедет под том (как это
+произошло с фото), маркер и дамп окажутся в томе — и вся логика «один
+раз залить» поменяет смысл. Сейчас том монтируется в `/app/data/photos`,
+то есть **внутрь** `/app/data`, и `dump.sql` остаётся в образе. Менять
+этот путь нельзя без пересмотра `entrypoint-data.sh`.
+
 ### 14. Одна форма — две страницы: модалку ищите от формы, а не по id
 
 Модалка пользователя продублирована в разметке: `users/list.html` (страница
