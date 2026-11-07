@@ -435,6 +435,20 @@ docker run --rm --network ppe-migtest -e SECRET_KEY=<ключ ≥32 символ
 `SECRET_KEY` нужен валидной длины: `config.py` падает на коротком ключе ещё
 до подключения к базе, и ошибка миграций не покажется.
 
+**Две правки 7 ноября 2026 — схема с нуля расходилась с рабочей базой.**
+Нашлось сравнением `pg_dump --schema-only` рабочей базы и базы, собранной
+миграциями:
+
+| Ревизия | Что было не так | Что сделано |
+|---|---|---|
+| `c63571f88efc` | `create_foreign_key` для `employee_ppe_sizes.size_group_id` вызывался второй раз (первый — в `fix_employee_sizes`); появлялось лишнее ограничение `employee_ppe_sizes_size_group_id_fkey1`, которого нет в рабочей базе | лишний FK убран, битый `drop_constraint(None)` в downgrade тоже |
+| `bd09b9140447` | `position_ppe_norms.quantity` без `server_default`, а в рабочей базе стоит `DEFAULT '1'` | добавлен `server_default='1'` |
+
+После правок `diff` схем с нуля и рабочей базы пустой. Проверять так:
+снять `pg_dump --schema-only --no-owner --no-privileges` с обеих баз и
+сравнить; строки `\restrict`/`\unrestrict` — артефакт `pg_dump` 16, их
+игнорировать.
+
 ### 9. Одинаковое имя у `const` и `function` в одном IIFE
 
 В `employees_list.js` заголовок модалки возврата — это

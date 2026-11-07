@@ -27,7 +27,7 @@ def upgrade() -> None:
     sa.Column('ppe_item_id', sa.Integer(), nullable=False),
     sa.Column('wear_period_value', sa.String(length=50), nullable=False, comment='Например: 1, 12, 6'),
     sa.Column('wear_period_unit', sa.String(length=20), nullable=False, comment='Например: год, месяц, смена'),
-    sa.Column('quantity', sa.String(length=50), nullable=False),
+    sa.Column('quantity', sa.String(length=50), server_default='1', nullable=False),
     sa.Column('version', sa.Integer(), server_default='1', nullable=False),
     sa.ForeignKeyConstraint(['position_id'], ['positions.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['ppe_item_id'], ['ppe_items.id'], ondelete='CASCADE'),
