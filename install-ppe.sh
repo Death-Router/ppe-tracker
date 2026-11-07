@@ -309,11 +309,11 @@ if [ "$CLEAN" = "1" ]; then
     step "Завожу администратора"
     # create_admin.py читает ADMIN_* из окружения контейнера (env_file),
     # поэтому ничего передавать не нужно. Скрипт идемпотентен.
-    if docker exec ppe-api python create_admin.py 2>&1 | grep -qi "уже существует"; then
-        warn "пользователь $ADMIN_USER уже был — пароль не менялся"
-    else
-        ok "администратор $ADMIN_USER создан"
-    fi
+    admin_out=$(docker exec ppe-api python create_admin.py 2>&1 || true)
+    case "$admin_out" in
+        *"уже существует"*) warn "пользователь $ADMIN_USER уже был — пароль не менялся" ;;
+        *) ok "администратор $ADMIN_USER создан" ;;
+    esac
 else
     ok "образ с данными: учётка администратора пришла вместе с данными"
 fi
