@@ -1166,12 +1166,29 @@ $ast.ParamBlock.Extent.Text
 ```bash
 # в чистой папке, не задевая рабочий C:\ppe
 sh install-ppe.sh ppe-tracker-api-prod.tar -d /tmp/ppe-check --force || true
-diff <(sed 's/[[:space:]]*$//' docker-compose.prod.yml) \
-     <(sed 's/[[:space:]]*$//' /tmp/ppe-check/docker-compose.yml)
+
+# обычный diff по файлам, без процессной подстановки: она есть в bash,
+# но не в POSIX sh, а скрипты в проекте пишутся под sh
+sed 's/[[:space:]]*$//' docker-compose.prod.yml > /tmp/check-a.yml
+sed 's/[[:space:]]*$//' /tmp/ppe-check/docker-compose.yml > /tmp/check-b.yml
+diff /tmp/check-a.yml /tmp/check-b.yml
 ```
 
 Отличия в `image`, `ports` и `restart` ожидаемы; **отличий в `volumes`
 быть не должно**.
+
+Сравнение только по `volumes` — без промежуточных файлов и без bash-измов,
+работает в любом `sh`:
+
+```sh
+# смонтированные пути из эталона и из сгенерированного шаблона
+grep -E '^\s+- .*:/' docker-compose.prod.yml
+grep -E '^\s+- .*:/' /tmp/ppe-check/docker-compose.yml
+```
+
+Регулярка ловит строки-монтирования вида `- ppe_photos:/app/data/photos`
+и в `api`, и в `db`; сравнить два вывода глазами быстрее, чем держать в
+голове весь compose.
 
 Шаблоны исправлены: в обоих скриптах у `api` теперь
 `ppe_photos:/app/data/photos` и корневой том `ppe_photos`; в печатаемую
