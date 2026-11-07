@@ -796,25 +796,25 @@ input[type="radio"] {
     width: 120px;
 }
 
-/* Значки «Загрузить»/«Удалить» на фото: видны всегда (приглушённо),
-   при наведении на колонку фото фон затемняется и значки становятся яркими.
-   Так они не «теряются», если браузер не отдаёт :hover (тач, эмуляция). */
+/* Значки «Загрузить»/«Удалить» появляются при наведении на фото */
 .photo-overlay {
     position: absolute;
     inset: 0;
-    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
     border-radius: var(--radius);
-    background: transparent;
-    transition: background 0.15s ease;
+    background: rgba(36, 50, 68, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
 }
 
-.photo-col:hover .photo-overlay,
-.photo-col:focus-within .photo-overlay {
-    background: rgba(36, 50, 68, 0.55);
+.photo-preview-wrap:hover .photo-overlay,
+.photo-preview-wrap:focus-within .photo-overlay {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .photo-icon {
@@ -832,13 +832,7 @@ input[type="radio"] {
     line-height: 1;
     box-shadow: var(--shadow-sm);
     cursor: pointer;
-    opacity: 0.75;
-    transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
-.photo-col:hover .photo-icon,
-.photo-col:focus-within .photo-icon {
-    opacity: 1;
+    transition: transform 0.15s ease;
 }
 
 .photo-icon:hover,
@@ -856,6 +850,14 @@ input[type="radio"] {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+}
+
+/* На устройствах без наведения (тач) значки видны сразу */
+@media (hover: none) {
+    .photo-overlay {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 /* ФИО справа от кнопок: лейбл отдельной колонкой слева от поля */
