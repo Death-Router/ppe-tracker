@@ -269,7 +269,7 @@
       FIELDS.forEach((f) => {
         const input = createForm.elements[f];
         if (!input) return;
-        input.value = f.includes('_date') && emp[f] ? emp[f].split('T')[0] : (emp[f] ?? '');
+        input.value = f.includes('_date') && emp[f] ? dateInputValue(emp[f]) : (emp[f] ?? '');
       });
 
       // Рост — список из сетки Положения, а не свободный ввод
@@ -294,22 +294,15 @@
     }
   };
 
-  // В модели поле называется expiry_date; write_off_date не существует
-  function formatDate(raw) {
-    if (!raw) return '—';
-    const [y, m, d] = String(raw).split('T')[0].split('-');
-    return d ? `${d}.${m}.${y}` : String(raw);
-  }
-
   // Срок носки истёк — подсвечиваем, чтобы выдача была видна сразу
   function expiryCell(raw) {
     if (!raw) return '<span class="cell-muted">—</span>';
-    const date = new Date(String(raw).split('T')[0]);
+    const date = new Date(dateInputValue(raw));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const expired = date < today;
     const cls = expired ? 'badge-soft badge-orange' : 'badge-soft badge-purple';
-    const label = expired ? `истёк ${formatDate(raw)}` : formatDate(raw);
+    const label = expired ? `истёк ${formatDateRu(raw)}` : formatDateRu(raw);
     return `<span class="${cls}">${escapeHtml(label)}</span>`;
   }
 
@@ -347,7 +340,7 @@
           <td>${escapeHtml(i.ppe_item?.name ?? '—')}</td>
           <td>${escapeHtml(i.size_value ?? '—')}</td>
           <td>${escapeHtml(String(i.quantity ?? '—'))}</td>
-          <td>${escapeHtml(formatDate(i.issue_date))}</td>
+          <td>${escapeHtml(formatDateRu(i.issue_date))}</td>
           <td>${expiryCell(i.expiry_date)}</td>
           <td class="col-actions">
             <button class="btn btn-icon" data-action="return-issue" data-id="${i.id}"
@@ -369,10 +362,10 @@
     const parts = [];
     if (issue.returned_date) {
       const qty = issue.returned_quantity ? ` (${issue.returned_quantity})` : '';
-      parts.push(`возврат ${formatDate(issue.returned_date)}${qty}`);
+      parts.push(`возврат ${formatDateRu(issue.returned_date)}${qty}`);
     }
     if (issue.write_off_act_number) {
-      const date = issue.write_off_act_date ? ` от ${formatDate(issue.write_off_act_date)}` : '';
+      const date = issue.write_off_act_date ? ` от ${formatDateRu(issue.write_off_act_date)}` : '';
       parts.push(`акт № ${issue.write_off_act_number}${date}`);
     }
     return parts.join('; ');
@@ -638,7 +631,7 @@
     issueForm.reset();
     issueQuantityInput.value = '1';
     issueQuantityHint.textContent = '';
-    issueDateInput.value = new Date().toISOString().split('T')[0];
+    issueDateInput.value = todayIso();
     issueSizeSelect.innerHTML = '<option value="">Сначала выберите СИЗ</option>';
     issueSizeSelect.disabled = true;
     issueSizeHint.textContent = '';
@@ -762,25 +755,20 @@
   const returnTitle = document.getElementById('return-issue-title');
   let returnIssue = null;
 
-  // Даты приходят строками ISO либо с временем — input[type=date] ждёт YYYY-MM-DD
-  function dateValue(raw) {
-    return raw ? String(raw).split('T')[0] : '';
-  }
-
   function openReturnModal(issue) {
     if (!issue || !returnForm) return;
     returnIssue = issue;
 
     const name = issue.ppe_item?.name ?? 'Выдача СИЗ';
     const size = issue.size_value ? `, размер ${issue.size_value}` : '';
-    returnTitle.textContent = `${name}${size} — выдано ${formatDate(issue.issue_date)}`;
+    returnTitle.textContent = `${name}${size} — выдано ${formatDateRu(issue.issue_date)}`;
 
     const fields = returnForm.elements;
-    fields['returned_date'].value = dateValue(issue.returned_date);
+    fields['returned_date'].value = dateInputValue(issue.returned_date);
     // Старая запись могла хранить нечисловое количество («-5», «2 пары») —
     // в поле показываем только цифры, иначе маска молча пропускала бы минус
     fields['returned_quantity'].value = FormHelper.digits(issue.returned_quantity, 3);
-    fields['write_off_act_date'].value = dateValue(issue.write_off_act_date);
+    fields['write_off_act_date'].value = dateInputValue(issue.write_off_act_date);
     fields['write_off_act_number'].value = issue.write_off_act_number ?? '';
 
     updateReturnHint(issue);

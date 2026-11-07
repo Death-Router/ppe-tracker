@@ -106,6 +106,31 @@ window.tableState = function (tbody, colspan, text, options = {}) {
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="${cls}">${escapeHtml(text)}</td></tr>`;
 };
 
+// Даты приходят строками ISO («2026-11-05T00:00:00») или как date.
+// Один набор форматтеров на приложение: раньше `formatDate` и `dateValue`
+// жили в employees_list.js, а `split('T')[0]` дублировался по месту.
+
+// «05.11.2026»; пустое значение — прочерк (или свой текст через empty)
+window.formatDateRu = function (raw, empty = '—') {
+  if (!raw) return empty;
+  const [y, m, d] = String(raw).split('T')[0].split('-');
+  return d ? `${d}.${m}.${y}` : String(raw);
+};
+
+// «2026-11-05» — формат для input[type=date]
+window.dateInputValue = function (raw) {
+  return raw ? String(raw).split('T')[0] : '';
+};
+
+// Сегодняшняя дата в том же формате. Через toISOString() нельзя: это UTC,
+// и в Москве после полуночи он отдаёт вчерашний день (00:30 → 21:30 UTC).
+window.todayIso = function () {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+};
+
 // Модалки Bootstrap: одна обёртка на всё приложение. Раньше в каждом файле
 // было `bootstrap.Modal.getOrCreateInstance(el).show()` / `.hide()` и ручной
 // поиск `.modal-title`; теперь это `ModalHelper`.
