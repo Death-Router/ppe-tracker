@@ -790,13 +790,26 @@ input[type="radio"] {
     gap: var(--space-2);
 }
 
-/* ФИО справа от кнопок, поля друг под другом */
+/* ФИО справа от кнопок: лейбл отдельной колонкой слева от поля */
 .fio-col {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    gap: var(--space-2);
+    min-width: 260px;
+}
+
+.fio-row {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    align-items: center;
     gap: var(--space-3);
-    min-width: 240px;
+}
+
+/* В строке «лейбл + поле» отступ снизу у лейбла не нужен: он выравнивается
+   по центру поля, а не стоит над ним */
+.fio-row .form-label {
+    margin-bottom: 0;
 }
 
 .photo-preview-wrap {
