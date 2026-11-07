@@ -104,11 +104,8 @@ async def create_norm(norm_in: PositionPpeNormCreate, db: AsyncSession = Depends
 
 @router.get("/", response_model=None)
 async def get_norms(
+    params: pagination.PageDep,
     db: AsyncSession = Depends(get_db),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(
-        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
-    ),
     search: str | None = Query(None, description="Поиск по должности или СИЗ"),
     position_id: int | None = Query(None, description="Фильтр по должности"),
     department_id: int | None = Query(None, description="Фильтр по подразделению"),
@@ -150,23 +147,14 @@ async def get_norms(
     total = (
         await db.execute(select(func.count()).select_from(query.subquery()))
     ).scalar_one()
-
-    params = pagination.normalize(page, page_size)
-    stmt = (
-        query.options(*norm_options())
-        .order_by(PositionPpeNorm.id)
-        .offset(params.offset)
-        .limit(params.page_size)
+    stmt = pagination.apply(
+        query.options(*norm_options()).order_by(PositionPpeNorm.id),
+        params,
     )
     result = await db.execute(stmt)
     items = result.scalars().all()
 
-    return pagination.Page.build(
-        [PositionPpeNormRead.model_validate(item) for item in items],
-        total=total,
-        page=params.page,
-        page_size=params.page_size,
-    )
+    return pagination.page_of([PositionPpeNormRead.model_validate(item) for item in items], total, params)
 
 
 def norm_signature(position_id: int, norm: Any) -> tuple[int, int, str, str, str]:

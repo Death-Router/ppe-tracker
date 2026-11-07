@@ -179,12 +179,9 @@ async def create_employee(
 
 @router.get("/", response_model=None)
 async def get_employees(
+    params: pagination.PageDep,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(
-        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
-    ),
     search: str | None = Query(None, description="Поиск по ФИО или табельному"),
     paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
 ):
@@ -220,23 +217,15 @@ async def get_employees(
     total = (
         await db.execute(select(func.count()).select_from(base.subquery()))
     ).scalar_one()
-
-    params = pagination.normalize(page, page_size)
-    query = (
+    query = pagination.apply(
         base.options(*employee_options())
-        .order_by(Employee.last_name, Employee.first_name, Employee.id)
-        .offset(params.offset)
-        .limit(params.page_size)
+        .order_by(Employee.last_name, Employee.first_name, Employee.id),
+        params,
     )
     result = await db.execute(query)
     items = result.scalars().all()
 
-    return pagination.Page.build(
-        [EmployeeRead.model_validate(item) for item in items],
-        total=total,
-        page=params.page,
-        page_size=params.page_size,
-    )
+    return pagination.page_of([EmployeeRead.model_validate(item) for item in items], total, params)
 
 
 @router.get("/{employee_id}", response_model=EmployeeRead)

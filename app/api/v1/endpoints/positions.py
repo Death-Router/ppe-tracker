@@ -45,11 +45,8 @@ async def create_position(pos_in: PositionCreate, db: AsyncSession = Depends(get
 
 @router.get("/", response_model=None)
 async def get_positions(
+    params: pagination.PageDep,
     db: AsyncSession = Depends(get_db),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(
-        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
-    ),
     search: str | None = Query(None, description="Поиск по названию должности"),
     department_id: int | None = Query(None, description="Фильтр по подразделению"),
     paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
@@ -73,22 +70,17 @@ async def get_positions(
     total = (
         await db.execute(select(func.count()).select_from(base.subquery()))
     ).scalar_one()
-
-    params = pagination.normalize(page, page_size)
     result = await db.execute(
-        base.options(selectinload(Position.department))
-        .order_by(Position.name, Position.id)
-        .offset(params.offset)
-        .limit(params.page_size)
+        pagination.apply(
+            base.options(selectinload(Position.department)).order_by(
+                Position.name, Position.id
+            ),
+            params,
+        )
     )
     items = result.scalars().all()
 
-    return pagination.Page.build(
-        [PositionRead.model_validate(item) for item in items],
-        total=total,
-        page=params.page,
-        page_size=params.page_size,
-    )
+    return pagination.page_of([PositionRead.model_validate(item) for item in items], total, params)
 
 @router.get("/{pos_id}", response_model=PositionRead)
 async def get_position(pos_id: int, db: AsyncSession = Depends(get_db)):

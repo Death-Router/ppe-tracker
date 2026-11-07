@@ -335,6 +335,29 @@ PpeSizeGroup → PpeSize (значения размеров)
 |---|---|---|
 | `app/api/versioning.py::ensure_version(current, client)` | 409 «Данные устарели», если запись изменилась с момента чтения | 9 |
 | `app/api/db.py::commit_or_400(db, detail)` | commit; при нарушении ограничения БД — rollback и 400 с текстом сущности | 12 |
+| `pagination.PageDep` (`Depends(pagination.params)`) | `page`/`page_size` с проверкой границ: `page=0` и `page_size=201` дают 422 | 5 |
+| `pagination.apply(stmt, params)` | `limit`/`offset`; `order_by` остаётся у вызывающего | 5 |
+| `pagination.page_of(items, total, params)` | конверт `{items, total, page, page_size, pages}` | 5 |
+
+Список с пагинацией теперь выглядит так:
+
+```python
+async def get_items(
+    params: pagination.PageDep,
+    db: AsyncSession = Depends(get_db),
+    ...
+):
+    if not paginated:
+        return result.scalars().all()
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    query = pagination.apply(base.options(...).order_by(...), params)
+    items = (await db.execute(query)).scalars().all()
+    return pagination.page_of([ItemRead.model_validate(i) for i in items], total, params)
+```
+
+`PageDep` — это `Annotated[PageParams, Depends(params)]`, поэтому параметр стоит
+первым в сигнатуре: Python не разрешает параметр без значения после параметров
+с значениями (`db=Depends(...)`). FastAPI порядок не важен.
 
 **Frontend (`app/static/js/common/dom.js`):**
 
@@ -352,10 +375,9 @@ PpeSizeGroup → PpeSize (значения размеров)
 `if db_x.version != x_in.version`, проверить `js/common/dom.js` и `app/api/`.
 
 **Что ещё осталось скопированным** (осознанно, правка шире задачи):
-`page`/`page_size` + `Page.build` в пяти списках (можно dependency
-`pagination.params()`), `if not obj: raise HTTPException(404)` в каждом
-endpoint'е, `catch → showToast → finally FormValidation.refresh()` в формах
-(12 мест), локальные `show/hideModal` в карточках.
+`if not obj: raise HTTPException(404)` в каждом endpoint'е,
+`catch → showToast → finally FormValidation.refresh()` в формах (12 мест),
+локальные `show/hideModal` в карточках.
 
 ---
 

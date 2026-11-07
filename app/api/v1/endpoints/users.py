@@ -21,12 +21,9 @@ async def require_admin(current_user: User = Depends(get_current_active_user)):
 
 @router.get("/", response_model=None)
 async def get_users(
+    params: pagination.PageDep,
     db: AsyncSession = Depends(get_db),
     _=Depends(require_admin),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(
-        pagination.DEFAULT_PAGE_SIZE, ge=1, le=pagination.MAX_PAGE_SIZE
-    ),
     paginated: bool = Query(False, description="Вернуть страницу с метаданными"),
 ):
     """Пользователи. Без paginated — полный список (нужен для редактирования)."""
@@ -39,17 +36,10 @@ async def get_users(
     total = (
         await db.execute(select(func.count()).select_from(User))
     ).scalar_one()
-
-    params = pagination.normalize(page, page_size)
-    result = await db.execute(base.offset(params.offset).limit(params.page_size))
+    result = await db.execute(pagination.apply(base, params))
     items = result.scalars().all()
 
-    return pagination.Page.build(
-        [UserRead.model_validate(item) for item in items],
-        total=total,
-        page=params.page,
-        page_size=params.page_size,
-    )
+    return pagination.page_of([UserRead.model_validate(item) for item in items], total, params)
 
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db), _ = Depends(require_admin)):
