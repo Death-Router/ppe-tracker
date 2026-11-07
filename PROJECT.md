@@ -1167,8 +1167,10 @@ $ast.ParamBlock.Extent.Text
 # в чистой папке, не задевая рабочий C:\ppe
 sh install-ppe.sh ppe-tracker-api-prod.tar -d /tmp/ppe-check --force || true
 
-# обычный diff по файлам, без процессной подстановки: она есть в bash,
-# но не в POSIX sh, а скрипты в проекте пишутся под sh
+# полный diff — только чтобы увидеть структуру целиком. Отличий будет много
+# и почти все ожидаемые, поэтому вывод читают, а не считают ошибкой.
+# Процессная подстановка <(...) не используется: она есть в bash, но не в
+# POSIX sh, а скрипты в проекте пишутся под sh.
 sed 's/[[:space:]]*$//' docker-compose.prod.yml > /tmp/check-a.yml
 sed 's/[[:space:]]*$//' /tmp/ppe-check/docker-compose.yml > /tmp/check-b.yml
 diff /tmp/check-a.yml /tmp/check-b.yml
@@ -1177,18 +1179,31 @@ diff /tmp/check-a.yml /tmp/check-b.yml
 Отличия в `image`, `ports` и `restart` ожидаемы; **отличий в `volumes`
 быть не должно**.
 
-Сравнение только по `volumes` — без промежуточных файлов и без bash-измов,
-работает в любом `sh`:
+Важная оговорка к предыдущей фразе: **имя тома БД отличается намеренно** —
+в проде `ppe_prod_pgdata` (чтобы dev- и прод-данные не пересекались), в
+установке `ppe_pgdata`. Поэтому «нет отличий в `volumes`» относится к
+**монтированиям `api`**, а не к имени тома Postgres. Полное сравнение
+файлов даёт ~80 строк ожидаемых отличий (комментарии, `build`, `env_file`,
+`container_name`, формат `healthcheck`, имя тома БД), поэтому проверять
+надо прицельно:
 
 ```sh
-# смонтированные пути из эталона и из сгенерированного шаблона
-grep -E '^\s+- .*:/' docker-compose.prod.yml
-grep -E '^\s+- .*:/' /tmp/ppe-check/docker-compose.yml
+# монтирования api: эталон и сгенерированный шаблон — должны совпасть
+sed -n '/^  api:/,/^  db:/p' docker-compose.prod.yml |
+    grep -E '^[[:space:]]+- [^ ]+:/'
+sed -n '/^  api:/,/^  db:/p' /tmp/ppe-check/docker-compose.yml |
+    grep -E '^[[:space:]]+- [^ ]+:/'
 ```
 
-Регулярка ловит строки-монтирования вида `- ppe_photos:/app/data/photos`
-и в `api`, и в `db`; сравнить два вывода глазами быстрее, чем держать в
-голове весь compose.
+`[[:space:]]`, а не `\s`: `\s` понимают GNU grep и busybox, но это не
+POSIX-класс (в BSD/macOS grep он не совпадёт ни с чем, и проверка молча
+покажет «отличий нет»). Сравнивать два вывода глазами быстрее, чем
+держать в голове весь compose.
+
+Если вывод `install-ppe.sh` упал (он вызван с `|| true`), сверять нечего:
+`/tmp/ppe-check/docker-compose.yml` либо отсутствует, либо остался от
+прошлого прогона. Проверка — `ls -l /tmp/ppe-check/docker-compose.yml` и
+время изменения файла.
 
 Шаблоны исправлены: в обоих скриптах у `api` теперь
 `ppe_photos:/app/data/photos` и корневой том `ppe_photos`; в печатаемую
