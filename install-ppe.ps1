@@ -10,6 +10,14 @@
     Требуется Docker Desktop (Windows-контейнеры не нужны — образ Linux,
     Docker Desktop запускает их через WSL2).
 
+    Параметры совпадают с install-ppe.sh: Image, Dir, Port, Clean, AdminLogin,
+    AdminPass, Force. Короткие формы -d и -p тоже работают.
+
+    ВНИМАНИЕ: PowerShell нечувствителен к регистру и запрещает алиас,
+    совпадающий с именем параметра — [Alias('dir')] рядом с $Dir даёт
+    ParameterNameConflictsWithAlias при загрузке. В алиасах только те имена,
+    которых нет среди параметров ($Image, $Clean, $Force).
+
 .EXAMPLE
     .\install-ppe.ps1
     Образ из ppe-tracker-api-data.tar рядом со скриптом, каталог C:\ppe.
@@ -18,16 +26,30 @@
     .\install-ppe.ps1 -Image .\ppe-tracker-api-prod.tar -Clean -Dir D:\apps\ppe
 
 .EXAMPLE
-    .\install-ppe.ps1 -Image .\data.tar -Port 8010 -AdminPass 'СложныйПароль1'
+    .\install-ppe.ps1 -Image .\data.tar -p 8010 -AdminPass 'СложныйПароль1'
+
+.EXAMPLE
+    # Короткие ключи работают как в Linux
+    .\install-ppe.ps1 -Image .\data.tar -d C:\ppe -p 8010
 #>
 [CmdletBinding()]
 param(
     [string]$Image,
+
+    [Alias('d')]
     [string]$Dir = "C:\ppe",
+
+    [Alias('p')]
     [int]$Port = 8000,
+
     [switch]$Clean,
+
+    [Alias('login')]
     [string]$AdminLogin = "admin",
+
+    [Alias('pass')]
     [string]$AdminPass,
+
     [switch]$Force
 )
 

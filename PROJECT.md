@@ -964,6 +964,33 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 -Image .\d
 
 Тот же приём, что в `push-ppe.cmd`.
 
+**Параметры двух скриптов совпадают:** `Image`, `Dir`, `Port`, `Clean`,
+`AdminLogin`, `AdminPass`, `Force`. Команда для Windows и Linux отличается
+только префиксом флага — `-d` против `--dir`.
+
+Достигается это алиасами, и здесь есть ловушка PowerShell: он
+**нечувствителен к регистру** и запрещает алиас, совпадающий с именем
+параметра. `[Alias('dir')]` рядом с `$Dir` даёт при загрузке скрипта
+
+```
+ParameterNameConflictsWithAlias: The parameter 'Dir' cannot be specified
+because it conflicts with the parameter alias of the same name
+```
+
+— то есть скрипт не запустится вовсе, и ошибка вылезет не при редактировании,
+а при первом вызове. Поэтому в алиасах только те имена, которых нет среди
+параметров: `-d`, `-p`, `-login`, `-pass`. Проверка привязки:
+
+```powershell
+# разбор param-блока без выполнения тела скрипта
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    '.\install-ppe.ps1', [ref]$null, [ref]$null)
+$ast.ParamBlock.Extent.Text
+```
+
+`ParseFile` ловит только синтаксис. Конфликт алиасов виден при **загрузке**
+скрипта — то есть только живым запуском или вызовом `& .\install-ppe.ps1 -d x`.
+
 **Формат `.tar` общий для Windows и Linux.** `docker save` пишет OCI-архив,
 `docker load` читает его на любой платформе — конвертировать нечего.
 Сжатый `.tar.gz` распаковывают: `gzip -d` на Linux, `install-ppe.ps1` — сам,
