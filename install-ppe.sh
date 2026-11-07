@@ -96,8 +96,8 @@ gen_secret() {
     if command -v python3 >/dev/null 2>&1; then
         python3 -c "import secrets,sys; sys.stdout.write(secrets.token_urlsafe($n))"
     elif [ -r /dev/urandom ]; then
-        # base64 без переводов строк; tokute = ceil(n*3/4) байт энтропии
-        bytes=$(( (n * 3 + 3) / 4 ))
+        # python3 нет: берём символы из /dev/urandom. tr оставляет только
+        # URL-безопасный алфавит, head -c обрезает до нужной длины.
         LC_ALL=C tr -dc 'A-Za-z0-9_-' < /dev/urandom | head -c "$n" || true
     else
         die "нет python3 и нет /dev/urandom: задайте пароли через --admin-pass"
@@ -115,7 +115,7 @@ ok "docker: $(docker --version | sed 's/^Docker version //; s/,.*//')"
 ok "compose: $(docker compose version --short 2>/dev/null || echo v2)"
 
 # --- Файл образа ----------------------------------------------------------
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 if [ -z "$IMAGE" ]; then
     for cand in ppe-tracker-api-data.tar ppe-tracker-api-prod.tar \
@@ -342,7 +342,10 @@ printf '  docker compose restart api   # перезапуск\n'
 printf '  docker compose down          # остановить (данные сохранятся)\n'
 printf '\n'
 printf 'Резервная копия базы:\n'
-printf '  docker exec ppe-db pg_dump -U ppe -d ppe_db --no-owner > backup_$(date +%%F).sql\n'
+# shellcheck disable=SC2016  # печатаем инструкцию: $(date) должен раскрыться
+# у пользователя при выполнении, а не сейчас
+printf '  docker exec ppe-db sh -c %s > backup_$(date +%%F).sql\n' \
+    "'pg_dump -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" --no-owner'"
 printf '\n'
 
 if [ "$CLEAN" != "1" ]; then

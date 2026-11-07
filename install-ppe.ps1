@@ -303,9 +303,9 @@ Write-Host "  docker compose restart api   # перезапуск"
 Write-Host "  docker compose down          # остановить (данные сохранятся)"
 Write-Host ""
 Write-Host "Резервная копия базы:"
-Write-Host "  docker exec ppe-db pg_dump -U ppe -d ppe_db --no-owner > backup_$(Get-Date -Format 'yyyy-MM-dd').sql"
+Write-Host "  docker exec ppe-db sh -c 'pg_dump -U `$POSTGRES_USER -d `$POSTGRES_DB --no-owner' > backup_$(Get-Date -Format 'yyyy-MM-dd').sql"
 Write-Host ""
 
 if (-not $Clean) {
-    Write-Warn "в образе персональные данные сотрудников - не публикуйте образ в registry"
+    Write-Warn "в образе персональные данные сотрудников — не публикуйте образ в registry"
 }
