@@ -7,4 +7,6 @@
 # подкладывается в data/.
 *
 !data/**
+!docker/
+!docker/entrypoint-data.sh
 !entrypoint-data.sh
