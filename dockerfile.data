@@ -24,6 +24,12 @@ USER root
 # Пользователь задан числом, а не именем: id остаётся тем же, если в базовом
 # образе имя пользователя поменяют.
 COPY --chown=10001:10001 data/dump.sql /app/data/dump.sql
+# Фото сотрудников: в дампе только имена файлов, сами файлы — на томе.
+# Кладём копию рядом (не в /app/data/photos: это точка монтирования тома),
+# entrypoint-data.sh разложит её в том при старте. При ручной сборке из корня
+# каталог photos/ должен существовать (может быть пустым) — make-data-image.sh
+# создаёт его сам.
+COPY --chown=10001:10001 photos/ /app/data/photo-seed/
 COPY docker/entrypoint-data.sh /usr/local/bin/entrypoint-data.sh
 
 # CRLF ломает шебанг так же, как в entrypoint.sh (PROJECT.md, ловушка 11):

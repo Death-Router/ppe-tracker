@@ -4,9 +4,10 @@
 # где эти правила не нужны: там лежат только дамп и entrypoint-data.sh.
 # Этот файл нужен, если сборка пойдёт из корня проекта (ручной docker build
 # с -f dockerfile.data .): тогда в контекст не должен уехать мусор, а дамп
-# подкладывается в data/.
+# подкладывается в data/, фото сотрудников — в photos/.
 *
 !data/**
+!photos/**
 !docker/
 !docker/entrypoint-data.sh
 !entrypoint-data.sh

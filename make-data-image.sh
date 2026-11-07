@@ -37,6 +37,8 @@ KEEP_DUMP=0
 SAVE=0
 SAVE_PATH=
 GZIP_DEPRECATED=0
+# Откуда брать фото сотрудников в режиме --with-data (в dev — bind-монт ./data)
+PHOTO_SEED_DIR=${PHOTO_SEED_DIR:-data/photos}
 
 usage() {
     cat <<'EOF'
@@ -80,6 +82,11 @@ make-data-image.sh — собрать образ PPE Tracker и упаковат
 Внутри образа с данными дамп лежит в /app/data/dump.sql и применяется при
 первом старте на ПУСТОЙ базе; повторно не накатывается (маркер .dump-loaded).
 Перезалить поверх живых данных: FORCE=1.
+
+Фото сотрудников (data/photos) в дамп не входят, поэтому в режиме --with-data
+они копируются в образ отдельно: /app/data/photo-seed, а entrypoint-data.sh
+раскладывает их в том при старте, не перетирая уже загруженные файлы.
+Источник можно переопределить: PHOTO_SEED_DIR=/путь/к/photos.
 
 Схема в обоих случаях разворачивается миграциями (alembic upgrade head) —
 AUTO_MIGRATE=1 при первом старте.
@@ -300,6 +307,26 @@ else
     # под другим uid — выравниваем явно.
     chmod 0644 "$TMP_DIR/data/dump.sql"
     ok "дамп готов: $(wc -c < "$TMP_DIR/data/dump.sql" | tr -d ' ') байт"
+
+    # Фото сотрудников в дампе нет: в БД только имена файлов, байты лежат на
+    # томе (в dev — ./data/photos). Без копии на новой машине все карточки
+    # показывают «нет фото», хотя строки employee_photos приехали.
+    step "Кладу фото сотрудников в контекст сборки"
+    mkdir -p "$TMP_DIR/photos"
+    photo_count=0
+    if [ -d "$PHOTO_SEED_DIR" ]; then
+        for f in "$PHOTO_SEED_DIR"/*; do
+            [ -f "$f" ] || continue
+            cp "$f" "$TMP_DIR/photos/" || die "не удалось скопировать $f"
+            photo_count=$((photo_count + 1))
+        done
+    fi
+    chmod -R a+rX "$TMP_DIR/photos" 2>/dev/null || true
+    if [ "$photo_count" -gt 0 ]; then
+        ok "фото: $photo_count файл(ов) из $PHOTO_SEED_DIR"
+    else
+        warn "фото не найдено в $PHOTO_SEED_DIR — на новой машине карточки будут без снимков"
+    fi
 
     step "Собираю базовый образ $PROD_IMAGE"
     docker build -f dockerfile.prod -t "$PROD_IMAGE" . || die "сборка $PROD_IMAGE не удалась"

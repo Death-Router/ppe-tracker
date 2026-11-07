@@ -18,6 +18,40 @@ WAIT_ATTEMPTS=${WAIT_ATTEMPTS:-90}
 
 log() { echo "data-image: $*"; }
 
+# Фото сотрудников лежат в томе (PHOTO_DIR), в дамп они не входят: в БД только
+# имена файлов из employee_photos. dockerfile.data кладёт копию в
+# /app/data/photo-seed — раскладываем её в том, не перетирая файлы, которые
+# уже загрузили через интерфейс. Вызывается перед каждым запуском приложения,
+# а не только при заливке дампа: фото могут отсутствовать и на базе, которая
+# уже наполнена.
+seed_photos() {
+    seed_dir=${PHOTO_SEED_DIR:-/app/data/photo-seed}
+    photos_dir=${PHOTO_DIR_ABS:-/app/data/photos}
+    [ -d "$seed_dir" ] || return 0
+    mkdir -p "$photos_dir" 2>/dev/null || true
+    seeded=0
+    skipped=0
+    for f in "$seed_dir"/*; do
+        [ -f "$f" ] || continue
+        name=${f##*/}
+        if [ -e "$photos_dir/$name" ]; then
+            skipped=$((skipped + 1))
+            continue
+        fi
+        if cp "$f" "$photos_dir/$name" 2>/dev/null; then
+            seeded=$((seeded + 1))
+        else
+            log "не удалось скопировать фото $name (права на $photos_dir?)"
+        fi
+    done
+    if [ "$seeded" -gt 0 ]; then
+        log "фото: скопировано $seeded файл(ов) в $photos_dir"
+    elif [ "$skipped" -gt 0 ]; then
+        log "фото: уже на месте ($skipped файл(ов))"
+    fi
+    return 0
+}
+
 if [ ! -f "$DUMP" ]; then
     echo "data-image: нет дампа $DUMP — образ собран без данных?" >&2
     exit 1
@@ -36,11 +70,9 @@ from sqlalchemy import text
 
 from app.db.session import async_session_maker
 
-
 async def ping() -> None:
     async with async_session_maker() as db:
         await db.execute(text('SELECT 1'))
-
 
 try:
     asyncio.run(ping())
@@ -84,7 +116,8 @@ fi
 # 3. Дамп уже применялся в этом томе?
 if [ -f "$MARKER" ]; then
     log "дамп уже применён ранее ($MARKER) — данные не перезаливаем"
-    exec /usr/local/bin/entrypoint.sh "$@"
+    seed_photos
+exec /usr/local/bin/entrypoint.sh "$@"
 fi
 
 # 4. Страховка от затирания живых данных: дамп идёт только в пустую базу.
@@ -96,12 +129,10 @@ from sqlalchemy import text
 
 from app.db.session import async_session_maker
 
-
 async def count() -> int:
     async with async_session_maker() as db:
         result = await db.execute(text('SELECT count(*) FROM users'))
         return int(result.scalar_one())
-
 
 print(asyncio.run(count()))
 ")
@@ -115,7 +146,8 @@ if [ "$rows" != "0" ]; then
     # «данные уже есть»: заливать нечего, просто запускаем приложение.
     if [ "${FORCE:-0}" != "1" ]; then
         log "в базе уже есть данные (пользователей: $rows) — дамп не заливаем"
-        exec /usr/local/bin/entrypoint.sh "$@"
+        seed_photos
+exec /usr/local/bin/entrypoint.sh "$@"
     fi
     log "FORCE=1: перезаливаю данные поверх существующих"
 fi
@@ -206,4 +238,5 @@ fi
 touch "$MARKER"
 log "данные залиты, маркер записан"
 
+seed_photos
 exec /usr/local/bin/entrypoint.sh "$@"

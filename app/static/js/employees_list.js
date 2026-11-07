@@ -47,14 +47,17 @@
     });
   }
 
-  // Кэш браузера сбрасываем по времени загрузки: адрес меняется после замены
-  // фото, поэтому браузер не показывает старое из кэша
+  // Версия в адресе сбрасывает кэш после замены фото; при ошибке загрузки
+  // (файл не доехал вместе с томом) показываем силуэт, а не «битую» картинку
   function photoUrl(employee) {
     const version = employee?.photo?.uploaded_at
       ? `?v=${encodeURIComponent(employee.photo.uploaded_at)}`
       : '';
     return `/api/v1/employees/${employee.id}/photo${version}`;
   }
+
+  // Значок-заглушка: используется и когда фото нет в БД, и когда файл не найден
+  const AVATAR_EMPTY = '<span class="avatar avatar--empty"><i class="bi bi-person"></i></span>';
 
   function renderTable(employees) {
     if (!employees.length) {
@@ -69,7 +72,7 @@
       // Фото грузим лениво: в списке 20 строк, и каждая — отдельный запрос
       const avatar = e.photo
         ? `<img class="avatar" src="${photoUrl(e)}" alt="" loading="lazy">`
-        : '<span class="avatar avatar--empty"><i class="bi bi-person"></i></span>';
+        : AVATAR_EMPTY;
       return `
       <tr data-employee-id="${e.id}">
         <td><div class="cell-person">${avatar}<span>${escapeHtml(fio)}</span></div></td>
@@ -82,6 +85,16 @@
         </td>
       </tr>
     `}).join('');
+
+    // Строка в employee_photos есть, а файла в томе может не быть (базу
+    // перенесли, фото — нет): сервер ответит 404, и браузер нарисует «битую»
+    // картинку. Подменяем на силуэт. Делегирование не подходит — событие
+    // error не всплывает, поэтому слушатели ставим на сами картинки.
+    tbody.querySelectorAll('img.avatar').forEach(img => {
+      img.addEventListener('error', () => {
+        img.outerHTML = AVATAR_EMPTY;
+      }, { once: true });
+    });
   }
 
   // ФИО передаём через data-атрибут, а не в onclick: подстановка строки в JS-код
@@ -1076,6 +1089,18 @@
   // FormData — API.request рассчитан на JSON.
   photoUploadBtn?.addEventListener('click', () => photoInput?.click());
   photoInput?.addEventListener('change', () => uploadPhoto(photoInput.files?.[0]));
+
+  // Файл мог не приехать вместе с томом: сервер отвечает 404, и браузер нарисовал
+  // бы «битую» картинку с alt-текстом. Показываем силуэт и говорим причину.
+  photoPreview?.addEventListener('error', () => {
+    photoPreview.classList.add('d-none');
+    photoPreview.removeAttribute('src');
+    photoEmpty?.classList.remove('d-none');
+    if (photoHint) {
+      photoHint.textContent = 'Файл фото не найден на сервере — загрузите заново';
+      photoHint.classList.add('text-danger');
+    }
+  });
 
   photoDeleteBtn?.addEventListener('click', async () => {
     if (!editingId || !confirm('Удалить фото сотрудника?')) return;
