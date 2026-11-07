@@ -796,16 +796,13 @@ input[type="radio"] {
     width: 120px;
 }
 
-/* Значки «Загрузить»/«Удалить» появляются при наведении на фото */
+/* Значки «Загрузить»/«Удалить» появляются при наведении на фото.
+   Камера — в левом верхнем углу снимка, корзина — в правом нижнем. */
 .photo-overlay {
     position: absolute;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
     border-radius: var(--radius);
-    background: rgba(36, 50, 68, 0.55);
+    background: rgba(36, 50, 68, 0.45);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s ease;
@@ -818,17 +815,20 @@ input[type="radio"] {
 }
 
 .photo-icon {
+    position: absolute;
+    top: var(--space-2);
+    left: var(--space-2);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     border: 0;
     border-radius: 50%;
     background: var(--surface);
     color: var(--brand);
-    font-size: 1rem;
+    font-size: 0.95rem;
     line-height: 1;
     box-shadow: var(--shadow-sm);
     cursor: pointer;
@@ -840,8 +840,12 @@ input[type="radio"] {
     transform: scale(1.08);
 }
 
-/* Удаление — оранжевый по дизайн-системе */
+/* Удаление — правый нижний угол, оранжевый по дизайн-системе */
 .photo-icon--danger {
+    top: auto;
+    left: auto;
+    right: var(--space-2);
+    bottom: var(--space-2);
     background: var(--accent);
     color: #fff;
 }
