@@ -777,20 +777,20 @@ input[type="radio"] {
    -------------------------------------------------------------------------- */
 .photo-row {
     display: flex;
-    gap: var(--space-5);
+    gap: var(--space-4);
     align-items: flex-start;
     margin-bottom: var(--space-4);
 }
 
-/* Колонка фото: превью, под ним стопкой кнопки «Загрузить» и «Удалить» */
-.photo-col {
+/* Колонка кнопок справа от фото: «Загрузить» и под ней «Удалить» */
+.photo-actions {
     flex: 0 0 150px;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
 }
 
-/* ФИО справа от фото, поля друг под другом */
+/* ФИО справа от кнопок, поля друг под другом */
 .fio-col {
     flex: 1 1 auto;
     display: flex;
@@ -867,13 +867,13 @@ input[type="radio"] {
         width: auto;
     }
 
-    /* На узком экране фото и ФИО — в столбик */
+    /* На узком экране фото, кнопки и ФИО — в столбик */
     .photo-row {
         flex-direction: column;
         gap: var(--space-3);
     }
 
-    .photo-col {
+    .photo-actions {
         flex: 0 0 auto;
         width: 100%;
         max-width: 200px;

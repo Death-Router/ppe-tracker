@@ -75,13 +75,13 @@
                                  друг под другом. Файл лежит на томе, отдаётся через API
                                  (персональные данные — без прямой раздачи из /static) -->
                             <div class="photo-row">
-                                <div class="photo-col">
-                                    <div class="photo-preview-wrap">
-                                        <img id="emp-photo-preview" class="photo-preview d-none" alt="Фото сотрудника">
-                                        <div id="emp-photo-empty" class="photo-preview photo-preview--empty">
-                                            <i class="bi bi-person"></i>
-                                        </div>
+                                <div class="photo-preview-wrap">
+                                    <img id="emp-photo-preview" class="photo-preview d-none" alt="Фото сотрудника">
+                                    <div id="emp-photo-empty" class="photo-preview photo-preview--empty">
+                                        <i class="bi bi-person"></i>
                                     </div>
+                                </div>
+                                <div class="photo-actions">
                                     <input type="file" id="emp-photo-input"
                                            accept="image/jpeg,image/png,image/webp" hidden>
                                     <button type="button" class="btn btn-sm btn-brand w-100" id="emp-photo-upload">
