@@ -85,6 +85,81 @@ def ensure_balance_not_negative(quantity: str, returned_quantity: str) -> None:
         )
 
 
+def issue_balance(issue: EmployeePpeIssue) -> Decimal | None:
+    """Сколько этого СИЗ ещё на руках по одной записи.
+
+    None — количество записано не числом («2 пары»): остаток не посчитать,
+    и такую запись считаем действующей, чтобы не пропустить дубль молча.
+    """
+    text = (issue.quantity or "").replace("\u00a0", " ").replace(",", ".").strip()
+    try:
+        issued = Decimal(text)
+    except InvalidOperation:
+        return None
+    returned_text = (issue.returned_quantity or "").replace(",", ".").strip()
+    if not returned_text:
+        return issued
+    try:
+        return issued - Decimal(returned_text)
+    except InvalidOperation:
+        return None
+
+
+async def ensure_not_duplicate(
+    db, employee_id: int, ppe_item: PpeItem, force: bool, new_quantity: str
+) -> None:
+    """Контроль повторной выдачи одного и того же СИЗ.
+
+    Раньше можно было выдать одно и то же сколько угодно раз, лишь бы каждая
+    запись вписывалась в норму: в карточке появлялись две строки «ботинки, 2»
+    на одну и ту же дату, а сколько реально на руках — не понять. Теперь
+    повторная выдача требует явного подтверждения (force=true).
+    """
+    result = await db.execute(
+        select(EmployeePpeIssue)
+        .where(
+            EmployeePpeIssue.employee_id == employee_id,
+            EmployeePpeIssue.ppe_item_id == ppe_item.id,
+        )
+        .order_by(EmployeePpeIssue.issue_date, EmployeePpeIssue.id)
+    )
+    rows = result.scalars().all()
+
+    on_hand_rows = []
+    total = Decimal(0)
+    unknown = False
+    for row in rows:
+        balance = issue_balance(row)
+        if balance is None:
+            on_hand_rows.append(row)
+            unknown = True
+        elif balance > 0:
+            on_hand_rows.append(row)
+            total += balance
+
+    if not on_hand_rows or force:
+        return
+
+    first = on_hand_rows[0]
+    if unknown:
+        what = f"записей {len(on_hand_rows)}, часть количеств записана не числом"
+    elif len(on_hand_rows) == 1:
+        what = f"выдано {first.quantity}"
+    else:
+        what = f"записей {len(on_hand_rows)}, на руках {total.normalize():f}"
+
+    until = ""
+    if first.expiry_date:
+        until = f", действует до {first.expiry_date.strftime('%d.%m.%Y')}"
+
+    detail = (
+        f"У сотрудника уже есть «{ppe_item.name}»: {what} "
+        f"(первая выдача {first.issue_date.strftime('%d.%m.%Y')}{until}). "
+        "Повторная выдача возможна только с подтверждением: передайте force=true."
+    )
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+
 @router.post("/", response_model=EmployeePpeIssueRead, status_code=status.HTTP_201_CREATED)
 async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depends(get_db)):
     # 1. Проверяем сотрудника
@@ -93,7 +168,12 @@ async def create_issue(issue_in: EmployeePpeIssueCreate, db: AsyncSession = Depe
 
     # 2. Проверяем СИЗ
     item_res = await db.execute(select(PpeItem).where(PpeItem.id == issue_in.ppe_item_id))
-    ensure_found(item_res.scalar_one_or_none(), "Наименование СИЗ не найдено")
+    ppe_item = ensure_found(item_res.scalar_one_or_none(), "Наименование СИЗ не найдено")
+
+    # 2a. Повторная выдача того же СИЗ — только с подтверждением (409 + force)
+    await ensure_not_duplicate(
+        db, issue_in.employee_id, ppe_item, issue_in.force, issue_in.quantity
+    )
 
     # 3. Рассчитываем срок годности на основе нормы для должности сотрудника
     expiry_date = None

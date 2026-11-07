@@ -530,10 +530,26 @@
     return size?.size_value ?? null;
   }
 
-  // Сколько раз эта СИЗ уже выдана сотруднику — для пометки в списке
-  function issuedCount(itemId) {
-    const issues = currentEmployee?.ppe_issues ?? [];
-    return issues.filter((i) => i.ppe_item_id === itemId).length;
+  // Остаток по одной выдаче: выдано − возвращено. null — количество записано
+  // не числом («2 пары»), тогда остаток неизвестен.
+  function issueBalance(issue) {
+    const issued = firstNumber(issue?.quantity);
+    if (issued === null) return null;
+    const returned = firstNumber(issue?.returned_quantity) ?? 0;
+    return issued - returned;
+  }
+
+  // Выдачи этого СИЗ, которые ещё на руках: остаток больше нуля или неизвестен.
+  // Именно они делают новую выдачу повторной.
+  function activeIssues(itemId) {
+    return (currentEmployee?.ppe_issues ?? []).filter(
+      (i) => i.ppe_item_id === itemId && (issueBalance(i) ?? 1) > 0
+    );
+  }
+
+  // Сколько всего этого СИЗ на руках (для подсказки и сравнения с нормой)
+  function onHandQuantity(itemId) {
+    return activeIssues(itemId).reduce((sum, i) => sum + (issueBalance(i) ?? 1), 0);
   }
 
   // Размеры размерной группы берём из справочника и запоминаем: при открытии
@@ -651,6 +667,18 @@
         );
       }
 
+      const active = activeIssues(itemId);
+      const onHand = onHandQuantity(itemId);
+      if (active.length) {
+        const first = active[0];
+        const until = first.expiry_date ? `, до ${formatDateRu(first.expiry_date)}` : '';
+        warnings.push(
+          `У сотрудника уже есть это СИЗ: на руках ${onHand} `
+          + `(записей ${active.length}, первая от ${formatDateRu(first.issue_date)}${until}). `
+          + 'Новая выдача будет повторной.'
+        );
+      }
+
       const norm = normByItem.get(itemId);
       const quantity = issueQuantityInput?.value?.trim() ?? '';
       if (norm && quantity) {
@@ -663,6 +691,13 @@
         if (!same) {
           warnings.push(
             `Количество «${quantity}» не совпадает с нормой для должности («${normQuantity}»).`
+          );
+        }
+        // Норма — на период. Если на руках уже есть, новая выдача выходит за неё
+        const add = firstNumber(quantity);
+        if (right !== null && add !== null && onHand + add > right) {
+          warnings.push(
+            `С учётом остатка получится ${onHand + add} при норме ${right} — выдача выходит за норму.`
           );
         }
       }
@@ -724,9 +759,10 @@
 
     issueItemSelect.innerHTML = '<option value="">Выберите СИЗ...</option>' +
       normItems.map(({ item, norm }) => {
-        const issued = issuedCount(item.id);
+        const onHand = onHandQuantity(item.id);
         const total = norm.quantity ?? '1';
-        const mark = issued ? ` — выдано ${issued} из ${total}` : '';
+        // Показываем остаток, а не число строк: две записи «2» — это 4 на руках
+        const mark = onHand ? ` — на руках ${onHand} из ${total}` : '';
         return `<option value="${item.id}">${escapeHtml(item.name)}${escapeHtml(mark)}</option>`;
       }).join('');
 
@@ -811,6 +847,24 @@
         ? null
         : (issueMethodSelect?.value || null),
     };
+
+    // Повторная выдача того же СИЗ — только после явного подтверждения.
+    // Раньше можно было выдать «ботинки, 2» сколько угодно раз, и в карточке
+    // появлялись две одинаковые строки на одну дату.
+    const active = activeIssues(payload.ppe_item_id);
+    if (active.length) {
+      const first = active[0];
+      const onHand = onHandQuantity(payload.ppe_item_id);
+      const until = first.expiry_date ? `, действует до ${formatDateRu(first.expiry_date)}` : '';
+      const question = `У сотрудника уже есть это СИЗ: на руках ${onHand} `
+        + `(записей ${active.length}, первая выдана ${formatDateRu(first.issue_date)}${until}).
+
+`
+        + `Выдать ещё ${payload.quantity}?`;
+      if (!window.confirm(question)) return;
+      // Сервер тоже проверяет дубль: без force он ответит 409
+      payload.force = true;
+    }
 
     await FormHelper.send(issueForm, async () => {
       await API.post('/api/v1/employee_ppe_issues/', payload);

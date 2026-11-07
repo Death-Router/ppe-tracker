@@ -20,7 +20,14 @@ class EmployeePpeIssueBase(BaseModel):
     write_off_act_number: str | None = Field(None, max_length=50)
 
 class EmployeePpeIssueCreate(EmployeePpeIssueBase):
-    pass
+    """Новая выдача.
+
+    force — подтверждение повторной выдачи: если у сотрудника уже есть это СИЗ
+    (остаток по прежним выдачам больше нуля), сервер отвечает 409 и просит
+    подтверждение. Флаг в БД не пишется, он живёт только в запросе.
+    """
+
+    force: bool = False
 
 class EmployeePpeIssueUpdate(BaseModel):
     """Правка возврата и акта списания по уже выданной записи.
