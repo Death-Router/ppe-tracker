@@ -2,7 +2,6 @@
   const tbody = document.querySelector('#functions-table tbody');
   const createForm = document.getElementById('create-form');
   const modalElement = document.getElementById('createModal');
-  const modalTitle = modalElement.querySelector('.modal-title');
   const submitBtn = modalElement.querySelector('button[type="submit"]');
 
   let editingId = null;
@@ -41,10 +40,10 @@
   window.openCreateModal = () => {
     editingId = null;
     editingVersion = null;
-    modalTitle.textContent = 'Новая функция';
+    ModalHelper.setTitle(modalElement, 'Новая функция');
     submitBtn.textContent = 'Создать';
     createForm.reset();
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    ModalHelper.show(modalElement);
   };
 
   // Редактирование
@@ -56,11 +55,11 @@
       
       editingId = id;
       editingVersion = func.version ?? null;
-      modalTitle.textContent = 'Редактирование функции';
+      ModalHelper.setTitle(modalElement, 'Редактирование функции');
       submitBtn.textContent = 'Сохранить';
       createForm.elements['name'].value = func.name;
       
-      bootstrap.Modal.getOrCreateInstance(modalElement).show();
+      ModalHelper.show(modalElement);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -79,7 +78,7 @@
       }
     }, {
       onSuccess: () => {
-        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        ModalHelper.hide(modalElement);
         createForm.reset();
         loadFunctions();
       },

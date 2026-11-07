@@ -110,7 +110,6 @@
   }
 
   const modalEl = document.getElementById('createModal');
-  const modalTitle = modalEl.querySelector('.modal-title');
   const submitBtn = modalEl.querySelector('button[type="submit"]');
   const versionInput = document.getElementById('pos-version');
 
@@ -118,11 +117,11 @@
 
   function openCreateModal() {
     editingId = null;
-    modalTitle.textContent = 'Новая должность';
+    ModalHelper.setTitle(modalEl, 'Новая должность');
     submitBtn.textContent = 'Создать';
     createForm.reset();
     if (versionInput) versionInput.value = '';
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    ModalHelper.show(modalEl);
   }
 
   window.openEditModal = async (id) => {
@@ -130,14 +129,14 @@
       // Значения и версию берём из API: строка может быть не на текущей странице
       const pos = await API.get(`/api/v1/positions/${id}`);
       editingId = id;
-      modalTitle.textContent = 'Редактирование должности';
+      ModalHelper.setTitle(modalEl, 'Редактирование должности');
       submitBtn.textContent = 'Сохранить';
 
       createForm.elements['name'].value = pos.name ?? '';
       createForm.elements['department_id'].value = pos.department_id ?? '';
       if (versionInput) versionInput.value = pos.version ?? '';
 
-      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      ModalHelper.show(modalEl);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -159,7 +158,7 @@
       }
     }, {
       onSuccess: () => {
-        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        ModalHelper.hide(modalEl);
         createForm.reset();
         loadData();
       },

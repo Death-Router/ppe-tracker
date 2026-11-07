@@ -7,7 +7,6 @@
   // настройках давал null и ошибку «Cannot set properties of null» при
   // открытии и редактировании пользователя.
   const modalElement = form?.closest('.modal') || document.getElementById('createModal');
-  const modalTitle = modalElement?.querySelector('.modal-title') || null;
   const userIdInput = document.getElementById('user-id');
   const passwordInput = document.getElementById('password');
   const passwordHint = document.getElementById('password-hint');
@@ -19,18 +18,6 @@
 
   // Если на странице нет таблицы пользователей, просто выходим
   if (!tbody) return;
-
-  function showModal() {
-    if (modalElement) bootstrap.Modal.getOrCreateInstance(modalElement).show();
-  }
-
-  function hideModal() {
-    if (modalElement) bootstrap.Modal.getOrCreateInstance(modalElement).hide();
-  }
-
-  function setModalTitle(text) {
-    if (modalTitle) modalTitle.textContent = text;
-  }
 
   let allUsers = [];
   let allDepartments = [];
@@ -79,13 +66,13 @@
 
   window.openCreateModal = () => {
     editingId = null;
-    setModalTitle('Новый пользователь');
+    ModalHelper.setTitle(modalElement, 'Новый пользователь');
     userIdInput.value = '';
     form.reset();
     passwordInput.required = true;
     passwordHint.classList.add('d-none');
     window.FormValidation.refresh(form);
-    showModal();
+    ModalHelper.show(modalElement);
   };
 
   window.editUser = async (id) => {
@@ -94,7 +81,7 @@
       if (!user) throw new Error('Пользователь не найден');
       
       editingId = id;
-      setModalTitle('Редактирование пользователя');
+      ModalHelper.setTitle(modalElement, 'Редактирование пользователя');
       userIdInput.value = id;
       
       form.elements['username'].value = user.username;
@@ -108,7 +95,7 @@
       window.FormValidation.refresh(form);
       form.elements['is_active'].checked = user.is_active;
       
-      showModal();
+      ModalHelper.show(modalElement);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -135,7 +122,7 @@
       }
     }, {
       onSuccess: () => {
-        hideModal();
+        ModalHelper.hide(modalElement);
         loadData();
       },
     });

@@ -7,7 +7,6 @@
   const searchInput = document.getElementById('search-input');
   const createForm = document.getElementById('create-form');
   const modalElement = document.getElementById('createModal');
-  const modalTitle = modalElement ? modalElement.querySelector('.modal-title') : null;
   const submitBtn = createForm ? createForm.querySelector('button[type="submit"]') : null;
 
   let items = [];
@@ -71,12 +70,12 @@
   }
 
   window.openCreateModal = () => {
-    if (!createForm || !modalTitle || !submitBtn) return;
+    if (!createForm || !submitBtn) return;
     editingId = null;
-    modalTitle.textContent = 'Новый пункт норм';
+    ModalHelper.setTitle(modalElement, 'Новый пункт норм');
     submitBtn.textContent = 'Создать';
     createForm.reset();
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    ModalHelper.show(modalElement);
   };
 
   window.editTypicalNorm = async (id) => {
@@ -90,12 +89,12 @@
       if (!norm) throw new Error('Пункт не найден');
 
       editingId = id;
-      modalTitle.textContent = 'Редактирование пункта';
+      ModalHelper.setTitle(modalElement, 'Редактирование пункта');
       submitBtn.textContent = 'Сохранить';
       createForm.elements['clause'].value = norm.clause;
       createForm.elements['description'].value = norm.description;
 
-      bootstrap.Modal.getOrCreateInstance(modalElement).show();
+      ModalHelper.show(modalElement);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -121,7 +120,7 @@
         validate: (payload) =>
           !payload.clause || !payload.description ? 'Заполните пункт и описание' : null,
         onSuccess: () => {
-          bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+          ModalHelper.hide(modalElement);
           createForm.reset();
           loadItems();
         },

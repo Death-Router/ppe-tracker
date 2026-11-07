@@ -14,7 +14,7 @@
   const btnBulkDelete = document.getElementById('btn-bulk-delete');
 
   // Элементы модалки массового редактирования
-  const bulkEditModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkEditModal'));
+  const bulkEditModal = document.getElementById('bulkEditModal');
   const bulkFunctionSelect = document.getElementById('bulk-function');
   const bulkSizeGroupSelect = document.getElementById('bulk-size-group');
   const bulkUnitSelect = document.getElementById('bulk-unit');
@@ -179,7 +179,7 @@
     bulkFunctionSelect.value = '';
     bulkSizeGroupSelect.value = '';
     bulkUnitSelect.value = '';
-    bulkEditModal.show();
+    ModalHelper.show(bulkEditModal);
   };
 
   window.applyBulkEdit = async () => {
@@ -203,7 +203,7 @@
         })
       });
       window.showToast('Выбранные СИЗ обновлены', 'success');
-      bulkEditModal.hide();
+      ModalHelper.hide(bulkEditModal);
       selectedIds.clear();
       loadItems();
     } catch (err) {
@@ -247,7 +247,6 @@
 
 
   const modalEl = document.getElementById('createModal');
-  const modalTitle = modalEl.querySelector('.modal-title');
   const submitBtn = modalEl.querySelector('button[type="submit"]');
   const versionInput = document.getElementById('item-version');
 
@@ -255,18 +254,18 @@
 
   function openCreateModal() {
     editingId = null;
-    modalTitle.textContent = 'Новое наименование СИЗ';
+    ModalHelper.setTitle(modalEl, 'Новое наименование СИЗ');
     submitBtn.textContent = 'Создать';
     createForm.reset();
     if (versionInput) versionInput.value = '';
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    ModalHelper.show(modalEl);
   }
 
   window.openEditModal = async (id) => {
     try {
       const item = await API.get(`/api/v1/ppe_items/${id}`);
       editingId = id;
-      modalTitle.textContent = 'Редактирование наименования';
+      ModalHelper.setTitle(modalEl, 'Редактирование наименования');
       submitBtn.textContent = 'Сохранить';
 
       createForm.elements['name'].value = item.name ?? '';
@@ -275,7 +274,7 @@
       createForm.elements['unit_id'].value = item.unit_id ?? '';
       if (versionInput) versionInput.value = item.version ?? '';
 
-      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      ModalHelper.show(modalEl);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -300,7 +299,7 @@
       }
     }, {
       onSuccess: () => {
-        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        ModalHelper.hide(modalEl);
         createForm.reset();
         loadItems();
       },

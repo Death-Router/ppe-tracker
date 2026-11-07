@@ -196,7 +196,6 @@
 
   // --- Модалка сотрудника: создание и редактирование -------------------
   const modalEl = document.getElementById('employeeModal');
-  const modalTitle = document.getElementById('employee-modal-title');
   const saveBtn = document.getElementById('emp-save-btn');
   const versionInput = document.getElementById('emp-version');
   const sizesBody = document.getElementById('emp-sizes-body');
@@ -215,9 +214,7 @@
     tableState(issuesBody, 6, 'Нет данных');
     createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
     // Возвращаемся на первую вкладку
-    bootstrap.Tab.getOrCreateInstance(
-      document.querySelector('#employeeModalTabs [data-bs-target="#emp-tab-main"]')
-    ).show();
+    TabHelper.show('#employeeModalTabs [data-bs-target="#emp-tab-main"]');
     window.FormValidation.refresh();
   }
 
@@ -237,9 +234,7 @@
     if (issuesTabItem?.classList.contains('d-none')) {
       const activePane = document.querySelector('#employeeModalContent .tab-pane.active');
       if (activePane?.id === 'emp-tab-issues') {
-        bootstrap.Tab.getOrCreateInstance(
-          document.querySelector('#employeeModalTabs [data-bs-target="#emp-tab-main"]')
-        ).show();
+        TabHelper.show('#employeeModalTabs [data-bs-target="#emp-tab-main"]');
       }
     }
   });
@@ -247,11 +242,11 @@
   window.openCreateEmployee = () => {
     editingId = null;
     currentEmployee = null;
-    modalTitle.textContent = 'Новый сотрудник';
+    ModalHelper.setTitle(modalEl, 'Новый сотрудник');
     saveBtn.textContent = 'Создать';
     setEditOnlyTabs(false);
     resetModal();
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    ModalHelper.show(modalEl);
   };
 
   window.openEditEmployee = async (id) => {
@@ -260,7 +255,10 @@
       editingId = id;
       currentEmployee = emp;
 
-      modalTitle.textContent = `Редактирование: ${[emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ')}`;
+      ModalHelper.setTitle(
+        modalEl,
+        `Редактирование: ${[emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ')}`
+      );
       saveBtn.textContent = 'Сохранить';
       resetModal();
 
@@ -290,7 +288,7 @@
       }
       renderIssues(emp);
 
-      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      ModalHelper.show(modalEl);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -622,7 +620,7 @@
       issueNormHint.textContent = '';
       toggleIssueMethod(null);
       updateIssueWarnings();
-      bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
+      ModalHelper.show(issueModalEl);
       return;
     }
 
@@ -649,7 +647,7 @@
     if (issueMethodSelect) issueMethodSelect.value = '';
     updateIssueWarnings();
 
-    bootstrap.Modal.getOrCreateInstance(issueModalEl).show();
+    ModalHelper.show(issueModalEl);
   }
 
   // При выборе СИЗ: размер — списком из справочника с подстановкой размера из
@@ -717,7 +715,7 @@
     await FormHelper.send(issueForm, async () => {
       await API.post('/api/v1/employee_ppe_issues/', payload);
       window.showToast('СИЗ выдан', 'success');
-      bootstrap.Modal.getOrCreateInstance(issueModalEl).hide();
+      ModalHelper.hide(issueModalEl);
       await reloadEmployee();
     }, {
       button: document.getElementById('issue-submit'),
@@ -788,7 +786,7 @@
     updateReturnHint(issue);
 
     window.FormValidation.refresh(returnForm);
-    bootstrap.Modal.getOrCreateInstance(returnModalEl).show();
+    ModalHelper.show(returnModalEl);
   }
 
   // Остаток = выдано − возвращено. Показываем его прямо в модалке: иначе
@@ -857,7 +855,7 @@
     await FormHelper.send(returnForm, async () => {
       await API.put(`/api/v1/employee_ppe_issues/${returnIssue.id}`, payload);
       window.showToast('Возврат сохранён', 'success');
-      bootstrap.Modal.getOrCreateInstance(returnModalEl).hide();
+      ModalHelper.hide(returnModalEl);
       await reloadEmployee();
     }, {
       button: document.getElementById('return-submit'),
@@ -885,9 +883,7 @@
   saveBtn.addEventListener('click', async () => {
     // Валидируем только поля основной вкладки: размеры проверяем отдельно
     if (!createForm.reportValidity()) {
-      bootstrap.Tab.getOrCreateInstance(
-        document.querySelector('#employeeModalTabs [data-bs-target="#emp-tab-main"]')
-      ).show();
+      TabHelper.show('#employeeModalTabs [data-bs-target="#emp-tab-main"]');
       return;
     }
 
@@ -927,9 +923,7 @@
     });
 
     if (sizeError) {
-      bootstrap.Tab.getOrCreateInstance(
-        document.querySelector('#employeeModalTabs [data-bs-target="#emp-tab-sizes"]')
-      ).show();
+      TabHelper.show('#employeeModalTabs [data-bs-target="#emp-tab-sizes"]');
       return;
     }
 
@@ -953,7 +947,7 @@
       button: saveBtn,
       payload,
       onSuccess: () => {
-        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        ModalHelper.hide(modalEl);
         loadEmployees();
       },
     });

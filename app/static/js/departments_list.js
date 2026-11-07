@@ -116,7 +116,6 @@
   });
 
   const modalEl = document.getElementById('createModal');
-  const modalTitle = modalEl.querySelector('.modal-title');
   const submitBtn = modalEl.querySelector('button[type="submit"]');
   const versionInput = document.getElementById('dept-version');
 
@@ -125,11 +124,11 @@
   // Открытие модалки в режиме создания
   function openCreateModal() {
     editingId = null;
-    modalTitle.textContent = 'Новое подразделение';
+    ModalHelper.setTitle(modalEl, 'Новое подразделение');
     submitBtn.textContent = 'Создать';
     createForm.reset();
     if (versionInput) versionInput.value = '';
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    ModalHelper.show(modalEl);
   }
 
   // Открытие модалки в режиме редактирования: данные берём из уже
@@ -142,7 +141,7 @@
     }
 
     editingId = id;
-    modalTitle.textContent = 'Редактирование подразделения';
+    ModalHelper.setTitle(modalEl, 'Редактирование подразделения');
     submitBtn.textContent = 'Сохранить';
 
     createForm.elements['name'].value = dept.name ?? '';
@@ -155,7 +154,7 @@
       opt.disabled = opt.value !== '' && forbidden.has(Number(opt.value));
     });
 
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    ModalHelper.show(modalEl);
   };
 
   function collectDescendantIds(rootId) {
@@ -187,7 +186,7 @@
       }
     }, {
       onSuccess: () => {
-        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        ModalHelper.hide(modalEl);
         createForm.reset();
         loadDepartments();
       },

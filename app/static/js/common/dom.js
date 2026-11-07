@@ -106,6 +106,34 @@ window.tableState = function (tbody, colspan, text, options = {}) {
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="${cls}">${escapeHtml(text)}</td></tr>`;
 };
 
+// Модалки Bootstrap: одна обёртка на всё приложение. Раньше в каждом файле
+// было `bootstrap.Modal.getOrCreateInstance(el).show()` / `.hide()` и ручной
+// поиск `.modal-title`; теперь это `ModalHelper`.
+window.ModalHelper = {
+  show(element) {
+    if (element) bootstrap.Modal.getOrCreateInstance(element).show();
+  },
+  hide(element) {
+    if (element) bootstrap.Modal.getOrCreateInstance(element).hide();
+  },
+  title(element) {
+    return element?.querySelector('.modal-title') ?? null;
+  },
+  setTitle(element, text) {
+    const target = this.title(element);
+    if (target) target.textContent = text;
+  },
+};
+
+// Вкладки Bootstrap: переключение по селектору, без ручного
+// getOrCreateInstance(document.querySelector(...)).show() в каждой ветке.
+window.TabHelper = {
+  show(selector) {
+    const tab = typeof selector === 'string' ? document.querySelector(selector) : selector;
+    if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+  },
+};
+
 // Подгоняем все помеченные списки и при изменении их содержимого
 window.fitAllSelects = function (root = document) {
   root.querySelectorAll('[data-fit-width]').forEach(window.fitSelectWidth);

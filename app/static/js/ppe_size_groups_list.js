@@ -2,7 +2,6 @@
   const tbody = document.querySelector('#groups-table tbody');
   const createForm = document.getElementById('create-form');
   const modalElement = document.getElementById('createModal');
-  const modalTitle = modalElement.querySelector('.modal-title');
   const submitBtn = modalElement.querySelector('button[type="submit"]');
 
   // Элементы модалки размеров
@@ -51,10 +50,10 @@
   window.openCreateModal = () => {
     editingId = null;
     editingVersion = null;
-    modalTitle.textContent = 'Новая размерная группа';
+    ModalHelper.setTitle(modalElement, 'Новая размерная группа');
     submitBtn.textContent = 'Создать';
     createForm.reset();
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    ModalHelper.show(modalElement);
   };
 
   window.editGroup = async (id) => {
@@ -65,12 +64,12 @@
       
       editingId = id;
       editingVersion = group.version ?? null;
-      modalTitle.textContent = 'Редактирование группы';
+      ModalHelper.setTitle(modalElement, 'Редактирование группы');
       submitBtn.textContent = 'Сохранить';
       createForm.elements['name'].value = group.name;
       createForm.elements['description'].value = group.description ?? '';
       
-      bootstrap.Modal.getOrCreateInstance(modalElement).show();
+      ModalHelper.show(modalElement);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -89,7 +88,7 @@
       }
     }, {
       onSuccess: () => {
-        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        ModalHelper.hide(modalElement);
         createForm.reset();
         loadGroups();
       },
@@ -113,8 +112,7 @@
     sizeGroupName.textContent = groupName;
     sizesList.innerHTML = '<li class="list-group-item text-muted">Загрузка...</li>';
     
-    const modal = bootstrap.Modal.getOrCreateInstance(sizesModalElement);
-    modal.show();
+    ModalHelper.show(sizesModalElement);
 
     try {
       const sizes = await API.get(`/api/v1/ppe_sizes/?size_group_id=${groupId}`);

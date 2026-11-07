@@ -6,7 +6,6 @@
   const selectedCountSpan = document.getElementById('selected-count');
   const bulkActions = document.getElementById('bulk-actions');
   const modalElement = document.getElementById('createNormModal');
-  const modalTitle = modalElement.querySelector('.modal-title');
   const submitBtn = modalElement.querySelector('button[type="submit"]');
   const modalDepartment = document.getElementById('modal-department');
   const modalPosition = document.getElementById('modal-position');
@@ -281,7 +280,7 @@
   // Открытие модалки для создания
   window.openCreateModal = () => {
     editingNormId = null;
-    modalTitle.textContent = 'Новая норма выдачи';
+    ModalHelper.setTitle(modalElement, 'Новая норма выдачи');
     submitBtn.textContent = 'Добавить';
     createForm.reset();
     itemInput.value = '';
@@ -292,7 +291,7 @@
     // Раньше модалку открывал data-bs-toggle на кнопке, скрипт только
     // заполнял поля. Атрибут убран из-за двойного backdrop — теперь
     // показывать обязан скрипт.
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    ModalHelper.show(modalElement);
   };
 
   // Редактирование нормы
@@ -300,7 +299,7 @@
     try {
       const norm = await API.get(`/api/v1/position_ppe_norms/${id}`);
       editingNormId = id;
-      modalTitle.textContent = 'Редактирование нормы';
+      ModalHelper.setTitle(modalElement, 'Редактирование нормы');
       submitBtn.textContent = 'Сохранить';
 
       // Находим должность и её подразделение
@@ -330,7 +329,7 @@
       // Пункт норм связан со справочником; null — «не указан»
       if (modalTypicalNorm) modalTypicalNorm.value = norm.typical_norm_id ?? '';
 
-      bootstrap.Modal.getOrCreateInstance(modalElement).show();
+      ModalHelper.show(modalElement);
     } catch (err) {
       window.showToast(`Ошибка загрузки: ${err.message}`, 'danger');
     }
@@ -376,7 +375,7 @@
       payload,
       validate: (data) => (data.ppe_item_id ? null : 'Выберите СИЗ из списка'),
       onSuccess: () => {
-        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        ModalHelper.hide(modalElement);
         createForm.reset();
         loadData();
       },
@@ -492,7 +491,7 @@
       return;
     }
     fillCopySelects();
-    bootstrap.Modal.getOrCreateInstance(copyModalEl).show();
+    ModalHelper.show(copyModalEl);
   });
 
   copySubmit?.addEventListener('click', async () => {
@@ -515,7 +514,7 @@
         target_position_ids: targetIds,
       });
       window.showToast(res.message, 'success');
-      bootstrap.Modal.getOrCreateInstance(copyModalEl).hide();
+      ModalHelper.hide(copyModalEl);
       loadPage(1);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');

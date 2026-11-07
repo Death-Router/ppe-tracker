@@ -2,7 +2,6 @@
   const tbody = document.querySelector('#units-table tbody');
   const createForm = document.getElementById('create-form');
   const modalElement = document.getElementById('createModal');
-  const modalTitle = modalElement ? modalElement.querySelector('.modal-title') : null;
   const submitBtn = createForm ? createForm.querySelector('button[type="submit"]') : null;
 
   let editingId = null;
@@ -39,15 +38,15 @@
 
   // Открытие модалки для создания
   window.openCreateModal = () => {
-    if (!createForm || !modalTitle || !submitBtn) {
+    if (!createForm || !submitBtn) {
       console.warn('Модалка не найдена');
       return;
     }
     editingId = null;
-    modalTitle.textContent = 'Новая единица измерения';
+    ModalHelper.setTitle(modalElement, 'Новая единица измерения');
     submitBtn.textContent = 'Создать';
     createForm.reset();
-    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    ModalHelper.show(modalElement);
   };
 
   // Редактирование
@@ -58,14 +57,14 @@
       if (!unit) throw new Error('Единица не найдена');
       
       editingId = id;
-      modalTitle.textContent = 'Редактирование единицы';
+      ModalHelper.setTitle(modalElement, 'Редактирование единицы');
       submitBtn.textContent = 'Сохранить';
       
       // Заполняем поля (с проверкой на существование)
       if (createForm.elements['name']) createForm.elements['name'].value = unit.name;
       if (createForm.elements['short_name']) createForm.elements['short_name'].value = unit.short_name;
       
-      bootstrap.Modal.getOrCreateInstance(modalElement).show();
+      ModalHelper.show(modalElement);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');
     }
@@ -84,7 +83,7 @@
         }
       }, {
         onSuccess: () => {
-          bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+          ModalHelper.hide(modalElement);
           createForm.reset();
           loadUnits();
         },
