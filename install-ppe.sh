@@ -330,9 +330,22 @@ while [ "$attempt" -le 60 ]; do
 done
 
 if [ "$ready" != "1" ]; then
-    warn "приложение не ответило за 120 с (последний код: $code)"
-    warn "логи: docker compose -f $COMPOSE_FILE logs --tail 50 api"
-    die "установка не завершена"
+    # Две разные беды: приложение не работает ИЛИ работает, а порт с хоста не
+    # отвечает (проброс портов, занятый порт). Изнутри контейнера приложение
+    # всегда на 127.0.0.1:8000.
+    if docker exec ppe-api python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)" >/dev/null 2>&1; then
+        warn "приложение внутри контейнера отвечает, а http://127.0.0.1:$PORT/healthz — нет"
+        warn "порт не пробросился с хоста: проверьте занятость порта и docker run -p"
+        ok "образ загружен, контейнеры подняты — установка считается выполненной"
+    else
+        warn "приложение не ответило за 120 с (последний код: $code)"
+        step "Состояние контейнеров"
+        docker compose ps || true
+        step "Последние строки лога api"
+        docker compose logs --tail 40 api || true
+        warn "полный лог: docker compose -f $COMPOSE_FILE logs -f api"
+        die "установка не завершена: приложение не поднялось (причина выше)"
+    fi
 fi
 ok "приложение отвечает (healthz 200)"
 

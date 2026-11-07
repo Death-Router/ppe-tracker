@@ -68,6 +68,27 @@ function Write-Ok($t)   { Write-Host "    $t" -ForegroundColor Green }
 function Write-Warn($t) { Write-Host "    $t" -ForegroundColor Yellow }
 function Write-Err($t)  { Write-Host "    $t" -ForegroundColor Red }
 
+# Проверка /healthz с хоста. Invoke-WebRequest уважает системный прокси
+# (WinINET): с настроенным прокси запрос к 127.0.0.1 может «висеть» до
+# таймаута, и установка ошибочно решает, что приложение не поднялось.
+# Поэтому сначала пробуем curl.exe (он прокси не берёт), затем
+# Invoke-WebRequest с -NoProxy, и только потом обычный вызов.
+function Test-Healthz([int]$Port) {
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        $code = & $curl.Source -s -o NUL -w '%{http_code}' --max-time 4 "http://127.0.0.1:$Port/healthz" 2>$null
+        if ($code -eq '200') { return $true }
+    }
+    try {
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/healthz" -UseBasicParsing -TimeoutSec 4 -NoProxy -ErrorAction Stop
+        return ($r.StatusCode -eq 200)
+    } catch { }
+    try {
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/healthz" -UseBasicParsing -TimeoutSec 4 -ErrorAction Stop
+        return ($r.StatusCode -eq 200)
+    } catch { return $false }
+}
+
 function New-Secret([int]$Length) {
     # Без python: PowerShell сам умеет криптостойкую случайность
     $bytes = [byte[]]::new([int]([math]::Ceiling($Length * 3 / 4)))
@@ -342,18 +363,36 @@ try {
     Write-Step "Жду готовности приложения"
     $ready = $false
     for ($i = 1; $i -le 60; $i++) {
-        try {
-            $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/healthz" -UseBasicParsing -TimeoutSec 3
-            if ($r.StatusCode -eq 200) { $ready = $true; break }
-        } catch { }
+        if (Test-Healthz $Port) { $ready = $true; break }
         Start-Sleep -Seconds 2
     }
+
     if (-not $ready) {
-        Write-Warn "приложение не ответило за 120 с"
-        Write-Warn "логи: docker compose -f `"$composeFile`" logs --tail 50 api"
-        exit 1
+        # Разделяем две разные беды: приложение не работает ИЛИ работает, но
+        # порт с хоста не отвечает (Docker Desktop, прокси, занятый порт).
+        # Изнутри контейнера приложение всегда на 127.0.0.1:8000.
+        $insideOk = $false
+        $probe = docker exec ppe-api python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)" 2>&1
+        if ($LASTEXITCODE -eq 0) { $insideOk = $true }
+
+        if ($insideOk) {
+            Write-Warn "приложение внутри контейнера отвечает, а http://127.0.0.1:$Port/healthz — нет"
+            Write-Warn "порт не пробросился с хоста: проверьте занятость порта и настройки Docker Desktop"
+            Write-Warn "попробуйте открыть http://localhost:$Port или переустановить с другим портом: install-ppe.cmd -p 8010"
+            Write-Ok "образ загружен, контейнеры подняты — установка считается выполненной"
+        } else {
+            Write-Warn "приложение не ответило за 120 с"
+            Write-Step "Состояние контейнеров"
+            docker compose ps
+            Write-Step "Последние строки лога api"
+            docker compose logs --tail 40 api
+            Write-Warn "полный лог: docker compose -f `"$composeFile`" logs -f api"
+            Write-Err "установка не завершена: приложение не поднялось (причина выше)"
+            exit 1
+        }
+    } else {
+        Write-Ok "приложение отвечает (healthz 200)"
     }
-    Write-Ok "приложение отвечает (healthz 200)"
 
     # --- Администратор ---------------------------------------------------
     if ($Clean) {
