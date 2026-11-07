@@ -105,14 +105,7 @@
     createForm.addEventListener('submit', async (event) => {
       event.preventDefault();
 
-      const payload = FormHelper.serialize(createForm);
-      if (!payload.clause || !payload.description) {
-        window.showToast('Заполните пункт и описание', 'danger');
-        return;
-      }
-
-      if (submitBtn) submitBtn.disabled = true;
-      try {
+      await FormHelper.send(createForm, async (payload) => {
         if (editingId) {
           // Версия из загруженного списка — оптимистичная блокировка
           const current = items.find((n) => n.id === editingId);
@@ -123,15 +116,16 @@
           await API.post('/api/v1/typical_norms/', payload);
           window.showToast('Пункт добавлен', 'success');
         }
-        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
-        createForm.reset();
-        loadItems();
-      } catch (err) {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      } finally {
-        if (submitBtn) submitBtn.disabled = false;
-        window.FormValidation.refresh();
-      }
+      }, {
+        button: submitBtn,
+        validate: (payload) =>
+          !payload.clause || !payload.description ? 'Заполните пункт и описание' : null,
+        onSuccess: () => {
+          bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+          createForm.reset();
+          loadItems();
+        },
+      });
     });
   }
 

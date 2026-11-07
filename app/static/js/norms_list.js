@@ -362,14 +362,7 @@
       quantity: createForm.elements['quantity'].value.trim()
     };
 
-    if (!payload.ppe_item_id) {
-      window.showToast('Выберите СИЗ из списка', 'danger');
-      return;
-    }
-
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
+    await FormHelper.send(createForm, async (payload) => {
       if (editingNormId) {
         payload.version = (await API.get(`/api/v1/position_ppe_norms/${editingNormId}`)).version;
         await API.put(`/api/v1/position_ppe_norms/${editingNormId}`, payload);
@@ -378,14 +371,16 @@
         await API.post('/api/v1/position_ppe_norms/', payload);
         window.showToast('Норма добавлена', 'success');
       }
-      bootstrap.Modal.getOrCreateInstance(modalElement).hide();
-      createForm.reset();
-      loadData();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      window.FormValidation.refresh();
-    }
+    }, {
+      // payload собран вручную: поле поиска СИЗ не входит в serialize формы
+      payload,
+      validate: (data) => (data.ppe_item_id ? null : 'Выберите СИЗ из списка'),
+      onSuccess: () => {
+        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        createForm.reset();
+        loadData();
+      },
+    });
   });
 
   // Удаление

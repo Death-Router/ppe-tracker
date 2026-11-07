@@ -42,6 +42,55 @@ window.FormHelper = {
     alertElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
   },
 
+  // Отправка формы из модалки/страницы: кнопка блокируется на время запроса,
+  // ошибка показывается тостом, валидация пересчитывается в любом случае.
+  // Было 12 копий `try/catch/finally` вокруг `API.put/post` в списках.
+  //
+  //   await FormHelper.send(form, async (payload) => {
+  //     await API.put(url, payload);
+  //     window.showToast('Сохранено', 'success');
+  //   }, { onSuccess: () => { hideModal(); form.reset(); load(); } });
+  //
+  // onConflict — свой обработчик для 409 (баннер «данные устарели»);
+  // без него показывается обычный тост.
+  // validate(payload) — проверка до запроса: вернуть текст проблемы или null
+  // (например, «Выберите СИЗ из списка»); тогда запрос не уходит.
+  // payload — готовый объект, если форма собирает его не через serialize
+  // (norms_list: отдельное поле поиска СИЗ вместо select с name).
+  async send(form, action, options = {}) {
+    const {
+      button = null,
+      onSuccess = null,
+      onConflict = null,
+      validate = null,
+      payload: given = null,
+    } = options;
+    const btn = button || form?.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+
+    try {
+      const data = given ?? this.serialize(form);
+      if (validate) {
+        const problem = validate(data);
+        if (problem) {
+          window.showToast(problem, 'danger');
+          return;
+        }
+      }
+      await action(data, form);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      if (err.isConflict && onConflict) {
+        onConflict(err);
+      } else {
+        window.showToast(`Ошибка: ${err.message}`, 'danger');
+      }
+    } finally {
+      // refresh снова разблокирует кнопку, если форма валидна
+      window.FormValidation.refresh(form);
+    }
+  },
+
   // Автоматическая привязка формы к API (PUT)
   async submit({ form, apiUrl, conflictAlert, onSuccess }) {
     event.preventDefault();

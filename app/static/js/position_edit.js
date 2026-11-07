@@ -37,23 +37,17 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    btnSubmit.disabled = true;
     form.elements['department_id'].value = Number(deptSelect.value);
-    
-    try {
-      await FormHelper.submit({
-        form: form,
-        apiUrl: `/api/v1/positions/${posId}`,
-        conflictAlert: conflictAlert,
-        onSuccess: (updated) => {
-          if (updated?.version != null) versionInput.value = updated.version;
-          isDirty = false;
-          window.showToast('Изменения сохранены', 'success');
-        }
-      });
-    } finally {
-      window.FormValidation.refresh();
-    }
+
+    await FormHelper.send(form, async (payload) => {
+      const updated = await API.put(`/api/v1/positions/${posId}`, payload);
+      if (updated?.version != null) versionInput.value = updated.version;
+      isDirty = false;
+      window.showToast('Изменения сохранены', 'success');
+    }, {
+      button: btnSubmit,
+      onConflict: () => FormHelper.showConflict(conflictAlert),
+    });
   });
 
   WS.subscribe((data) => {

@@ -372,14 +372,16 @@ async def get_items(
 | `departmentOptionsHtml(depts, { placeholder })` | `<option>` с префиксом `↳ ` по уровням | 2 |
 | `onRowAction(tbody, handlers)` | делегирование кликов по `[data-action]` | 7 |
 | `tableState(tbody, colspan, text, { error })` | строка-заглушка «пока нет / ошибка», текст экранируется | 20 |
+| `FormHelper.send(form, action, opts)` | отправка формы: блокировка кнопки, тост об ошибке, `refresh` валидации; `payload` — готовый объект, `validate` — проверка до запроса, `onConflict` — свой обработчик 409 | 15 |
 
 **Правило:** новое место берёт хелпер, а не копию. Перед тем как писать
 очередной `tbody.innerHTML = '<tr><td colspan=…` или
 `if db_x.version != x_in.version`, проверить `js/common/dom.js` и `app/api/`.
 
 **Что ещё осталось скопированным** (осознанно, правка шире задачи):
-`catch → showToast → finally FormValidation.refresh()` в формах (12 мест),
-локальные `show/hideModal` в карточках.
+локальные `show/hideModal` в карточках, обработчик кнопки «копировать нормы»
+(это не форма, у него своя проверка выбора и кнопка вне формы), форматтеры
+дат в `employees_list.js`.
 
 ---
 

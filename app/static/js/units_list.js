@@ -74,11 +74,7 @@
   if (createForm) {
     createForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const payload = FormHelper.serialize(createForm);
-      const btn = createForm.querySelector('button[type="submit"]');
-      if (btn) btn.disabled = true;
-      
-      try {
+      await FormHelper.send(createForm, async (payload) => {
         if (editingId) {
           await API.put(`/api/v1/units/${editingId}`, payload);
           window.showToast('Единица обновлена', 'success');
@@ -86,14 +82,13 @@
           await API.post('/api/v1/units/', payload);
           window.showToast('Единица создана', 'success');
         }
-        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
-        createForm.reset();
-        loadUnits();
-      } catch (err) {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      } finally {
-        window.FormValidation.refresh();
-      }
+      }, {
+        onSuccess: () => {
+          bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+          createForm.reset();
+          loadUnits();
+        },
+      });
     });
   }
 

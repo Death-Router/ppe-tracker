@@ -116,21 +116,15 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const payload = FormHelper.serialize(form);
-    
-    if (payload.department_id) {
-      payload.department_id = Number(payload.department_id);
-    } else {
-      payload.department_id = null;
-    }
-    
-    payload.include_subdepartments = includeSubdep.checked;
-    payload.is_active = form.elements['is_active'].checked;
-    
-    const btn = form.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    
-    try {
+    await FormHelper.send(form, async (payload) => {
+      if (payload.department_id) {
+        payload.department_id = Number(payload.department_id);
+      } else {
+        payload.department_id = null;
+      }
+      payload.include_subdepartments = includeSubdep.checked;
+      payload.is_active = form.elements['is_active'].checked;
+
       if (editingId) {
         if (!payload.password) delete payload.password;
         await API.put(`/api/v1/users/${editingId}`, payload);
@@ -139,13 +133,12 @@
         await API.post('/api/v1/users/', payload);
         window.showToast('Пользователь создан', 'success');
       }
-      hideModal();
-      loadData();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      window.FormValidation.refresh();
-    }
+    }, {
+      onSuccess: () => {
+        hideModal();
+        loadData();
+      },
+    });
   });
 
   window.deleteUser = async (id) => {

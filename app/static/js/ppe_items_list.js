@@ -285,14 +285,11 @@
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const payload = FormHelper.serialize(createForm);
-    payload.function_id = payload.function_id ? Number(payload.function_id) : null;
-    payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
-    payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
+    await FormHelper.send(createForm, async (payload) => {
+      payload.function_id = payload.function_id ? Number(payload.function_id) : null;
+      payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
+      payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
 
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
       if (editingId) {
         payload.version = Number(versionInput.value);
         await API.put(`/api/v1/ppe_items/${editingId}`, payload);
@@ -301,14 +298,13 @@
         await API.post('/api/v1/ppe_items/', payload);
         window.showToast('Наименование создано', 'success');
       }
-      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-      createForm.reset();
-      loadItems();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      window.FormValidation.refresh();
-    }
+    }, {
+      onSuccess: () => {
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        createForm.reset();
+        loadItems();
+      },
+    });
   });
 
   window.deleteItem = async (id, name) => {

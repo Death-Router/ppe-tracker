@@ -57,26 +57,17 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    btnSubmit.disabled = true;
-    
-    const payload = FormHelper.serialize(form);
-    payload.parent_id = payload.parent_id ? Number(payload.parent_id) : null;
+    await FormHelper.send(form, async (payload) => {
+      payload.parent_id = payload.parent_id ? Number(payload.parent_id) : null;
 
-    try {
       const updated = await API.put(`/api/v1/departments/${deptId}`, payload);
       if (updated?.version != null) versionInput.value = updated.version;
       isDirty = false;
       window.showToast('Изменения сохранены', 'success');
-    } catch (err) {
-      if (err.isConflict) {
-        conflictAlert.classList.remove('d-none');
-        conflictAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      }
-    } finally {
-      window.FormValidation.refresh();
-    }
+    }, {
+      button: btnSubmit,
+      onConflict: () => FormHelper.showConflict(conflictAlert),
+    });
   });
 
   WS.subscribe((data) => {

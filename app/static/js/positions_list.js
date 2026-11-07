@@ -147,12 +147,8 @@
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const payload = FormHelper.serialize(createForm);
-    payload.department_id = Number(payload.department_id);
-
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    try {
+    await FormHelper.send(createForm, async (payload) => {
+      payload.department_id = Number(payload.department_id);
       if (editingId) {
         payload.version = Number(versionInput.value);
         await API.put(`/api/v1/positions/${editingId}`, payload);
@@ -161,14 +157,13 @@
         await API.post('/api/v1/positions/', payload);
         window.showToast('Должность создана', 'success');
       }
-      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-      createForm.reset();
-      loadData();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      window.FormValidation.refresh();
-    }
+    }, {
+      onSuccess: () => {
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        createForm.reset();
+        loadData();
+      },
+    });
   });
 
   window.deletePos = async (id, name) => {

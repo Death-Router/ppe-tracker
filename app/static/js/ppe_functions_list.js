@@ -68,11 +68,7 @@
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const payload = FormHelper.serialize(createForm);
-    const btn = createForm.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    
-    try {
+    await FormHelper.send(createForm, async (payload) => {
       if (editingId) {
         payload.version = editingVersion;
         await API.put(`/api/v1/ppe_functions/${editingId}`, payload);
@@ -81,14 +77,13 @@
         await API.post('/api/v1/ppe_functions/', payload);
         window.showToast('Функция создана', 'success');
       }
-      bootstrap.Modal.getOrCreateInstance(modalElement).hide();
-      createForm.reset();
-      loadFunctions();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      window.FormValidation.refresh();
-    }
+    }, {
+      onSuccess: () => {
+        bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        createForm.reset();
+        loadFunctions();
+      },
+    });
   });
 
   window.deleteFunction = async (id, name) => {

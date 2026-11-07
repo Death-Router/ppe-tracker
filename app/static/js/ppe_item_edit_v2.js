@@ -83,28 +83,19 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    btnSubmit.disabled = true;
+    await FormHelper.send(form, async (payload) => {
+      payload.function_id = payload.function_id ? Number(payload.function_id) : null;
+      payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
+      payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
 
-    const payload = FormHelper.serialize(form);
-    payload.function_id = payload.function_id ? Number(payload.function_id) : null;
-    payload.size_group_id = payload.size_group_id ? Number(payload.size_group_id) : null;
-    payload.unit_id = payload.unit_id ? Number(payload.unit_id) : null;
-
-    try {
       const updated = await API.put(`/api/v1/ppe_items/${itemId}`, payload);
       if (updated?.version != null) versionInput.value = updated.version;
       isDirty = false;
       window.showToast('Изменения сохранены', 'success');
-    } catch (err) {
-      if (err.isConflict) {
-        conflictAlert.classList.remove('d-none');
-        conflictAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      }
-    } finally {
-      window.FormValidation.refresh();
-    }
+    }, {
+      button: btnSubmit,
+      onConflict: () => FormHelper.showConflict(conflictAlert),
+    });
   });
 
   WS.subscribe(async (data) => {

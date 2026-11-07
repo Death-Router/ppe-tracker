@@ -714,24 +714,16 @@
         : (issueMethodSelect?.value || null),
     };
 
-    if (!payload.ppe_item_id) {
-      window.showToast('Выберите наименование СИЗ', 'danger');
-      return;
-    }
-
-    const submit = document.getElementById('issue-submit');
-    submit.disabled = true;
-    try {
+    await FormHelper.send(issueForm, async () => {
       await API.post('/api/v1/employee_ppe_issues/', payload);
       window.showToast('СИЗ выдан', 'success');
       bootstrap.Modal.getOrCreateInstance(issueModalEl).hide();
       await reloadEmployee();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      submit.disabled = false;
-      window.FormValidation.refresh();
-    }
+    }, {
+      button: document.getElementById('issue-submit'),
+      payload,
+      validate: (data) => (data.ppe_item_id ? null : 'Выберите наименование СИЗ'),
+    });
   });
 
   // Перезапрос карточки: срок носки считает сервер, клиенту его не вычислить
@@ -862,22 +854,16 @@
       version: Number(returnIssue.version),
     };
 
-    const submit = document.getElementById('return-submit');
-    submit.disabled = true;
-    try {
+    await FormHelper.send(returnForm, async () => {
       await API.put(`/api/v1/employee_ppe_issues/${returnIssue.id}`, payload);
       window.showToast('Возврат сохранён', 'success');
       bootstrap.Modal.getOrCreateInstance(returnModalEl).hide();
       await reloadEmployee();
-    } catch (err) {
-      if (err.isConflict) {
-        window.showToast('Запись изменилась, откройте её заново', 'warning');
-      } else {
-        window.showToast(`Ошибка: ${err.message}`, 'danger');
-      }
-    } finally {
-      submit.disabled = false;
-    }
+    }, {
+      button: document.getElementById('return-submit'),
+      payload,
+      onConflict: () => window.showToast('Запись изменилась, откройте её заново', 'warning'),
+    });
   });
 
   document.getElementById('emp-add-issue')?.addEventListener('click', () => {
@@ -954,8 +940,7 @@
     if (!payload.position_change_date) payload.position_change_date = null;
     payload.ppe_sizes = ppeSizes;
 
-    saveBtn.disabled = true;
-    try {
+    await FormHelper.send(createForm, async (payload) => {
       if (editingId) {
         payload.version = Number(versionInput.value);
         await API.put(`/api/v1/employees/${editingId}`, payload);
@@ -964,14 +949,14 @@
         await API.post('/api/v1/employees/', payload);
         window.showToast('Сотрудник создан', 'success');
       }
-      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-      loadEmployees();
-    } catch (err) {
-      window.showToast(`Ошибка: ${err.message}`, 'danger');
-    } finally {
-      saveBtn.disabled = false;
-      window.FormValidation.refresh();
-    }
+    }, {
+      button: saveBtn,
+      payload,
+      onSuccess: () => {
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        loadEmployees();
+      },
+    });
   });
 
   window.deleteEmployee = async (id, fio) => {
