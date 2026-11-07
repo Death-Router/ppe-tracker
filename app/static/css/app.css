@@ -775,10 +775,28 @@ input[type="radio"] {
 /* --------------------------------------------------------------------------
    12a. Фото сотрудника
    -------------------------------------------------------------------------- */
-.photo-block {
+.photo-row {
     display: flex;
-    gap: var(--space-4);
+    gap: var(--space-5);
     align-items: flex-start;
+    margin-bottom: var(--space-4);
+}
+
+/* Колонка фото: превью, под ним стопкой кнопки «Загрузить» и «Удалить» */
+.photo-col {
+    flex: 0 0 150px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+/* ФИО справа от фото, поля друг под другом */
+.fio-col {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 240px;
 }
 
 .photo-preview-wrap {
@@ -802,12 +820,6 @@ input[type="radio"] {
     font-size: 3rem;
     color: var(--brand);
     opacity: 0.35;
-}
-
-.photo-actions {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
 }
 
 /* Аватар в списке сотрудников: круг слева от ФИО */
@@ -853,5 +865,17 @@ input[type="radio"] {
 
     .cell-mono {
         width: auto;
+    }
+
+    /* На узком экране фото и ФИО — в столбик */
+    .photo-row {
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+
+    .photo-col {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 200px;
     }
 }

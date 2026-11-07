@@ -71,44 +71,45 @@
                     <div class="tab-pane fade show active" id="emp-tab-main" role="tabpanel">
                         <form data-validate="true" id="employee-form" novalidate>
                             <input type="hidden" name="version" id="emp-version" value="">
-                            <!-- Фото сотрудника: файл лежит на томе, отдаётся через API
+                            <!-- Фото сотрудника и ФИО: фото слева, поля ФИО справа
+                                 друг под другом. Файл лежит на томе, отдаётся через API
                                  (персональные данные — без прямой раздачи из /static) -->
-                            <div class="photo-block mb-3">
-                                <div class="photo-preview-wrap">
-                                    <img id="emp-photo-preview" class="photo-preview d-none" alt="Фото сотрудника">
-                                    <div id="emp-photo-empty" class="photo-preview photo-preview--empty">
-                                        <i class="bi bi-person"></i>
+                            <div class="photo-row">
+                                <div class="photo-col">
+                                    <div class="photo-preview-wrap">
+                                        <img id="emp-photo-preview" class="photo-preview d-none" alt="Фото сотрудника">
+                                        <div id="emp-photo-empty" class="photo-preview photo-preview--empty">
+                                            <i class="bi bi-person"></i>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="photo-actions">
                                     <input type="file" id="emp-photo-input"
                                            accept="image/jpeg,image/png,image/webp" hidden>
-                                    <div class="d-flex flex-wrap gap-2">
-                                        <button type="button" class="btn btn-sm btn-brand" id="emp-photo-upload">
-                                            <i class="bi bi-camera"></i> Загрузить фото
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-cancel d-none" id="emp-photo-delete">
-                                            <i class="bi bi-trash"></i> Удалить
-                                        </button>
-                                    </div>
+                                    <button type="button" class="btn btn-sm btn-brand w-100" id="emp-photo-upload">
+                                        <i class="bi bi-camera"></i> Загрузить фото
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-brand-orange w-100 d-none" id="emp-photo-delete">
+                                        <i class="bi bi-trash"></i> Удалить
+                                    </button>
                                     <div class="form-text" id="emp-photo-hint">
                                         JPEG, PNG или WebP до 5 МБ
                                     </div>
                                 </div>
+                                <div class="fio-col">
+                                    <div>
+                                        <label class="form-label" for="emp-last-name">Фамилия <span class="req">*</span></label>
+                                        <input class="form-control" id="emp-last-name" name="last_name" required maxlength="100">
+                                    </div>
+                                    <div>
+                                        <label class="form-label" for="emp-first-name">Имя <span class="req">*</span></label>
+                                        <input class="form-control" id="emp-first-name" name="first_name" required maxlength="100">
+                                    </div>
+                                    <div>
+                                        <label class="form-label" for="emp-middle-name">Отчество</label>
+                                        <input class="form-control" id="emp-middle-name" name="middle_name" maxlength="100">
+                                    </div>
+                                </div>
                             </div>
                             <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label class="form-label" for="emp-last-name">Фамилия <span class="req">*</span></label>
-                                    <input class="form-control" id="emp-last-name" name="last_name" required maxlength="100">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label" for="emp-first-name">Имя <span class="req">*</span></label>
-                                    <input class="form-control" id="emp-first-name" name="first_name" required maxlength="100">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label" for="emp-middle-name">Отчество</label>
-                                    <input class="form-control" id="emp-middle-name" name="middle_name" maxlength="100">
-                                </div>
                                 <div class="col-md-3">
                                     <label class="form-label" for="emp-personnel">Табельный номер <span class="req">*</span></label>
                                     <input class="form-control" id="emp-personnel" name="personnel_number" required maxlength="20">
