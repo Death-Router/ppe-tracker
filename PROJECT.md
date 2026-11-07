@@ -1054,11 +1054,16 @@ docker compose exec -T api alembic revision --autogenerate -m "..."   # влад
 
 ```text
 ppe-tracker-install-<tag>.tar.gz
-├── ppe-tracker-api-<tag>.tar.gz   образ (docker save | gzip)
+├── ppe-tracker-api-<tag>.tar      образ, как его отдаёт docker save
 ├── install-ppe.sh                 установщик Linux / WSL / Git Bash
 ├── install-ppe.ps1                установщик Windows PowerShell
 └── INSTALL.txt                    три шага на месте
 ```
+
+**Сжатие одно — на весь архив.** Вложенного `.tar.gz` нет: образ внутри лежит
+обычным tar-ом, иначе он жался бы дважды (дольше, а размер тот же). Цена —
+временный каталог со `docker save`-tar (~570 МБ) на машине сборки; он
+удаляется по `trap`.
 
 Сжатие не отключается: ключ `--gzip` принимается ради старых команд и
 игнорируется с предупреждением. Смысл архива — «распаковал и запустил»:

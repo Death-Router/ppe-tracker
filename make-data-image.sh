@@ -3,10 +3,10 @@
 #
 # По умолчанию собирается ЧИСТЫЙ образ: схема развернётся миграциями при
 # первом старте, данных нет. С переносом данных из dev-базы — флаг --with-data.
-# Флаг --save собирает архив .tar.gz для переноса: внутри образ (docker save,
-# уже сжатый) и установщики install-ppe.sh / install-ppe.ps1 + INSTALL.txt —
-# всё в корне архива, поэтому на целевой машине достаточно распаковать и
-# запустить установщик.
+# Флаг --save собирает архив .tar.gz для переноса: внутри обычный tar образа
+# (docker save) и установщики install-ppe.sh / install-ppe.ps1 + INSTALL.txt —
+# всё в корне архива, сжатие одно, на весь архив. На целевой машине достаточно
+# распаковать и запустить установщик.
 #
 # Запуск из корня клона:
 #
@@ -64,11 +64,13 @@ make-data-image.sh — собрать образ PPE Tracker и упаковат
   чистый образ:  docker build -f dockerfile.prod  →  ppe-tracker-api:prod
   с данными:     плюс pg_dump dev-базы и слой с дампом  →  ...:data
 
-Архив для переноса (.tar.gz, сжатие не отключается) содержит в корне:
-  ppe-tracker-api-<tag>.tar.gz   образ (docker save | gzip)
+Архив для переноса — один .tar.gz (сжатие не отключается), в корне лежат:
+  ppe-tracker-api-<tag>.tar      образ, как его отдаёт docker save
   install-ppe.sh                 установщик для Linux / WSL / Git Bash
   install-ppe.ps1                установщик для Windows PowerShell
   INSTALL.txt                    три шага на месте
+Сжатие одно — на весь архив целиком: вложенного .tar.gz нет, иначе образ
+жался бы дважды.
 На целевой машине: tar -xzf <архив> -C <папка>, затем запустить установщик —
 образ он найдёт рядом с собой.
 
@@ -329,7 +331,7 @@ if [ "$SAVE" = "1" ]; then
     # тег отдельно — он идёт в имя архива (data / prod / свой).
     IMAGE_BASENAME=$(printf '%s' "$IMAGE_TO_SAVE" | tr ':/' '--')
     IMAGE_TAG=${IMAGE_TO_SAVE##*:}
-    IMAGE_FILE="$IMAGE_BASENAME.tar.gz"
+    IMAGE_FILE="$IMAGE_BASENAME.tar"
 
     if [ -z "$SAVE_PATH" ]; then
         SAVE_PATH="ppe-tracker-install-$IMAGE_TAG.tar.gz"
@@ -348,13 +350,17 @@ if [ "$SAVE" = "1" ]; then
         || die "не удалось создать временный каталог"
 
     step "Сохраняю образ $IMAGE_TO_SAVE"
-    # Без промежуточного .tar: pipe пишет сразу в архив, диск не нужен
-    # дважды (образ ~570 МБ в распакованном виде).
-    docker save "$IMAGE_TO_SAVE" | gzip > "$STAGE_DIR/$IMAGE_FILE" \
-        || die "docker save | gzip не удался"
-    gzip -t "$STAGE_DIR/$IMAGE_FILE" 2>/dev/null \
-        || die "полученный $IMAGE_FILE не читается как gzip"
-    ok "образ упакован: $IMAGE_FILE ($(( $(wc -c < "$STAGE_DIR/$IMAGE_FILE" | tr -d ' ') / 1048576 )) МБ)"
+    # Образ кладём как есть, tar-ом: сжимается он один раз — вместе со всем
+    # архивом на шаге tar -czf. Вложенный .tar.gz дал бы двойное сжатие
+    # (медленнее и без выигрыша в размере).
+    docker save "$IMAGE_TO_SAVE" -o "$STAGE_DIR/$IMAGE_FILE" \
+        || die "docker save не удался"
+    tar -tf "$STAGE_DIR/$IMAGE_FILE" >/dev/null 2>&1 \
+        || die "полученный $IMAGE_FILE не читается как tar"
+    # docker save -o создаёт файл 0600: после распаковки архива root'ом в
+    # /opt/ppe установщик под обычным пользователем не смог бы его прочитать
+    chmod 0644 "$STAGE_DIR/$IMAGE_FILE"
+    ok "образ сохранён: $IMAGE_FILE ($(( $(wc -c < "$STAGE_DIR/$IMAGE_FILE" | tr -d ' ') / 1048576 )) МБ)"
 
     step "Кладу в корень архива установщики"
     for f in install-ppe.sh install-ppe.ps1; do

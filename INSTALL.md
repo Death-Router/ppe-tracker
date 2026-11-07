@@ -110,11 +110,14 @@ tar -xzf ppe-tracker-install-data.tar.gz -C /opt/ppe
 Появятся три файла рядом:
 
 ```text
-ppe-tracker-api-data.tar.gz   образ (сжатый, установщик распакует сам)
+ppe-tracker-api-data.tar      образ, как его отдаёт docker save
 install-ppe.sh                установщик Linux / WSL / Git Bash
 install-ppe.ps1               установщик Windows PowerShell
 INSTALL.txt                   те же три шага, что ниже
 ```
+
+Сжатие одно — на весь архив: образ внутри лежит обычным tar-ом (вложенного
+`.tar.gz` нет, иначе он жался бы дважды).
 
 Дальше — установщик из раздела 4 или 5; параметры указывать не нужно, образ
 он ищет рядом с собой.
@@ -262,7 +265,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
 
 | Параметр | По умолчанию | Назначение |
 |---|---|---|
-| `-Image` | ищет `ppe-tracker-api-*.tar.gz` рядом со скриптом | файл образа |
+| `-Image` | ищет `ppe-tracker-api-*.tar(.gz)` рядом со скриптом | файл образа |
 | `-Dir` / `-d` | `C:\ppe` | каталог установки |
 | `-Port` / `-p` | `8000` | порт на `127.0.0.1` |
 | `-Clean` | — | образ без данных: завести администратора |
@@ -274,9 +277,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
 флага: `-` в PowerShell против `--` в POSIX-шелле (`-Clean` ↔ `--clean`,
 `-AdminLogin` ↔ `--admin-login`, `-AdminPass` ↔ `--admin-pass`,
 `-Force` ↔ `--force`, короткие `-d`/`-p`/`-login`/`-pass` — те же).
-Единственное исключение — образ: в PowerShell это `-Image .\файл.tar.gz`, а в
+Единственное исключение — образ: в PowerShell это `-Image .\файл.tar`, а в
 `.sh` он передаётся позиционным аргументом
-(`sh install-ppe.sh файл.tar.gz`), потому что второй «файловый» параметр там
+(`sh install-ppe.sh файл.tar`), потому что второй «файловый» параметр там
 не нужен.
 
 Скрипт идемпотентен: повторный запуск не трогает данные, а существующий
@@ -294,8 +297,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 `
 
 ```bash
 sh install-ppe.sh -d /opt/ppe                       # образ ищется рядом
-sh install-ppe.sh ppe-tracker-api-data.tar.gz -d /opt/ppe
-sh install-ppe.sh ppe-tracker-api-prod.tar.gz -d /opt/ppe --clean
+sh install-ppe.sh ppe-tracker-api-data.tar -d /opt/ppe
+sh install-ppe.sh ppe-tracker-api-prod.tar -d /opt/ppe --clean
 ```
 
 Параметры: `-d` каталог, `-p` порт, `--clean`, `--admin-login`,
@@ -307,7 +310,7 @@ sh install-ppe.sh ppe-tracker-api-prod.tar.gz -d /opt/ppe --clean
 Через установщик не нужно — он делает `docker load` сам. Вручную:
 
 ```bash
-docker load -i /opt/ppe/ppe-tracker-api-prod.tar.gz
+docker load -i /opt/ppe/ppe-tracker-api-prod.tar
 docker images ppe-tracker-api
 ```
 
