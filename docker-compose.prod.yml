@@ -24,7 +24,11 @@ services:
     image: ppe-tracker-api:prod
     restart: unless-stopped
     env_file:
-      - .env.prod
+      # required: false — чтобы `docker compose config` и `up` не падали, если
+      # файла нет: приложение всё равно не стартует без SECRET_KEY, и это
+      # сообщение понятнее, чем ошибка compose о ненайденном .env.prod
+      - path: .env.prod
+        required: false
     environment:
       ENVIRONMENT: production
       # Включать только вместе с HTTPS на прокси: иначе вход не работает
@@ -56,6 +60,12 @@ services:
       # :? — вместо пустой строки compose остановится и скажет, чего не хватает.
       # По умолчанию значение берётся из .env, поэтому без --env-file .env.prod
       # получится "POSTGRES_USER не задан..." вместо молчаливого blank.
+      #
+      # ВАЖНО: api берёт эти переменные из env_file (.env.prod), а db — из
+      # интерполяции ${...} (то есть из .env или --env-file). Если запустить
+      # без --env-file, у api будет пароль из .env.prod, у db — из dev-.env:
+      # контейнеры поднимутся, а запросы упадут с
+      # «password authentication failed for user "ppe"» и /healthz = 503.
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER не задан. Заполните .env.prod и запускайте с --env-file .env.prod}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан. Заполните .env.prod и запускайте с --env-file .env.prod}
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB не задан. Заполните .env.prod и запускайте с --env-file .env.prod}

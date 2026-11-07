@@ -306,10 +306,15 @@ WebSocket `/ws/*` работает через `proxy_pass` без дополни
 | Что | Команда | Ожидание |
 |---|---|---|
 | приложение живо | `curl 127.0.0.1:8000/healthz` | `{"status":"ok"}` |
-| схема на голове | `docker exec ppe-db psql -U ppe -d ppe_db -c "select version_num from alembic_version;"` | `e7b41c05a9d3` |
-| данные (если образ с данными) | `docker exec ppe-db psql -U ppe -d ppe_db -c "select count(*) from employees;"` | число > 0 |
+| схема на голове | `docker exec ppe-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version;"'` | одна строка; та же ревизия, что `docker exec ppe-api alembic heads` (без `(head)`) |
+| данные (если образ с данными) | `docker exec ppe-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select count(*) from employees;"'` | число > 0 |
 | вход | браузер | страница входа |
 | схема API закрыта | `curl -o /dev/null -w "%{http_code}" 127.0.0.1:8000/docs` | `404` |
+
+Логин и база в командах не зашиты: `psql` внутри контейнера берёт
+`POSTGRES_USER`/`POSTGRES_DB` из своего окружения (их задаёт `.env`).
+Ревизию головы сверяйте сравнением двух выводов, а не с числом из этой
+инструкции — при новой миграции конкретный id устареет.
 
 `/docs` = 404 — это правильно: при `ENVIRONMENT=production` схема API
 закрыта намеренно.
@@ -381,16 +386,18 @@ docker compose up -d                     # пересоздаст api на но�
 
 ## 9. Резервное копирование
 
-Только база, без образа:
+Только база, без образа (логин и имя базы берутся из окружения контейнера):
 
 ```bash
-docker exec ppe-db pg_dump -U ppe -d ppe_db --no-owner > backup_$(date +%F).sql
+docker exec ppe-db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' \
+    > backup_$(date +%F).sql
 ```
 
 Восстановление:
 
 ```bash
-cat backup_2026-11-06.sql | docker exec -i ppe-db psql -U ppe -d ppe_db
+docker exec -i ppe-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+    < backup_2026-11-06.sql
 ```
 
 Файлы резервных копий содержат персональные данные — храните соответственно.
