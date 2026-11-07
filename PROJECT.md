@@ -1051,6 +1051,7 @@ docker compose exec -T api alembic revision --autogenerate -m "..."   # влад
 | `make-data-image.sh` | машина с исходниками: собрать образ и упаковать в `.tar.gz` (образ + установщики) |
 | `install-ppe.sh` | целевая машина: WSL, Ubuntu, любой Linux, Git Bash |
 | `install-ppe.ps1` | целевая машина: Windows без Git Bash |
+| `install-ppe.cmd` | целевая машина: Windows — обёртка для cmd.exe: проверяет `pwsh`, запускает `.ps1`, окно не закрывается на ошибке |
 | `INSTALL.md` | человек: шаги, параметры, типовые отказы |
 
 ### make-data-image.sh: что собирает
@@ -1067,6 +1068,7 @@ ppe-tracker-install-<tag>.tar.gz
 ├── ppe-tracker-api-<tag>.tar      образ, как его отдаёт docker save
 ├── install-ppe.sh                 установщик Linux / WSL / Git Bash
 ├── install-ppe.ps1                установщик Windows PowerShell
+├── install-ppe.cmd                обёртка для cmd.exe (проверяет pwsh и запускает .ps1)
 └── INSTALL.txt                    три шага на месте
 ```
 
@@ -1118,11 +1120,22 @@ Dev-база поднимается **только** в режиме с данн
 в редакторе (ассоциация `UserChoice`), а политика выполнения запрещает
 сценарии:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-ppe.ps1 -Image .\data.tar
+```bat
+install-ppe.cmd
+install-ppe.cmd -p 8010
 ```
 
-Тот же приём, что в `push-ppe.cmd`.
+`install-ppe.cmd` — тонкая обёртка (тот же приём, что в `push-ppe.cmd`):
+проверяет наличие `pwsh`, при отсутствии печатает ссылку на скачивание и
+`pause`, иначе запускает `pwsh -NoProfile -ExecutionPolicy Bypass -File
+install-ppe.ps1` с теми же аргументами. Файл в UTF-8 с `chcp 65001` и CRLF
+(`.gitattributes`: `*.cmd text eol=crlf`) — иначе cmd.exe показал бы
+кириллицу мусором.
+
+**Каталог установки на Windows по умолчанию — текущий**: `.env` и
+`docker-compose.yml` создаются в папке, откуда запущен установщик (в `.sh`
+остаётся `/opt/ppe`). Распакованный архив поэтому самодостаточен: образ и
+конфиги лежат рядом.
 
 **Параметры двух скриптов совпадают:** `Image`, `Dir`, `Port`, `Clean`,
 `AdminLogin`, `AdminPass`, `Force`. Команда для Windows и Linux отличается

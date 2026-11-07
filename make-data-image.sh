@@ -4,7 +4,8 @@
 # По умолчанию собирается ЧИСТЫЙ образ: схема развернётся миграциями при
 # первом старте, данных нет. С переносом данных из dev-базы — флаг --with-data.
 # Флаг --save собирает архив .tar.gz для переноса: внутри обычный tar образа
-# (docker save) и установщики install-ppe.sh / install-ppe.ps1 + INSTALL.txt —
+# (docker save) и установщики install-ppe.sh / install-ppe.ps1 / install-ppe.cmd
+# + INSTALL.txt —
 # всё в корне архива, сжатие одно, на весь архив. На целевой машине достаточно
 # распаковать и запустить установщик.
 #
@@ -70,6 +71,7 @@ make-data-image.sh — собрать образ PPE Tracker и упаковат
   ppe-tracker-api-<tag>.tar      образ, как его отдаёт docker save
   install-ppe.sh                 установщик для Linux / WSL / Git Bash
   install-ppe.ps1                установщик для Windows PowerShell
+  install-ppe.cmd                обёртка для cmd.exe: проверяет pwsh и запускает .ps1
   INSTALL.txt                    три шага на месте
 Сжатие одно — на весь архив целиком: вложенного .tar.gz нет, иначе образ
 жался бы дважды.
@@ -154,7 +156,7 @@ fi
 if [ "$SAVE" = "1" ]; then
     # Архив собирается только из этих файлов: без них установка на целевой
     # машине превратится в ручное копирование команд из INSTALL.md
-    for f in install-ppe.sh install-ppe.ps1; do
+    for f in install-ppe.sh install-ppe.ps1 install-ppe.cmd; do
         [ -f "$f" ] || die "нет $f: он кладётся в корень архива --save"
     done
     for tool in tar gzip; do
@@ -390,12 +392,12 @@ if [ "$SAVE" = "1" ]; then
     ok "образ сохранён: $IMAGE_FILE ($(( $(wc -c < "$STAGE_DIR/$IMAGE_FILE" | tr -d ' ') / 1048576 )) МБ)"
 
     step "Кладу в корень архива установщики"
-    for f in install-ppe.sh install-ppe.ps1; do
+    for f in install-ppe.sh install-ppe.ps1 install-ppe.cmd; do
         cp "$f" "$STAGE_DIR/$f" || die "не удалось скопировать $f"
     done
     # Бит +x в архиве: на Linux установщик запускают как ./install-ppe.sh
     chmod 0755 "$STAGE_DIR/install-ppe.sh"
-    ok "install-ppe.sh, install-ppe.ps1"
+    ok "install-ppe.sh, install-ppe.ps1, install-ppe.cmd"
 
     # Короткая памятка рядом с файлами: INSTALL.md в архив не входит, а
     # порядок действий из трёх шагов нужен именно здесь.
@@ -409,8 +411,9 @@ PPE Tracker — установка из архива
 
 2. Запустить установщик:
      Linux / WSL:  sh install-ppe.sh
-     Windows:      powershell -NoProfile -ExecutionPolicy Bypass -File .\\install-ppe.ps1
-   Образ ($IMAGE_FILE) установщик найдёт рядом с собой сам.
+     Windows:      install-ppe.cmd   (или двойной клик по нему)
+   Образ ($IMAGE_FILE) установщик найдёт рядом с собой сам, а .env и
+   docker-compose.yml появятся в той же папке, откуда запущен установщик.
 
 3. Открыть http://127.0.0.1:8000 и войти под учёткой, которую напечатает
    установщик (пароль генерируется на месте и лежит в .env установки).
@@ -424,17 +427,17 @@ EOF
     # при распаковке в существующую папку tar применил бы к ней права
     # стейджинга (mktemp создаёт 0700) и неожиданно закрыл к ней доступ.
     tar -czf "$SAVE_PATH" -C "$STAGE_DIR" \
-        install-ppe.sh install-ppe.ps1 INSTALL.txt "$IMAGE_FILE" \
+        install-ppe.sh install-ppe.ps1 install-ppe.cmd INSTALL.txt "$IMAGE_FILE" \
         || die "tar не удался"
 
     # Проверка содержимого: пустой или частичный архив обнаружится здесь,
     # а не на целевой машине.
     tar -tzf "$SAVE_PATH" >/dev/null 2>&1 || die "архив $SAVE_PATH не читается"
-    for need in install-ppe.sh install-ppe.ps1 INSTALL.txt "$IMAGE_FILE"; do
+    for need in install-ppe.sh install-ppe.ps1 install-ppe.cmd INSTALL.txt "$IMAGE_FILE"; do
         tar -tzf "$SAVE_PATH" | grep -qx "$need" \
             || die "в архиве нет $need"
     done
-    ok "в архиве: $IMAGE_FILE, install-ppe.sh, install-ppe.ps1, INSTALL.txt"
+    ok "в архиве: $IMAGE_FILE, install-ppe.sh, install-ppe.ps1, install-ppe.cmd, INSTALL.txt"
 
     size=$(wc -c < "$SAVE_PATH" | tr -d ' ')
     [ "$size" -gt 104857600 ] || die "архив подозрительно мал ($size байт)"
@@ -450,7 +453,7 @@ docker image ls --format '    {{.Repository}}:{{.Tag}}  {{.DiskUsage}}' 2>/dev/n
 if [ -n "$SAVED_FILE" ]; then
     printf '\n'
     ok "архив для переноса: $SAVED_FILE"
-    ok "внутри: образ .tar.gz, install-ppe.sh, install-ppe.ps1, INSTALL.txt"
+    ok "внутри: образ .tar, install-ppe.sh, install-ppe.ps1, install-ppe.cmd, INSTALL.txt"
 fi
 
 printf '\n'
@@ -469,7 +472,7 @@ if [ -n "$SAVED_FILE" ]; then
         "$(basename "$SAVED_FILE")"
     printf '  3. запустить установщик из этой папки:\n'
     printf '       Linux / WSL:  sh install-ppe.sh\n'
-    printf '       Windows:      powershell -NoProfile -ExecutionPolicy Bypass -File .\\install-ppe.ps1\n'
+    printf '       Windows:      install-ppe.cmd   (двойной клик или из cmd)\n'
     printf '     Образ ищется рядом со скриптом, параметры не нужны.\n'
     printf '\n'
 else

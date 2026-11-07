@@ -3,9 +3,10 @@
     Автоматическая установка PPE Tracker из образа на Windows.
 
 .DESCRIPTION
-    Загружает образ из .tar, создаёт каталог установки, генерирует .env и
-    docker-compose.yml, поднимает базу и приложение, ждёт готовности и
-    заводит администратора (для чистого образа).
+    Загружает образ из .tar, создаёт .env и docker-compose.yml, поднимает базу
+    и приложение, ждёт готовности и заводит администратора (для чистого
+    образа). Файлы создаются в каталоге запуска (Dir по умолчанию — текущий):
+    распаковали архив, запустили — рядом с образом появились .env и compose.
 
     Требуется Docker Desktop (Windows-контейнеры не нужны — образ Linux,
     Docker Desktop запускает их через WSL2).
@@ -20,7 +21,7 @@
 
 .EXAMPLE
     .\install-ppe.ps1
-    Образ из ppe-tracker-api-data.tar рядом со скриптом, каталог C:\ppe.
+    Образ из ppe-tracker-api-data.tar рядом со скриптом, каталог — текущий.
 
 .EXAMPLE
     .\install-ppe.ps1 -Image .\ppe-tracker-api-prod.tar -Clean -Dir D:\apps\ppe
@@ -30,14 +31,21 @@
 
 .EXAMPLE
     # Короткие ключи работают как в Linux
-    .\install-ppe.ps1 -Image .\data.tar -d C:\ppe -p 8010
+    .\install-ppe.ps1 -Image .\data.tar -d D:\apps\ppe -p 8010
+
+.EXAMPLE
+    # Без -Dir: .env и docker-compose.yml появятся в текущем каталоге
+    .\install-ppe.cmd -p 8010
 #>
 [CmdletBinding()]
 param(
     [string]$Image,
 
+    # Каталог установки: по умолчанию — тот, откуда запустили скрипт. Так
+    # распакованный архив остаётся самодостаточной папкой: образ, .env и
+    # compose лежат рядом, и установку можно повторить из неё же.
     [Alias('d')]
-    [string]$Dir = "C:\ppe",
+    [string]$Dir = (Get-Location).Path,
 
     [Alias('p')]
     [int]$Port = 8000,
@@ -140,6 +148,30 @@ if (-not (Test-Path -LiteralPath $Dir)) {
     Write-Ok "создан"
 } else {
     Write-Ok "каталог существует"
+}
+
+# Имена контейнеров фиксированы (ppe-api/ppe-db) — на них завязаны инструкции
+# и бэкап. Если они уже заняты ДРУГИМ compose-проектом (например, старая
+# установка в C:\ppe), docker compose упадёт с «container name is already in
+# use». Лучше сказать это сразу и подсказать, что делать.
+#
+# Метка читается через {{json .Config.Labels}} и ConvertFrom-Json, а не через
+# {{ index .Config.Labels "…" }}: PowerShell съедает кавычки внутри аргумента
+# (проверено — docker получает com.docker.compose.project без кавычек и падает
+# с «function "com" not defined», код 64). В json-варианте кавычек в шаблоне нет.
+$projectName = Split-Path -Leaf $Dir
+foreach ($cname in @('ppe-api', 'ppe-db')) {
+    $labelsJson = docker inspect --format '{{json .Config.Labels}}' $cname 2>$null
+    $owner = $null
+    if ($LASTEXITCODE -eq 0 -and $labelsJson) {
+        $owner = ($labelsJson | ConvertFrom-Json).'com.docker.compose.project'
+    }
+    if ($owner -and $owner -ne $projectName) {
+        Write-Warn "контейнер $cname уже принадлежит проекту '$owner', а установка идёт в '$projectName'."
+        Write-Warn "Остановите старую установку (docker compose -p $owner down) или укажите другой каталог: -Dir <папка>"
+        Write-Err "установка остановлена: имя контейнера занято"
+        exit 1
+    }
 }
 
 # --- Загрузка -------------------------------------------------------------
