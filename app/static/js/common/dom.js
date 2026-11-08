@@ -209,6 +209,27 @@ window.ModalHelper = {
   },
 };
 
+// Закрытие формы с несохранёнными изменениями требует подтверждения.
+// Работает и для модалок (Bootstrap шлёт hide.bs.modal, событие всплывает),
+// и для ссылок «Закрыть» на страницах редактирования (data-dirty-close).
+window.confirmDiscard = function (scope) {
+  const forms = scope ? scope.querySelectorAll('form') : [];
+  const dirty = [...forms].some((form) => window.FormValidation?.isDirty(form));
+  if (!dirty) return true;
+  return window.confirm('Есть несохранённые изменения. Закрыть без сохранения?');
+};
+
+document.addEventListener('hide.bs.modal', (event) => {
+  if (!window.confirmDiscard(event.target)) event.preventDefault();
+});
+
+document.addEventListener('click', (event) => {
+  const link = event.target.closest('[data-dirty-close]');
+  if (!link) return;
+  // Страница редактирования: форма одна, берём её из документа
+  if (!window.confirmDiscard(document)) event.preventDefault();
+});
+
 // Вкладки Bootstrap: переключение по селектору, без ручного
 // getOrCreateInstance(document.querySelector(...)).show() в каждой ветке.
 window.TabHelper = {

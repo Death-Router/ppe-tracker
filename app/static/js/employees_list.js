@@ -257,6 +257,10 @@
     const closeOnly = live && !formDirty;
     saveBtn.textContent = closeOnly ? 'Закрыть' : (editingId ? 'Сохранить' : 'Создать');
     saveBtn.dataset.mode = closeOnly ? 'close' : 'save';
+    // «Закрыть» — оранжевая (действие-отмена по дизайн-системе),
+    // «Сохранить»/«Создать» — фиолетовая
+    saveBtn.classList.toggle('btn-brand-orange', closeOnly);
+    saveBtn.classList.toggle('btn-brand', !closeOnly);
     // «Закрыть» доступна всегда, «Сохранить»/«Создать» — только когда есть что сохранять
     saveBtn.disabled = !closeOnly && !formDirty;
     cancelBtn?.classList.toggle('d-none', closeOnly);
