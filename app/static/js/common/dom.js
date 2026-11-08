@@ -188,7 +188,14 @@ window.formatQuantityRu = function (value, unitName) {
 // поиск `.modal-title`; теперь это `ModalHelper`.
 window.ModalHelper = {
   show(element) {
-    if (element) bootstrap.Modal.getOrCreateInstance(element).show();
+    if (!element) return;
+    // Формы внутри модалки к моменту показа уже заполнены (режим
+    // редактирования) или сброшены (создание). Запоминаем это состояние как
+    // исходное: «Сохранить» станет активной только после правки
+    element.querySelectorAll('form').forEach((form) => {
+      window.FormValidation?.markClean(form);
+    });
+    bootstrap.Modal.getOrCreateInstance(element).show();
   },
   hide(element) {
     if (element) bootstrap.Modal.getOrCreateInstance(element).hide();

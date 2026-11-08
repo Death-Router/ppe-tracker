@@ -78,6 +78,8 @@ window.FormHelper = {
         }
       }
       await action(data, form);
+      // Данные сохранены: «Сохранить» снова гаснет до следующей правки
+      window.FormValidation?.markClean(form);
       if (onSuccess) onSuccess();
     } catch (err) {
       if (err.isConflict && onConflict) {

@@ -74,7 +74,7 @@
       if (versionInput) versionInput.value = item.version ?? '';
 
       isDirty = false;
-      window.FormValidation.refresh(form);
+      window.FormValidation.markClean(form);
       if (isWsUpdate) window.showToast('Карточка обновлена', 'info');
     } catch (err) {
       window.showToast(`Ошибка загрузки: ${err.message}`, 'danger');

@@ -257,11 +257,33 @@
     const closeOnly = live && !formDirty;
     saveBtn.textContent = closeOnly ? 'Закрыть' : (editingId ? 'Сохранить' : 'Создать');
     saveBtn.dataset.mode = closeOnly ? 'close' : 'save';
+    // «Закрыть» доступна всегда, «Сохранить»/«Создать» — только когда есть что сохранять
+    saveBtn.disabled = !closeOnly && !formDirty;
     cancelBtn?.classList.toggle('d-none', closeOnly);
   }
 
+  // Подпись состояния карточки: поля формы + строки размеров (они живут вне
+  // формы). Сравнение с исходной подписью, а не флаг «что-то нажали»: если
+  // вернуть прежнее значение, «Сохранить» снова гаснет.
+  function formSignature() {
+    const fields = JSON.stringify(FormHelper.serialize(createForm));
+    const sizes = [...sizesBody.querySelectorAll('tr')]
+      .map((tr) => `${tr.querySelector('.size-group-select')?.value ?? ''}`
+        + `:${tr.querySelector('.size-value-input')?.value.trim() ?? ''}`)
+      .join(',');
+    return `${fields}|${sizes}`;
+  }
+
+  let formBaseline = null;
+
   function markDirty() {
-    formDirty = true;
+    formDirty = formBaseline !== null && formSignature() !== formBaseline;
+    updateFooter();
+  }
+
+  function resetDirty() {
+    formBaseline = formSignature();
+    formDirty = false;
     updateFooter();
   }
 
@@ -383,10 +405,9 @@
     editingId = null;
     currentEmployee = null;
     ModalHelper.setTitle(modalEl, 'Новый сотрудник');
-    formDirty = false;
     setEditOnlyTabs(false);
     resetModal();
-    updateFooter();
+    resetDirty();
     renderPhoto(null);
     ModalHelper.show(modalEl);
   };
@@ -401,7 +422,6 @@
         modalEl,
         `Редактирование: ${[emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ')}`
       );
-      formDirty = false;
       resetModal();
       renderPhoto(emp);
 
@@ -433,7 +453,7 @@
       renderOnHand(emp);
       // Нормы грузятся запросом: рисуем, когда придут, — карточку не держим
       void renderNorms(emp);
-      updateFooter();
+      resetDirty();
 
       ModalHelper.show(modalEl);
     } catch (err) {
@@ -1280,8 +1300,7 @@
       button: saveBtn,
       payload,
       onSuccess: () => {
-        formDirty = false;
-        updateFooter();
+        resetDirty();
         ModalHelper.hide(modalEl);
         loadEmployees();
       },
