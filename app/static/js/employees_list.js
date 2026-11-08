@@ -227,6 +227,10 @@
   const sizesBody = document.getElementById('emp-sizes-body');
   const issuesBody = document.querySelector('#emp-issues-table tbody');
   const issuesTabItem = document.getElementById('emp-tab-issues-item');
+  const onHandBody = document.getElementById('emp-onhand-body');
+  const normsBody = document.getElementById('emp-norms-body');
+  const onHandTabItem = document.getElementById('emp-tab-onhand-item');
+  const normsTabItem = document.getElementById('emp-tab-norms-item');
 
   let editingId = null;
   let currentEmployee = null;
@@ -238,6 +242,8 @@
     versionInput.value = '';
     sizesBody.innerHTML = '';
     tableState(issuesBody, 6, 'Нет данных');
+    tableState(onHandBody, 5, 'Нет данных');
+    tableState(normsBody, 5, 'Нет данных');
     createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
     // Возвращаемся на первую вкладку
     TabHelper.show('#employeeModalTabs [data-bs-target="#emp-tab-main"]');
@@ -249,7 +255,12 @@
   function setEditOnlyTabs(isEditing) {
     if (!issuesTabItem) return;
     const hasPosition = Boolean(createForm.elements['position_id']?.value);
-    issuesTabItem.classList.toggle('d-none', !(isEditing && hasPosition));
+    const visible = isEditing && hasPosition;
+    // Три вкладки живут вместе: выдачи, остатки и нормы. Без должности норм
+    // нет, а значит нечего ни выдавать, ни сравнивать
+    [issuesTabItem, onHandTabItem, normsTabItem].forEach((item) => {
+      item?.classList.toggle('d-none', !visible);
+    });
   }
 
   // Должность меняется прямо в модалке — вкладку показываем или скрываем сразу
@@ -259,7 +270,8 @@
     // Если вкладку скрыли, а она была открыта, вернёмся на основные данные
     if (issuesTabItem?.classList.contains('d-none')) {
       const activePane = document.querySelector('#employeeModalContent .tab-pane.active');
-      if (activePane?.id === 'emp-tab-issues') {
+      const editOnly = ['emp-tab-issues', 'emp-tab-onhand', 'emp-tab-norms'];
+      if (editOnly.includes(activePane?.id)) {
         TabHelper.show('#employeeModalTabs [data-bs-target="#emp-tab-main"]');
       }
     }
@@ -389,6 +401,9 @@
         sizesBody.appendChild(await buildSizeRow(size.size_group_id, size.size_value));
       }
       renderIssues(emp);
+      renderOnHand(emp);
+      // Нормы грузятся запросом: рисуем, когда придут, — карточку не держим
+      void renderNorms(emp);
 
       ModalHelper.show(modalEl);
     } catch (err) {
@@ -454,6 +469,129 @@
               <i class="bi bi-trash"></i>
             </button>
           </td>
+        </tr>`).join('');
+  }
+
+  // Вкладка «СИЗ в наличии»: что реально числится за сотрудником сейчас.
+  // Считаем по остаткам (выдано − возвращено), а не по числу строк: полностью
+  // возвращённые выдачи не показываем, а две выдачи одного СИЗ складываем
+  // в одну строку — иначе «2 + 2» выглядели как две разные позиции.
+  function groupOnHand(issues) {
+    // Одна строка на наименование. Отдельно от renderOnHand, чтобы агрегацию
+    // остатков можно было проверить без DOM: две выдачи по 2 — это 4,
+    // а полностью возвращённая запись в список не попадает вовсе.
+    const byItem = new Map();
+    (issues ?? []).forEach((issue) => {
+      if ((issueBalance(issue) ?? 1) <= 0) return;
+      const key = issue.ppe_item_id;
+      const row = byItem.get(key) ?? {
+        name: issue.ppe_item?.name ?? '—',
+        sizes: [],
+        quantity: 0,
+        unknown: false,
+        issueDate: issue.issue_date ?? null,
+        expiry: issue.expiry_date ?? null,
+      };
+      if (issue.size_value && !row.sizes.includes(String(issue.size_value))) {
+        row.sizes.push(String(issue.size_value));
+      }
+      const balance = issueBalance(issue);
+      if (balance === null) row.unknown = true;
+      else row.quantity += balance;
+      // Самая ранняя выдача и самый близкий срок: по ним видно, что пора менять
+      if (issue.issue_date && (!row.issueDate || issue.issue_date < row.issueDate)) {
+        row.issueDate = issue.issue_date;
+      }
+      if (issue.expiry_date && (!row.expiry || issue.expiry_date < row.expiry)) {
+        row.expiry = issue.expiry_date;
+      }
+      byItem.set(key, row);
+    });
+    return [...byItem.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }
+
+  function renderOnHand(emp) {
+    if (!onHandBody) return;
+    const rows = groupOnHand(emp?.ppe_issues);
+    if (!rows.length) {
+      tableState(onHandBody, 5, 'СИЗ на руках нет');
+      return;
+    }
+    onHandBody.innerHTML = rows.map((row) => `<tr>
+          <td>${escapeHtml(row.name)}</td>
+          <td>${escapeHtml(row.sizes.join(', ') || '—')}</td>
+          <td>${escapeHtml(row.unknown ? '—' : String(row.quantity))}</td>
+          <td>${escapeHtml(formatDateRu(row.issueDate))}</td>
+          <td>${expiryCell(row.expiry)}</td>
+        </tr>`).join('');
+  }
+
+  // Вкладка «СИЗ по нормам»: что положено по должности и сколько уже на руках.
+  // Норму показываем словами («2 пары на 1 год»), как в модалке выдачи.
+  // Данные строки «СИЗ по нормам» — без HTML: правило «есть / не выдано /
+  // просрочено» проверяется тестом, а разметка только собирает строку.
+  function normRowModel(norm, item, emp) {
+    const normQuantity = String(norm.quantity ?? '1').trim();
+    const digits = FormHelper.digits(normQuantity, 3);
+    const quantityText = formatQuantityRu(digits || normQuantity, item.unit?.name);
+    const periodText = norm.wear_period_unit === 'до износа'
+      ? 'до износа'
+      : `на ${formatPeriodRu(norm.wear_period_value, norm.wear_period_unit)}`;
+
+    const active = activeIssues(item.id);
+    const today = todayIso();
+    const allExpired = active.length > 0
+      && active.every((i) => i.expiry_date && i.expiry_date < today);
+
+    return {
+      name: item.name,
+      normText: `${quantityText} ${periodText}`,
+      size: sizeFromCard(emp, item) ?? '—',
+      onHand: onHandQuantity(item.id),
+      state: !active.length ? 'none' : (allExpired ? 'expired' : 'ok'),
+    };
+  }
+
+  const NORM_STATE_HTML = {
+    none: '<span class="cell-muted">не выдано</span>',
+    expired: '<span class="badge-soft badge-orange">просрочено</span>',
+    ok: '<span class="badge-soft badge-purple">есть</span>',
+  };
+
+  async function renderNorms(emp) {
+    if (!normsBody) return;
+    if (!emp?.position_id) {
+      tableState(normsBody, 5, 'У сотрудника не указана должность — нормы не заданы');
+      return;
+    }
+
+    try {
+      if (!allPpeItems) {
+        allPpeItems = await API.get('/api/v1/ppe_items');
+      }
+      await loadNormsForEmployee(emp);
+    } catch (err) {
+      tableState(normsBody, 5, `Ошибка загрузки норм: ${err.message}`, { error: true });
+      return;
+    }
+
+    if (!normByItem.size) {
+      tableState(normsBody, 5, 'Для должности не заданы нормы выдачи');
+      return;
+    }
+
+    const rows = [...normByItem.values()]
+      .map((norm) => ({ norm, item: allPpeItems.find((i) => i.id === norm.ppe_item_id) }))
+      .filter((row) => row.item)
+      .sort((a, b) => a.item.name.localeCompare(b.item.name, 'ru'))
+      .map(({ norm, item }) => normRowModel(norm, item, emp));
+
+    normsBody.innerHTML = rows.map((row) => `<tr>
+          <td>${escapeHtml(row.name)}</td>
+          <td>${escapeHtml(row.normText)}</td>
+          <td>${escapeHtml(row.size)}</td>
+          <td>${escapeHtml(String(row.onHand))}</td>
+          <td>${NORM_STATE_HTML[row.state]}</td>
         </tr>`).join('');
   }
 
@@ -885,6 +1023,8 @@
       const emp = await API.get(`/api/v1/employees/${editingId}`);
       currentEmployee = emp;
       renderIssues(emp);
+      renderOnHand(emp);
+      void renderNorms(emp);
       renderPhoto(emp);
     } catch (err) {
       window.showToast(`Ошибка: ${err.message}`, 'danger');

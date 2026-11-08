@@ -61,7 +61,17 @@
                     </li>
                     <li class="nav-item d-none" role="presentation" id="emp-tab-issues-item">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#emp-tab-issues" type="button" role="tab">
-                            СИЗ сотрудника
+                            Выданные СИЗ
+                        </button>
+                    </li>
+                    <li class="nav-item d-none" role="presentation" id="emp-tab-onhand-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#emp-tab-onhand" type="button" role="tab">
+                            СИЗ в наличии
+                        </button>
+                    </li>
+                    <li class="nav-item d-none" role="presentation" id="emp-tab-norms-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#emp-tab-norms" type="button" role="tab">
+                            СИЗ по нормам
                         </button>
                     </li>
                 </ul>
@@ -205,6 +215,53 @@
                                 </thead>
                                 <tbody>
                                 <tr><td colspan="6" class="state">Нет данных</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Вкладка: СИЗ в наличии (остатки по выдачам) -->
+                    <div class="tab-pane fade" id="emp-tab-onhand" role="tabpanel">
+                        <p class="form-text mb-2">
+                            Что числится за сотрудником сейчас: выдано минус возвращено.
+                            Полностью возвращённые выдачи сюда не попадают.
+                        </p>
+                        <div class="table-responsive">
+                            <table class="data-table data-table--dense" id="emp-onhand-table">
+                                <thead>
+                                <tr>
+                                    <th>Наименование СИЗ</th>
+                                    <th>Размер</th>
+                                    <th class="col-medium">На руках</th>
+                                    <th>Дата выдачи</th>
+                                    <th>Действует до</th>
+                                </tr>
+                                </thead>
+                                <tbody id="emp-onhand-body">
+                                <tr><td colspan="5" class="state">Нет данных</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Вкладка: СИЗ по нормам (что положено по должности) -->
+                    <div class="tab-pane fade" id="emp-tab-norms" role="tabpanel">
+                        <p class="form-text mb-2">
+                            Нормы выдачи для должности сотрудника и сколько из них уже на руках.
+                        </p>
+                        <div class="table-responsive">
+                            <table class="data-table data-table--dense" id="emp-norms-table">
+                                <thead>
+                                <tr>
+                                    <th>Наименование СИЗ</th>
+                                    <th>Норма выдачи</th>
+                                    <th>Размер из карточки</th>
+                                    <th class="col-medium">На руках</th>
+                                    <th>Состояние</th>
+                                </tr>
+                                </thead>
+                                <tbody id="emp-norms-body">
+                                <tr><td colspan="5" class="state">Нет данных</td></tr>
                                 </tbody>
                             </table>
                         </div>
