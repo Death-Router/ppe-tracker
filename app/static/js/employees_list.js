@@ -242,7 +242,7 @@
     versionInput.value = '';
     sizesBody.innerHTML = '';
     tableState(issuesBody, 6, 'Нет данных');
-    tableState(onHandBody, 5, 'Нет данных');
+    tableState(onHandBody, 3, 'Нет данных');
     tableState(normsBody, 5, 'Нет данных');
     createPosSelect.innerHTML = '<option value="">Сначала выберите подразделение</option>';
     // Возвращаемся на первую вкладку
@@ -489,8 +489,6 @@
         sizes: [],
         quantity: 0,
         unknown: false,
-        issueDate: issue.issue_date ?? null,
-        expiry: issue.expiry_date ?? null,
       };
       if (issue.size_value && !row.sizes.includes(String(issue.size_value))) {
         row.sizes.push(String(issue.size_value));
@@ -498,13 +496,6 @@
       const balance = issueBalance(issue);
       if (balance === null) row.unknown = true;
       else row.quantity += balance;
-      // Самая ранняя выдача и самый близкий срок: по ним видно, что пора менять
-      if (issue.issue_date && (!row.issueDate || issue.issue_date < row.issueDate)) {
-        row.issueDate = issue.issue_date;
-      }
-      if (issue.expiry_date && (!row.expiry || issue.expiry_date < row.expiry)) {
-        row.expiry = issue.expiry_date;
-      }
       byItem.set(key, row);
     });
     return [...byItem.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -514,15 +505,16 @@
     if (!onHandBody) return;
     const rows = groupOnHand(emp?.ppe_issues);
     if (!rows.length) {
-      tableState(onHandBody, 5, 'СИЗ на руках нет');
+      tableState(onHandBody, 3, 'СИЗ на руках нет');
       return;
     }
+    // Даты выдачи и сроки здесь не показываем: это суммарный остаток по
+    // наименованию, у него нет одной даты и одного срока. За ними — на
+    // вкладку «Выданные СИЗ»
     onHandBody.innerHTML = rows.map((row) => `<tr>
           <td>${escapeHtml(row.name)}</td>
           <td>${escapeHtml(row.sizes.join(', ') || '—')}</td>
           <td>${escapeHtml(row.unknown ? '—' : String(row.quantity))}</td>
-          <td>${escapeHtml(formatDateRu(row.issueDate))}</td>
-          <td>${expiryCell(row.expiry)}</td>
         </tr>`).join('');
   }
 
