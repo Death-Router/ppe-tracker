@@ -179,6 +179,14 @@
 
                     <!-- Вкладка: размеры -->
                     <div class="tab-pane fade" id="emp-tab-sizes" role="tabpanel">
+                        {# Кнопки добавления одинаковые во всём приложении: «+» слева
+                           над таблицей (btn-add), а не текстовая кнопка под ней #}
+                        <div class="d-flex mb-2">
+                            <button type="button" class="btn btn-add" id="emp-add-size"
+                                    title="Добавить размер">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
                         <table class="data-table data-table--dense" id="emp-sizes-table">
                             <thead>
                             <tr>
@@ -189,16 +197,14 @@
                             </thead>
                             <tbody id="emp-sizes-body"></tbody>
                         </table>
-                        <button type="button" class="btn btn-sm btn-brand mt-3" id="emp-add-size">
-                            <i class="bi bi-plus-lg"></i> Добавить размер
-                        </button>
                     </div>
 
                     <!-- Вкладка: выдачи (только при редактировании) -->
                     <div class="tab-pane fade" id="emp-tab-issues" role="tabpanel">
-                        <div class="d-flex justify-content-end mb-2">
-                            <button type="button" class="btn btn-sm btn-brand" id="emp-add-issue">
-                                <i class="bi bi-plus-lg"></i> Выдать СИЗ
+                        <div class="d-flex mb-2">
+                            <button type="button" class="btn btn-add" id="emp-add-issue"
+                                    title="Выдать СИЗ">
+                                <i class="bi bi-plus-lg"></i>
                             </button>
                         </div>
                         <div class="table-responsive">
