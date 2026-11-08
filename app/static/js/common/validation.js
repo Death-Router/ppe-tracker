@@ -30,6 +30,14 @@ window.FormValidation = (() => {
     update(form);
   }
 
+  // Принудительно вернуть «грязное» состояние: запрос не прошёл, и
+  // пользователю надо повторить отправку с теми же данными
+  function markDirty(form) {
+    if (!form) return;
+    baselines.set(form, '');
+    update(form);
+  }
+
   function update(form) {
     if (!form) return true;
     const valid = form.checkValidity();
@@ -85,5 +93,5 @@ window.FormValidation = (() => {
     setTimeout(() => refresh(), 1200);
   });
 
-  return { attach, scan, refresh, update, markClean, isDirty };
+  return { attach, scan, refresh, update, markClean, markDirty, isDirty };
 })();

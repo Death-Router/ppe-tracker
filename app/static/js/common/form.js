@@ -77,11 +77,15 @@ window.FormHelper = {
           return;
         }
       }
-      await action(data, form);
-      // Данные сохранены: «Сохранить» снова гаснет до следующей правки
+      // Форму считаем сохранённой ДО запроса: обработчики закрывают модалку
+      // внутри action (ModalHelper.hide), и иначе на успешном сохранении
+      // вылезало бы «есть несохранённые изменения». При ошибке вернём
+      // «грязное» состояние в catch, чтобы можно было повторить
       window.FormValidation?.markClean(form);
+      await action(data, form);
       if (onSuccess) onSuccess();
     } catch (err) {
+      window.FormValidation?.markDirty(form);
       if (err.isConflict && onConflict) {
         onConflict(err);
       } else {
