@@ -274,7 +274,11 @@
             </div>
 
             <div class="modal-footer">
-                <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Отмена</button>
+                {# Кнопка контекстная: на вкладках «Основные данные» и «Размеры СИЗ»
+                   это «Сохранить» (данные карточки), на остальных сохранять
+                   нечего — там действия сохраняются сразу, поэтому «Закрыть» #}
+                <button type="button" class="btn btn-cancel" data-bs-dismiss="modal"
+                        id="emp-cancel-btn">Отмена</button>
                 <button type="button" class="btn btn-brand" id="emp-save-btn">Создать</button>
             </div>
         </div>

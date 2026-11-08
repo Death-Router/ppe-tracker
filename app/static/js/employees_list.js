@@ -223,6 +223,7 @@
   // --- Модалка сотрудника: создание и редактирование -------------------
   const modalEl = document.getElementById('employeeModal');
   const saveBtn = document.getElementById('emp-save-btn');
+  const cancelBtn = document.getElementById('emp-cancel-btn');
   const versionInput = document.getElementById('emp-version');
   const sizesBody = document.getElementById('emp-sizes-body');
   const issuesBody = document.querySelector('#emp-issues-table tbody');
@@ -234,8 +235,35 @@
 
   let editingId = null;
   let currentEmployee = null;
+  // Есть ли в карточке несохранённые правки: от этого зависит, показывать ли
+  // на «живых» вкладках «Сохранить» (иначе можно потерять введённое)
+  let formDirty = false;
   // Выдачи текущей карточки по id — нужны модалке возврата
   let issueById = new Map();
+
+  // Вкладки, где ничего не сохраняется кнопкой футера: выдачи, остатки и нормы
+  // меняются своими действиями (модалка выдачи, возврат, удаление)
+  const LIVE_TABS = ['emp-tab-issues', 'emp-tab-onhand', 'emp-tab-norms'];
+
+  function activePaneId() {
+    return document.querySelector('#employeeModalContent .tab-pane.active')?.id ?? '';
+  }
+
+  // Футер зависит от вкладки: на «данных» — Сохранить/Отмена, на «живых» —
+  // Закрыть (если в форме нет несохранённых правок)
+  function updateFooter() {
+    if (!saveBtn) return;
+    const live = LIVE_TABS.includes(activePaneId());
+    const closeOnly = live && !formDirty;
+    saveBtn.textContent = closeOnly ? 'Закрыть' : (editingId ? 'Сохранить' : 'Создать');
+    saveBtn.dataset.mode = closeOnly ? 'close' : 'save';
+    cancelBtn?.classList.toggle('d-none', closeOnly);
+  }
+
+  function markDirty() {
+    formDirty = true;
+    updateFooter();
+  }
 
   function resetModal() {
     createForm.reset();
@@ -355,9 +383,10 @@
     editingId = null;
     currentEmployee = null;
     ModalHelper.setTitle(modalEl, 'Новый сотрудник');
-    saveBtn.textContent = 'Создать';
+    formDirty = false;
     setEditOnlyTabs(false);
     resetModal();
+    updateFooter();
     renderPhoto(null);
     ModalHelper.show(modalEl);
   };
@@ -372,7 +401,7 @@
         modalEl,
         `Редактирование: ${[emp.last_name, emp.first_name, emp.middle_name].filter(Boolean).join(' ')}`
       );
-      saveBtn.textContent = 'Сохранить';
+      formDirty = false;
       resetModal();
       renderPhoto(emp);
 
@@ -404,6 +433,7 @@
       renderOnHand(emp);
       // Нормы грузятся запросом: рисуем, когда придут, — карточку не держим
       void renderNorms(emp);
+      updateFooter();
 
       ModalHelper.show(modalEl);
     } catch (err) {
@@ -1152,17 +1182,38 @@
       .then(openIssueModal);
   });
 
+  // Любая правка в форме или в размерах делает футер «Сохранить»: иначе на
+  // «живой» вкладке кнопка закрыла бы карточку и потеряла введённое
+  createForm.addEventListener('input', markDirty);
+  createForm.addEventListener('change', markDirty);
+  sizesBody.addEventListener('input', markDirty);
+  sizesBody.addEventListener('change', markDirty);
+
+  // Вкладка сменилась — пересчитать футер
+  document.getElementById('employeeModalTabs')?.addEventListener('shown.bs.tab', updateFooter);
+
   document.getElementById('btn-add-employee')?.addEventListener('click', window.openCreateEmployee);
   document.getElementById('emp-add-size')?.addEventListener('click', async () => {
     sizesBody.appendChild(await buildSizeRow());
+    markDirty();
   });
 
   sizesBody.addEventListener('click', (event) => {
     const btn = event.target.closest('.remove-size-btn');
-    if (btn) btn.closest('tr').remove();
+    if (btn) {
+      btn.closest('tr').remove();
+      markDirty();
+    }
   });
 
   saveBtn.addEventListener('click', async () => {
+    // На вкладках выдач/остатков/норм сохранять нечего: там действия
+    // сохраняются сразу, кнопка работает как «Закрыть»
+    if (saveBtn.dataset.mode === 'close') {
+      ModalHelper.hide(modalEl);
+      return;
+    }
+
     // Валидируем только поля основной вкладки: размеры проверяем отдельно
     if (!createForm.reportValidity()) {
       TabHelper.show('#employeeModalTabs [data-bs-target="#emp-tab-main"]');
@@ -1229,6 +1280,8 @@
       button: saveBtn,
       payload,
       onSuccess: () => {
+        formDirty = false;
+        updateFooter();
         ModalHelper.hide(modalEl);
         loadEmployees();
       },
